@@ -21,6 +21,7 @@ class PlaceMapView extends StatefulWidget {
     this.onMarkerTap,
     this.onMarkerDoubleTap,
     this.onMarkerAction,
+    this.onViewportChanged,
     this.height = 420,
   });
 
@@ -33,6 +34,7 @@ class PlaceMapView extends StatefulWidget {
   final ValueChanged<int>? onMarkerTap;
   final ValueChanged<int>? onMarkerDoubleTap;
   final ValueChanged<int>? onMarkerAction;
+  final ValueChanged<PlaceMapViewport>? onViewportChanged;
   final double height;
 
   @override
@@ -51,6 +53,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
   Timer? _relayoutTimer;
   final List<Function> _markerJsCallbacks = [];
   final List<js.JsObject> _markerOverlayObjects = [];
+  final List<Function> _mapJsCallbacks = [];
   int _renderVersion = 0;
 
   js.JsObject? _map;
@@ -269,6 +272,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     _activeOverlay = null;
     _markerJsCallbacks.clear();
     _markerOverlayObjects.clear();
+    _mapJsCallbacks.clear();
 
     final centerMarker = markers.first;
     final center = js.JsObject(
@@ -362,6 +366,15 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     _map = map;
     _bounds = bounds;
 
+    if (widget.onViewportChanged != null) {
+      final idleCallback = js.allowInterop(() {
+        _emitViewportChanged();
+      });
+      _mapJsCallbacks.add(idleCallback);
+      final event = maps['event'] as js.JsObject?;
+      event?.callMethod('addListener', [map, 'idle', idleCallback]);
+    }
+
     if (widget.connectSequentially && widget.routeMarkers.length >= 2) {
       try {
         final path = widget.routeMarkers
@@ -392,7 +405,40 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     }
 
     map.callMethod('setBounds', [bounds]);
+    _emitViewportChanged();
     _scheduleRelayout();
+  }
+
+  void _emitViewportChanged() {
+    if (!mounted || _map == null || widget.onViewportChanged == null) {
+      return;
+    }
+    try {
+      final center = _map!.callMethod('getCenter') as js.JsObject;
+      final bounds = _map!.callMethod('getBounds') as js.JsObject;
+      final southWest = bounds.callMethod('getSouthWest') as js.JsObject;
+      final northEast = bounds.callMethod('getNorthEast') as js.JsObject;
+
+      widget.onViewportChanged!(
+        PlaceMapViewport(
+          centerLatitude: _jsNumber(center.callMethod('getLat')),
+          centerLongitude: _jsNumber(center.callMethod('getLng')),
+          minLatitude: _jsNumber(southWest.callMethod('getLat')),
+          maxLatitude: _jsNumber(northEast.callMethod('getLat')),
+          minLongitude: _jsNumber(southWest.callMethod('getLng')),
+          maxLongitude: _jsNumber(northEast.callMethod('getLng')),
+        ),
+      );
+    } catch (_) {
+      // Ignore viewport callback failures.
+    }
+  }
+
+  double _jsNumber(Object? value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    return double.tryParse('$value') ?? 0;
   }
 
   html.DivElement _buildOverlayContent(PlaceMapMarkerData marker) {
@@ -464,8 +510,53 @@ class _PlaceMapViewState extends State<PlaceMapView> {
         ..style.fontSize = '13px'
         ..style.lineHeight = '1.5'
         ..style.color = '#64748b'
-        ..style.marginBottom = marker.actionLabel == null ? '0' : '14px',
+        ..style.marginBottom = '10px',
     );
+
+    if ((marker.roadAddress ?? '').isNotEmpty) {
+      root.append(
+        html.DivElement()
+          ..text = '도로명: ${marker.roadAddress!}'
+          ..style.fontSize = '12px'
+          ..style.lineHeight = '1.5'
+          ..style.color = '#475569'
+          ..style.marginBottom = '6px',
+      );
+    }
+    if ((marker.phoneNumber ?? '').isNotEmpty) {
+      root.append(
+        html.DivElement()
+          ..text = '전화: ${marker.phoneNumber!}'
+          ..style.fontSize = '12px'
+          ..style.lineHeight = '1.5'
+          ..style.color = '#475569'
+          ..style.marginBottom = '6px',
+      );
+    }
+    if ((marker.categoryName ?? '').isNotEmpty) {
+      root.append(
+        html.DivElement()
+          ..text = '분류: ${marker.categoryName!}'
+          ..style.fontSize = '12px'
+          ..style.lineHeight = '1.5'
+          ..style.color = '#475569'
+          ..style.marginBottom = '10px',
+      );
+    }
+
+    if ((marker.placeUrl ?? '').isNotEmpty) {
+      root.append(
+        html.AnchorElement(href: marker.placeUrl!)
+          ..text = '카카오 장소 상세 보기'
+          ..target = '_blank'
+          ..style.display = 'inline-block'
+          ..style.marginBottom = marker.actionLabel == null ? '0' : '14px'
+          ..style.color = '#0F766E'
+          ..style.fontSize = '12px'
+          ..style.fontWeight = '800'
+          ..style.textDecoration = 'none',
+      );
+    }
 
     if ((marker.actionLabel ?? '').isNotEmpty) {
       final button = html.ButtonElement()

@@ -376,6 +376,11 @@ class MerchantItem {
     required this.category,
     required this.latitude,
     required this.longitude,
+    required this.kakaoPlaceName,
+    required this.kakaoPhoneNumber,
+    required this.kakaoRoadAddress,
+    required this.kakaoCategoryName,
+    required this.kakaoPlaceUrl,
   });
 
   final int id;
@@ -384,6 +389,11 @@ class MerchantItem {
   final String category;
   final double? latitude;
   final double? longitude;
+  final String kakaoPlaceName;
+  final String kakaoPhoneNumber;
+  final String kakaoRoadAddress;
+  final String kakaoCategoryName;
+  final String kakaoPlaceUrl;
 
   factory MerchantItem.fromJson(Map<String, dynamic> json) {
     return MerchantItem(
@@ -393,6 +403,11 @@ class MerchantItem {
       category: json['category'] as String? ?? '',
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
+      kakaoPlaceName: json['kakaoPlaceName'] as String? ?? '',
+      kakaoPhoneNumber: json['kakaoPhoneNumber'] as String? ?? '',
+      kakaoRoadAddress: json['kakaoRoadAddress'] as String? ?? '',
+      kakaoCategoryName: json['kakaoCategoryName'] as String? ?? '',
+      kakaoPlaceUrl: json['kakaoPlaceUrl'] as String? ?? '',
     );
   }
 }
@@ -453,6 +468,34 @@ class RegionDetail {
           .toList(),
       onlineMalls: ((json['onlineMalls'] as List<dynamic>?) ?? [])
           .map((item) => OnlineMallItem.fromJson(item as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}
+
+class MerchantMapSearchResult {
+  const MerchantMapSearchResult({
+    required this.region,
+    required this.centerLatitude,
+    required this.centerLongitude,
+    required this.merchantCount,
+    required this.merchants,
+  });
+
+  final RegionSummary region;
+  final double centerLatitude;
+  final double centerLongitude;
+  final int merchantCount;
+  final List<MerchantItem> merchants;
+
+  factory MerchantMapSearchResult.fromJson(Map<String, dynamic> json) {
+    return MerchantMapSearchResult(
+      region: RegionSummary.fromJson(json['region'] as Map<String, dynamic>),
+      centerLatitude: (json['centerLatitude'] as num?)?.toDouble() ?? 0,
+      centerLongitude: (json['centerLongitude'] as num?)?.toDouble() ?? 0,
+      merchantCount: json['merchantCount'] as int? ?? 0,
+      merchants: ((json['merchants'] as List<dynamic>?) ?? const [])
+          .map((item) => MerchantItem.fromJson(item as Map<String, dynamic>))
           .toList(),
     );
   }

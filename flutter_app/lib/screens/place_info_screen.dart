@@ -20,10 +20,12 @@ class PlaceInfoScreen extends StatefulWidget {
 }
 
 class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
-  Future<(TripDetail, RegionDetail)>? _future;
+  Future<({TripDetail tripDetail, RegionDetail regionDetail, MerchantMapSearchResult merchantMap})>? _future;
   bool _initialized = false;
   _PlaceInfoMapTab _selectedTab = _PlaceInfoMapTab.designatedPlaces;
   int? _focusedMarkerId;
+  PlaceMapViewport? _searchedViewport;
+  PlaceMapViewport? _pendingViewport;
 
   @override
   void didChangeDependencies() {
@@ -33,19 +35,45 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
     _initialized = true;
   }
 
-  Future<(TripDetail, RegionDetail)> _loadBundle() async {
+  Future<({TripDetail tripDetail, RegionDetail regionDetail, MerchantMapSearchResult merchantMap})> _loadBundle({
+    PlaceMapViewport? merchantViewport,
+  }) async {
     final controller = AppScope.of(context);
     final tripDetail = await controller.repository.getTripDetail(widget.tripId);
     final regionDetail = await controller.repository.getRegionDetail(
       tripDetail.trip.regionId,
       residence: controller.currentUser?.residence,
     );
-    return (tripDetail, regionDetail);
+    final merchantMap = await controller.repository.getMerchantMap(
+      regionId: tripDetail.trip.regionId,
+      minLat: merchantViewport?.minLatitude,
+      maxLat: merchantViewport?.maxLatitude,
+      minLng: merchantViewport?.minLongitude,
+      maxLng: merchantViewport?.maxLongitude,
+    );
+    return (
+      tripDetail: tripDetail,
+      regionDetail: regionDetail,
+      merchantMap: merchantMap,
+    );
   }
 
   Future<void> _refresh() async {
     setState(() {
-      _future = _loadBundle();
+      _future = _loadBundle(merchantViewport: _searchedViewport);
+    });
+  }
+
+  Future<void> _researchMerchants() async {
+    final viewport = _pendingViewport;
+    if (viewport == null) {
+      return;
+    }
+    setState(() {
+      _searchedViewport = viewport;
+      _pendingViewport = null;
+      _future = _loadBundle(merchantViewport: viewport);
+      _focusedMarkerId = null;
     });
   }
 
@@ -67,10 +95,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
         1;
   }
 
-  Future<void> _addPlaceToPlanner(
-    TripDetail tripDetail,
-    PlaceItem place,
-  ) async {
+  Future<void> _addPlaceToPlanner(TripDetail tripDetail, PlaceItem place) async {
     final controller = AppScope.of(context);
     final alreadyExists = tripDetail.selectedPlaces.any(
       (item) =>
@@ -130,8 +155,12 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
           id: 0,
           placeType: PlaceCategory.merchant,
           referencePlaceId: merchant.id,
-          placeName: merchant.name,
-          address: merchant.address,
+          placeName: merchant.kakaoPlaceName.isNotEmpty
+              ? merchant.kakaoPlaceName
+              : merchant.name,
+          address: merchant.kakaoRoadAddress.isNotEmpty
+              ? merchant.kakaoRoadAddress
+              : merchant.address,
           visitOrder: _nextVisitOrder(tripDetail),
           latitude: merchant.latitude,
           longitude: merchant.longitude,
@@ -184,44 +213,6 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
         .toList();
   }
 
-  List<MerchantItem> _buildFeaturedMerchants(List<MerchantItem> merchants) {
-    final candidates = merchants
-        .where((item) => item.latitude != null && item.longitude != null)
-        .toList();
-    if (candidates.length <= 10) {
-      return candidates;
-    }
-
-    final anchor = candidates.first;
-    candidates.sort((a, b) {
-      final aDistance = _distanceScore(
-        anchor.latitude!,
-        anchor.longitude!,
-        a.latitude!,
-        a.longitude!,
-      );
-      final bDistance = _distanceScore(
-        anchor.latitude!,
-        anchor.longitude!,
-        b.latitude!,
-        b.longitude!,
-      );
-      return aDistance.compareTo(bDistance);
-    });
-    return candidates.take(10).toList();
-  }
-
-  double _distanceScore(
-    double baseLat,
-    double baseLng,
-    double targetLat,
-    double targetLng,
-  ) {
-    final latDiff = baseLat - targetLat;
-    final lngDiff = baseLng - targetLng;
-    return (latDiff * latDiff) + (lngDiff * lngDiff);
-  }
-
   List<PlaceMapMarkerData> _buildMerchantMarkers(
     String regionName,
     List<MerchantItem> merchants,
@@ -232,8 +223,12 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
         .map(
           (merchant) => PlaceMapMarkerData(
             id: merchant.id,
-            name: merchant.name,
-            address: merchant.address,
+            name: merchant.kakaoPlaceName.isNotEmpty
+                ? merchant.kakaoPlaceName
+                : merchant.name,
+            address: merchant.kakaoRoadAddress.isNotEmpty
+                ? merchant.kakaoRoadAddress
+                : merchant.address,
             latitude: merchant.latitude!,
             longitude: merchant.longitude!,
             selected: selectedPlaces.any(
@@ -243,9 +238,26 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
             ),
             regionLabel: regionName,
             actionLabel: '플래너에 추가',
+            phoneNumber: merchant.kakaoPhoneNumber,
+            roadAddress: merchant.kakaoRoadAddress,
+            categoryName: merchant.kakaoCategoryName.isNotEmpty
+                ? merchant.kakaoCategoryName
+                : merchant.category,
+            placeUrl: merchant.kakaoPlaceUrl,
           ),
         )
         .toList();
+  }
+
+  bool _hasPendingMerchantViewport() {
+    final pending = _pendingViewport;
+    final searched = _searchedViewport;
+    if (pending == null) return false;
+    if (searched == null) return true;
+    return pending.minLatitude != searched.minLatitude ||
+        pending.maxLatitude != searched.maxLatitude ||
+        pending.minLongitude != searched.minLongitude ||
+        pending.maxLongitude != searched.maxLongitude;
   }
 
   @override
@@ -256,25 +268,25 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
     return AppShell(
       title: '직접 코스 만들기',
       modeName: controller.modeName,
-      child: FutureBuilder<(TripDetail, RegionDetail)>(
+      child: FutureBuilder<({TripDetail tripDetail, RegionDetail regionDetail, MerchantMapSearchResult merchantMap})>(
         future: _future,
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final tripDetail = snapshot.data!.$1;
-          final regionDetail = snapshot.data!.$2;
+          final tripDetail = snapshot.data!.tripDetail;
+          final regionDetail = snapshot.data!.regionDetail;
+          final merchantMap = snapshot.data!.merchantMap;
           final places = regionDetail.halfPricePlaces
               .where((place) => place.latitude != null && place.longitude != null)
               .toList();
-          final featuredMerchants = _buildFeaturedMerchants(regionDetail.merchants);
           final showingMerchants = _selectedTab == _PlaceInfoMapTab.merchants;
 
           final markers = showingMerchants
               ? _buildMerchantMarkers(
                   tripDetail.trip.regionName,
-                  featuredMerchants,
+                  merchantMap.merchants,
                   tripDetail.selectedPlaces,
                 )
               : _buildPlaceMarkers(
@@ -295,7 +307,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
               SectionCard(
                 title: '지도에서 장소 고르기',
                 subtitle: showingMerchants
-                    ? '지역 내 대표 지점을 기준으로 가까운 지역화폐 가맹점 10곳만 먼저 보여줍니다. 추후에는 내 위치 기준으로 확장할 수 있어요.'
+                    ? '기본은 시청/군청 등 지역 중심 화면으로 시작하고, 지도를 옮긴 뒤 `이 지역 재검색`을 눌렀을 때만 현재 화면 안의 가맹점을 다시 불러옵니다.'
                     : '카카오맵 마커를 누르면 지정관광지 정보가 지도 위 카드로 열리고, 바로 플래너에 추가할 수 있어요.',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -310,6 +322,28 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
                       },
                     ),
                     const SizedBox(height: 14),
+                    if (showingMerchants) ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '현재 ${merchantMap.merchantCount}개 가맹점',
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    color: const Color(0xFF111827),
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
+                          ),
+                          FilledButton.tonal(
+                            onPressed: _hasPendingMerchantViewport()
+                                ? _researchMerchants
+                                : null,
+                            child: const Text('이 지역 재검색'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     PlaceMapView(
                       markers: markers,
                       emptyMessage: showingMerchants
@@ -333,7 +367,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
                         });
 
                         if (showingMerchants) {
-                          final selected = featuredMerchants.cast<MerchantItem?>().firstWhere(
+                          final selected = merchantMap.merchants.cast<MerchantItem?>().firstWhere(
                                 (item) => item?.id == markerId,
                                 orElse: () => null,
                               );
@@ -348,7 +382,14 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
                           await _addPlaceToPlanner(tripDetail, selected);
                         }
                       },
-                      height: 500,
+                      onViewportChanged: showingMerchants
+                          ? (viewport) {
+                              setState(() {
+                                _pendingViewport = viewport;
+                              });
+                            }
+                          : null,
+                      height: showingMerchants ? 430 : 500,
                     ),
                     const SizedBox(height: 16),
                     SizedBox(
@@ -396,7 +437,7 @@ class _IntroCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '카카오맵 마커를 눌러 원하는 관광지나 가맹점을 보고, 플래너에 담아 여행 동선을 완성해 보세요.',
+            '카카오맵 마커를 눌러 원하는 관광지와 지역화폐 가맹점을 보고, 플래너에 담아 여행 동선을 완성해 보세요.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: const Color(0xFF64748B),
                   height: 1.45,

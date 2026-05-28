@@ -213,6 +213,11 @@ class MockTravelRepository implements TravelRepository {
           category: '오프라인 가맹점',
           latitude: 34.3132,
           longitude: 126.7581,
+          kakaoPlaceName: '완도 특산품 상회',
+          kakaoPhoneNumber: '061-555-1111',
+          kakaoRoadAddress: '전라남도 완도군 시장길 5',
+          kakaoCategoryName: '기념품점',
+          kakaoPlaceUrl: 'https://place.map.kakao.com/',
         ),
       ],
       onlineMalls: const [
@@ -274,6 +279,11 @@ class MockTravelRepository implements TravelRepository {
           category: '오프라인 가맹점',
           latitude: 34.6421,
           longitude: 126.7672,
+          kakaoPlaceName: '강진 로컬브랜드 마켓',
+          kakaoPhoneNumber: '061-555-2222',
+          kakaoRoadAddress: '전라남도 강진군 읍내로 3',
+          kakaoCategoryName: '상점',
+          kakaoPlaceUrl: 'https://place.map.kakao.com/',
         ),
       ],
       onlineMalls: const [
@@ -333,6 +343,11 @@ class MockTravelRepository implements TravelRepository {
           category: '오프라인 가맹점',
           latitude: 37.3705,
           longitude: 128.3902,
+          kakaoPlaceName: '평창 여행상점',
+          kakaoPhoneNumber: '033-555-3333',
+          kakaoRoadAddress: '강원특별자치도 평창군 관광로 2',
+          kakaoCategoryName: '상점',
+          kakaoPlaceUrl: 'https://place.map.kakao.com/',
         ),
       ],
       onlineMalls: const [
@@ -543,6 +558,34 @@ class MockTravelRepository implements TravelRepository {
       digitalTourCardPlaces: detail.digitalTourCardPlaces,
       merchants: detail.merchants,
       onlineMalls: detail.onlineMalls,
+    );
+  }
+
+  @override
+  Future<MerchantMapSearchResult> getMerchantMap({
+    required int regionId,
+    double? minLat,
+    double? maxLat,
+    double? minLng,
+    double? maxLng,
+  }) async {
+    final detail = _regionDetails[regionId];
+    if (detail == null) {
+      throw Exception('지역 정보를 찾을 수 없습니다.');
+    }
+    final merchants = detail.merchants
+        .where((item) => item.latitude != null && item.longitude != null)
+        .toList();
+    return MerchantMapSearchResult(
+      region: detail.region,
+      centerLatitude: detail.region.id == 1
+          ? 34.3119
+          : (merchants.isEmpty ? 0 : (merchants.first.latitude ?? 0)),
+      centerLongitude: detail.region.id == 1
+          ? 126.7551
+          : (merchants.isEmpty ? 0 : (merchants.first.longitude ?? 0)),
+      merchantCount: merchants.length,
+      merchants: merchants,
     );
   }
 
