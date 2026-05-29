@@ -24,10 +24,14 @@ abstract class TravelRepository {
   Future<RegionDetail> getRegionDetail(int regionId, {String? residence});
   Future<MerchantMapSearchResult> getMerchantMap({
     required int regionId,
-    double? minLat,
-    double? maxLat,
-    double? minLng,
-    double? maxLng,
+    double? southLat,
+    double? northLat,
+    double? westLng,
+    double? eastLng,
+  });
+  Future<MerchantDetailItem> getMerchantDetail({
+    required int regionId,
+    required int merchantId,
   });
   Future<TripSummary> createTrip({
     required int userId,

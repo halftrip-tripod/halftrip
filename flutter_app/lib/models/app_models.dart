@@ -479,14 +479,14 @@ class MerchantMapSearchResult {
     required this.centerLatitude,
     required this.centerLongitude,
     required this.merchantCount,
-    required this.merchants,
+    required this.markers,
   });
 
   final RegionSummary region;
   final double centerLatitude;
   final double centerLongitude;
   final int merchantCount;
-  final List<MerchantItem> merchants;
+  final List<MerchantMarkerItem> markers;
 
   factory MerchantMapSearchResult.fromJson(Map<String, dynamic> json) {
     return MerchantMapSearchResult(
@@ -494,9 +494,73 @@ class MerchantMapSearchResult {
       centerLatitude: (json['centerLatitude'] as num?)?.toDouble() ?? 0,
       centerLongitude: (json['centerLongitude'] as num?)?.toDouble() ?? 0,
       merchantCount: json['merchantCount'] as int? ?? 0,
-      merchants: ((json['merchants'] as List<dynamic>?) ?? const [])
-          .map((item) => MerchantItem.fromJson(item as Map<String, dynamic>))
+      markers: ((json['merchants'] as List<dynamic>?) ?? const [])
+          .map((item) => MerchantMarkerItem.fromJson(item as Map<String, dynamic>))
           .toList(),
+    );
+  }
+}
+
+class MerchantMarkerItem {
+  const MerchantMarkerItem({
+    required this.id,
+    required this.latitude,
+    required this.longitude,
+  });
+
+  final int id;
+  final double latitude;
+  final double longitude;
+
+  factory MerchantMarkerItem.fromJson(Map<String, dynamic> json) {
+    return MerchantMarkerItem(
+      id: json['id'] as int,
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
+    );
+  }
+}
+
+class MerchantDetailItem {
+  const MerchantDetailItem({
+    required this.id,
+    required this.storeName,
+    required this.roadAddress,
+    required this.category,
+    required this.latitude,
+    required this.longitude,
+    required this.kakaoPlaceName,
+    required this.kakaoPhone,
+    required this.kakaoRoadAddress,
+    required this.kakaoCategory,
+    required this.kakaoPlaceUrl,
+  });
+
+  final int id;
+  final String storeName;
+  final String roadAddress;
+  final String category;
+  final double? latitude;
+  final double? longitude;
+  final String kakaoPlaceName;
+  final String kakaoPhone;
+  final String kakaoRoadAddress;
+  final String kakaoCategory;
+  final String kakaoPlaceUrl;
+
+  factory MerchantDetailItem.fromJson(Map<String, dynamic> json) {
+    return MerchantDetailItem(
+      id: json['id'] as int,
+      storeName: json['storeName'] as String? ?? '',
+      roadAddress: json['roadAddress'] as String? ?? '',
+      category: json['category'] as String? ?? '',
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
+      kakaoPlaceName: json['kakaoPlaceName'] as String? ?? '',
+      kakaoPhone: json['kakaoPhone'] as String? ?? '',
+      kakaoRoadAddress: json['kakaoRoadAddress'] as String? ?? '',
+      kakaoCategory: json['kakaoCategory'] as String? ?? '',
+      kakaoPlaceUrl: json['kakaoPlaceUrl'] as String? ?? '',
     );
   }
 }

@@ -236,22 +236,36 @@ class ApiTravelRepository implements TravelRepository {
   @override
   Future<MerchantMapSearchResult> getMerchantMap({
     required int regionId,
-    double? minLat,
-    double? maxLat,
-    double? minLng,
-    double? maxLng,
+    double? southLat,
+    double? northLat,
+    double? westLng,
+    double? eastLng,
   }) async {
     final response = await _jsonRequest(
       'GET',
       '/regions/$regionId/merchant-map',
       query: {
-        if (minLat != null) 'minLat': minLat,
-        if (maxLat != null) 'maxLat': maxLat,
-        if (minLng != null) 'minLng': minLng,
-        if (maxLng != null) 'maxLng': maxLng,
+        if (southLat != null) 'southLat': southLat,
+        if (northLat != null) 'northLat': northLat,
+        if (westLng != null) 'westLng': westLng,
+        if (eastLng != null) 'eastLng': eastLng,
       },
     );
     return MerchantMapSearchResult.fromJson(
+      response['data'] as Map<String, dynamic>,
+    );
+  }
+
+  @override
+  Future<MerchantDetailItem> getMerchantDetail({
+    required int regionId,
+    required int merchantId,
+  }) async {
+    final response = await _jsonRequest(
+      'GET',
+      '/regions/$regionId/merchant-map/$merchantId',
+    );
+    return MerchantDetailItem.fromJson(
       response['data'] as Map<String, dynamic>,
     );
   }

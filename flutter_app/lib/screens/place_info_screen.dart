@@ -26,6 +26,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
   int? _focusedMarkerId;
   PlaceMapViewport? _searchedViewport;
   PlaceMapViewport? _pendingViewport;
+  final Map<int, MerchantDetailItem> _merchantDetailCache = {};
 
   @override
   void didChangeDependencies() {
@@ -46,10 +47,10 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
     );
     final merchantMap = await controller.repository.getMerchantMap(
       regionId: tripDetail.trip.regionId,
-      minLat: merchantViewport?.minLatitude,
-      maxLat: merchantViewport?.maxLatitude,
-      minLng: merchantViewport?.minLongitude,
-      maxLng: merchantViewport?.maxLongitude,
+      southLat: merchantViewport?.minLatitude,
+      northLat: merchantViewport?.maxLatitude,
+      westLng: merchantViewport?.minLongitude,
+      eastLng: merchantViewport?.maxLongitude,
     );
     return (
       tripDetail: tripDetail,
@@ -139,7 +140,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
 
   Future<void> _addMerchantToPlanner(
     TripDetail tripDetail,
-    MerchantItem merchant,
+    MerchantDetailItem merchant,
   ) async {
     final controller = AppScope.of(context);
     final alreadyExists = tripDetail.selectedPlaces.any(
@@ -157,10 +158,10 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
           referencePlaceId: merchant.id,
           placeName: merchant.kakaoPlaceName.isNotEmpty
               ? merchant.kakaoPlaceName
-              : merchant.name,
+              : merchant.storeName,
           address: merchant.kakaoRoadAddress.isNotEmpty
               ? merchant.kakaoRoadAddress
-              : merchant.address,
+              : merchant.roadAddress,
           visitOrder: _nextVisitOrder(tripDetail),
           latitude: merchant.latitude,
           longitude: merchant.longitude,
@@ -215,22 +216,21 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
 
   List<PlaceMapMarkerData> _buildMerchantMarkers(
     String regionName,
-    List<MerchantItem> merchants,
+    List<MerchantMarkerItem> merchants,
     List<TripPlaceItem> selectedPlaces,
   ) {
     return merchants
-        .where((merchant) => merchant.latitude != null && merchant.longitude != null)
         .map(
           (merchant) => PlaceMapMarkerData(
             id: merchant.id,
-            name: merchant.kakaoPlaceName.isNotEmpty
-                ? merchant.kakaoPlaceName
-                : merchant.name,
-            address: merchant.kakaoRoadAddress.isNotEmpty
-                ? merchant.kakaoRoadAddress
-                : merchant.address,
-            latitude: merchant.latitude!,
-            longitude: merchant.longitude!,
+            name: _merchantDetailCache[merchant.id]?.kakaoPlaceName.isNotEmpty == true
+                ? _merchantDetailCache[merchant.id]!.kakaoPlaceName
+                : (_merchantDetailCache[merchant.id]?.storeName ?? '가맹점'),
+            address: _merchantDetailCache[merchant.id]?.kakaoRoadAddress.isNotEmpty == true
+                ? _merchantDetailCache[merchant.id]!.kakaoRoadAddress
+                : (_merchantDetailCache[merchant.id]?.roadAddress ?? '상세 정보를 불러오는 중입니다.'),
+            latitude: merchant.latitude,
+            longitude: merchant.longitude,
             selected: selectedPlaces.any(
               (item) =>
                   item.placeType == PlaceCategory.merchant &&
@@ -238,15 +238,33 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
             ),
             regionLabel: regionName,
             actionLabel: '플래너에 추가',
-            phoneNumber: merchant.kakaoPhoneNumber,
-            roadAddress: merchant.kakaoRoadAddress,
-            categoryName: merchant.kakaoCategoryName.isNotEmpty
-                ? merchant.kakaoCategoryName
-                : merchant.category,
-            placeUrl: merchant.kakaoPlaceUrl,
+            phoneNumber: _merchantDetailCache[merchant.id]?.kakaoPhone,
+            roadAddress: _merchantDetailCache[merchant.id]?.kakaoRoadAddress,
+            categoryName: _merchantDetailCache[merchant.id]?.kakaoCategory.isNotEmpty == true
+                ? _merchantDetailCache[merchant.id]!.kakaoCategory
+                : _merchantDetailCache[merchant.id]?.category,
+            placeUrl: _merchantDetailCache[merchant.id]?.kakaoPlaceUrl,
           ),
         )
         .toList();
+  }
+
+  Future<void> _loadMerchantDetail(int regionId, int merchantId) async {
+    if (_merchantDetailCache.containsKey(merchantId)) {
+      return;
+    }
+    try {
+      final detail = await AppScope.of(context).repository.getMerchantDetail(
+        regionId: regionId,
+        merchantId: merchantId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _merchantDetailCache[merchantId] = detail;
+      });
+    } catch (_) {
+      // Keep marker usable even if detail fetch fails.
+    }
   }
 
   bool _hasPendingMerchantViewport() {
@@ -286,7 +304,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
           final markers = showingMerchants
               ? _buildMerchantMarkers(
                   tripDetail.trip.regionName,
-                  merchantMap.merchants,
+                  merchantMap.markers,
                   tripDetail.selectedPlaces,
                 )
               : _buildPlaceMarkers(
@@ -355,11 +373,17 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
                         setState(() {
                           _focusedMarkerId = markerId;
                         });
+                        if (showingMerchants) {
+                          _loadMerchantDetail(tripDetail.trip.regionId, markerId);
+                        }
                       },
                       onMarkerDoubleTap: (markerId) {
                         setState(() {
                           _focusedMarkerId = markerId;
                         });
+                        if (showingMerchants) {
+                          _loadMerchantDetail(tripDetail.trip.regionId, markerId);
+                        }
                       },
                       onMarkerAction: (markerId) async {
                         setState(() {
@@ -367,10 +391,8 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
                         });
 
                         if (showingMerchants) {
-                          final selected = merchantMap.merchants.cast<MerchantItem?>().firstWhere(
-                                (item) => item?.id == markerId,
-                                orElse: () => null,
-                              );
+                          await _loadMerchantDetail(tripDetail.trip.regionId, markerId);
+                          final selected = _merchantDetailCache[markerId];
                           if (selected == null) return;
                           await _addMerchantToPlanner(tripDetail, selected);
                         } else {

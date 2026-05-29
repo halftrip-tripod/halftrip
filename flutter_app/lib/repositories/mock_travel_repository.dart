@@ -564,10 +564,10 @@ class MockTravelRepository implements TravelRepository {
   @override
   Future<MerchantMapSearchResult> getMerchantMap({
     required int regionId,
-    double? minLat,
-    double? maxLat,
-    double? minLng,
-    double? maxLng,
+    double? southLat,
+    double? northLat,
+    double? westLng,
+    double? eastLng,
   }) async {
     final detail = _regionDetails[regionId];
     if (detail == null) {
@@ -585,7 +585,41 @@ class MockTravelRepository implements TravelRepository {
           ? 126.7551
           : (merchants.isEmpty ? 0 : (merchants.first.longitude ?? 0)),
       merchantCount: merchants.length,
-      merchants: merchants,
+      markers: merchants
+          .map((item) => MerchantMarkerItem(
+                id: item.id,
+                latitude: item.latitude ?? 0,
+                longitude: item.longitude ?? 0,
+              ))
+          .toList(),
+    );
+  }
+
+  @override
+  Future<MerchantDetailItem> getMerchantDetail({
+    required int regionId,
+    required int merchantId,
+  }) async {
+    final detail = _regionDetails[regionId];
+    if (detail == null) {
+      throw Exception('지역 정보를 찾을 수 없습니다.');
+    }
+    final merchant = detail.merchants.firstWhere(
+      (item) => item.id == merchantId,
+      orElse: () => throw Exception('가맹점 정보를 찾을 수 없습니다.'),
+    );
+    return MerchantDetailItem(
+      id: merchant.id,
+      storeName: merchant.name,
+      roadAddress: merchant.address,
+      category: merchant.category,
+      latitude: merchant.latitude,
+      longitude: merchant.longitude,
+      kakaoPlaceName: merchant.kakaoPlaceName,
+      kakaoPhone: merchant.kakaoPhoneNumber,
+      kakaoRoadAddress: merchant.kakaoRoadAddress,
+      kakaoCategory: merchant.kakaoCategoryName,
+      kakaoPlaceUrl: merchant.kakaoPlaceUrl,
     );
   }
 
