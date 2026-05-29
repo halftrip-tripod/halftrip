@@ -136,33 +136,48 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
     );
   }
 
-  Future<void> _addMerchantToPlanner(
-    TripDetail tripDetail,
-    MerchantDetailItem merchant,
-  ) async {
+  Future<void> _addMerchantToPlanner({
+    required TripDetail tripDetail,
+    required MerchantMarkerItem marker,
+    required MerchantItem? fallback,
+  }) async {
     final controller = AppScope.of(context);
+    final detail = _merchantDetailCache[marker.id];
+
     final alreadyExists = tripDetail.selectedPlaces.any(
       (item) =>
           item.placeType == PlaceCategory.merchant &&
-          item.referencePlaceId == merchant.id,
+          item.referencePlaceId == marker.id,
     );
 
     if (!alreadyExists) {
+      final resolvedName = detail?.kakaoPlaceName.isNotEmpty == true
+          ? detail!.kakaoPlaceName
+          : detail?.storeName.isNotEmpty == true
+              ? detail!.storeName
+              : fallback?.kakaoPlaceName.isNotEmpty == true
+                  ? fallback!.kakaoPlaceName
+                  : fallback?.name ?? '가맹점';
+
+      final resolvedAddress = detail?.kakaoRoadAddress.isNotEmpty == true
+          ? detail!.kakaoRoadAddress
+          : detail?.roadAddress.isNotEmpty == true
+              ? detail!.roadAddress
+              : fallback?.kakaoRoadAddress.isNotEmpty == true
+                  ? fallback!.kakaoRoadAddress
+                  : fallback?.address ?? '주소 정보 없음';
+
       final payload = [
         ...tripDetail.selectedPlaces,
         TripPlaceItem(
           id: 0,
           placeType: PlaceCategory.merchant,
-          referencePlaceId: merchant.id,
-          placeName: merchant.kakaoPlaceName.isNotEmpty
-              ? merchant.kakaoPlaceName
-              : merchant.storeName,
-          address: merchant.kakaoRoadAddress.isNotEmpty
-              ? merchant.kakaoRoadAddress
-              : merchant.roadAddress,
+          referencePlaceId: marker.id,
+          placeName: resolvedName,
+          address: resolvedAddress,
           visitOrder: _nextVisitOrder(tripDetail),
-          latitude: merchant.latitude,
-          longitude: merchant.longitude,
+          latitude: marker.latitude,
+          longitude: marker.longitude,
           checked: true,
         ),
       ];
@@ -174,14 +189,15 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
       await _refresh();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${merchant.storeName}를 플래너에 추가했습니다.')),
+        SnackBar(content: Text('$resolvedName를 플래너에 추가했습니다.')),
       );
       return;
     }
 
+    final displayName = detail?.storeName ?? fallback?.name ?? '가맹점';
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${merchant.storeName}은 이미 플래너에 담겨 있습니다.')),
+      SnackBar(content: Text('$displayName은 이미 플래너에 담겨 있습니다.')),
     );
   }
 
@@ -212,48 +228,55 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
         .toList();
   }
 
-  List<PlaceMapMarkerData> _buildMerchantMarkers(
-    String regionName,
-    List<MerchantMarkerItem> merchants,
-    List<TripPlaceItem> selectedPlaces,
-  ) {
-    return merchants
-        .map(
-          (merchant) {
-            final detail = _merchantDetailCache[merchant.id];
-            return PlaceMapMarkerData(
-              id: merchant.id,
-              name: detail?.kakaoPlaceName.isNotEmpty == true
-                  ? detail!.kakaoPlaceName
-                  : (detail?.storeName ?? '가맹점'),
-              address: detail?.kakaoRoadAddress.isNotEmpty == true
-                  ? detail!.kakaoRoadAddress
-                  : (detail?.roadAddress ?? '상세 정보를 불러오는 중입니다.'),
-              latitude: merchant.latitude,
-              longitude: merchant.longitude,
-              selected: selectedPlaces.any(
-                (item) =>
-                    item.placeType == PlaceCategory.merchant &&
-                    item.referencePlaceId == merchant.id,
-              ),
-              regionLabel: regionName,
-              actionLabel: '플래너에 추가',
-              phoneNumber: detail?.kakaoPhone,
-              roadAddress: detail?.kakaoRoadAddress,
-              categoryName: detail?.kakaoCategory.isNotEmpty == true
-                  ? detail!.kakaoCategory
-                  : detail?.category,
-              placeUrl: detail?.kakaoPlaceUrl,
-            );
-          },
-        )
-        .toList();
+  List<PlaceMapMarkerData> _buildMerchantMarkers({
+    required String regionName,
+    required List<MerchantMarkerItem> markers,
+    required List<TripPlaceItem> selectedPlaces,
+    required Map<int, MerchantItem> fallbackMerchants,
+  }) {
+    return markers.map((marker) {
+      final detail = _merchantDetailCache[marker.id];
+      final fallback = fallbackMerchants[marker.id];
+      final displayName = detail?.kakaoPlaceName.isNotEmpty == true
+          ? detail!.kakaoPlaceName
+          : detail?.storeName.isNotEmpty == true
+              ? detail!.storeName
+              : fallback?.kakaoPlaceName.isNotEmpty == true
+                  ? fallback!.kakaoPlaceName
+                  : fallback?.name ?? '가맹점';
+      final displayAddress = detail?.kakaoRoadAddress.isNotEmpty == true
+          ? detail!.kakaoRoadAddress
+          : detail?.roadAddress.isNotEmpty == true
+              ? detail!.roadAddress
+              : fallback?.kakaoRoadAddress.isNotEmpty == true
+                  ? fallback!.kakaoRoadAddress
+                  : fallback?.address ?? '상세 정보 조회 실패';
+
+      return PlaceMapMarkerData(
+        id: marker.id,
+        name: displayName,
+        address: displayAddress,
+        latitude: marker.latitude,
+        longitude: marker.longitude,
+        selected: selectedPlaces.any(
+          (item) =>
+              item.placeType == PlaceCategory.merchant &&
+              item.referencePlaceId == marker.id,
+        ),
+        regionLabel: regionName,
+        actionLabel: '플래너에 추가',
+        phoneNumber: detail?.kakaoPhone,
+        roadAddress: detail?.kakaoRoadAddress ?? fallback?.kakaoRoadAddress,
+        categoryName: detail?.kakaoCategory.isNotEmpty == true
+            ? detail!.kakaoCategory
+            : detail?.category ?? fallback?.category,
+        placeUrl: detail?.kakaoPlaceUrl ?? fallback?.kakaoPlaceUrl,
+      );
+    }).toList();
   }
 
   Future<void> _loadMerchantDetail(int regionId, int merchantId) async {
-    if (_merchantDetailCache.containsKey(merchantId)) {
-      return;
-    }
+    if (_merchantDetailCache.containsKey(merchantId)) return;
     try {
       final detail = await AppScope.of(context).repository.getMerchantDetail(
         regionId: regionId,
@@ -264,7 +287,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
         _merchantDetailCache[merchantId] = detail;
       });
     } catch (_) {
-      // Keep marker usable even if detail fetch fails.
+      // Read 실패는 허용. Write(플래너 추가)는 marker 기본값으로 계속 가능해야 함.
     }
   }
 
@@ -300,13 +323,17 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
           final places = regionDetail.halfPricePlaces
               .where((place) => place.latitude != null && place.longitude != null)
               .toList();
+          final fallbackMerchants = {
+            for (final merchant in regionDetail.merchants) merchant.id: merchant,
+          };
           final showingMerchants = _selectedTab == _PlaceInfoMapTab.merchants;
 
           final markers = showingMerchants
               ? _buildMerchantMarkers(
-                  tripDetail.trip.regionName,
-                  merchantMap.markers,
-                  tripDetail.selectedPlaces,
+                  regionName: tripDetail.trip.regionName,
+                  markers: merchantMap.markers,
+                  selectedPlaces: tripDetail.selectedPlaces,
+                  fallbackMerchants: fallbackMerchants,
                 )
               : _buildPlaceMarkers(
                   tripDetail.trip.regionName,
@@ -326,7 +353,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
               SectionCard(
                 title: '지도에서 장소 고르기',
                 subtitle: showingMerchants
-                    ? '기본은 시청·군청 등 지역 중심 화면으로 시작하고, 지도를 옮긴 뒤 `이 지역 재검색`을 눌렀을 때만 현재 화면 안의 가맹점을 다시 불러옵니다.'
+                    ? '기본은 시청/군청 등 지역 중심 화면으로 시작하고, 지도를 옮긴 뒤 `이 지역 재검색`을 눌렀을 때만 현재 화면 안의 가맹점을 다시 불러옵니다.'
                     : '카카오맵 마커를 누르면 지정관광지 정보가 지도 위 카드로 열리고, 바로 플래너에 추가할 수 있어요.',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -392,10 +419,18 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
                         });
 
                         if (showingMerchants) {
-                          await _loadMerchantDetail(tripDetail.trip.regionId, markerId);
-                          final selected = _merchantDetailCache[markerId];
-                          if (selected == null) return;
-                          await _addMerchantToPlanner(tripDetail, selected);
+                          final marker = merchantMap.markers.cast<MerchantMarkerItem?>().firstWhere(
+                                (item) => item?.id == markerId,
+                                orElse: () => null,
+                              );
+                          if (marker == null) return;
+                          final fallback = fallbackMerchants[marker.id];
+                          await _addMerchantToPlanner(
+                            tripDetail: tripDetail,
+                            marker: marker,
+                            fallback: fallback,
+                          );
+                          _loadMerchantDetail(tripDetail.trip.regionId, markerId);
                         } else {
                           final selected = places.cast<PlaceItem?>().firstWhere(
                                 (item) => item?.id == markerId,
