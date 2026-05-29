@@ -575,6 +575,17 @@ class MockTravelRepository implements TravelRepository {
     }
     final merchants = detail.merchants
         .where((item) => item.latitude != null && item.longitude != null)
+        .where((item) {
+          final lat = item.latitude!;
+          final lng = item.longitude!;
+          final inLat = southLat == null || northLat == null
+              ? true
+              : lat >= southLat && lat <= northLat;
+          final inLng = westLng == null || eastLng == null
+              ? true
+              : lng >= westLng && lng <= eastLng;
+          return inLat && inLng;
+        })
         .toList();
     return MerchantMapSearchResult(
       region: detail.region,

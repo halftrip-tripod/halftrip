@@ -67,14 +67,12 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
 
   Future<void> _researchMerchants() async {
     final viewport = _pendingViewport;
-    if (viewport == null) {
-      return;
-    }
+    if (viewport == null) return;
     setState(() {
       _searchedViewport = viewport;
       _pendingViewport = null;
-      _future = _loadBundle(merchantViewport: viewport);
       _focusedMarkerId = null;
+      _future = _loadBundle(merchantViewport: viewport);
     });
   }
 
@@ -176,14 +174,14 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
       await _refresh();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${merchant.name}를 플래너에 추가했습니다.')),
+        SnackBar(content: Text('${merchant.storeName}를 플래너에 추가했습니다.')),
       );
       return;
     }
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${merchant.name}은 이미 플래너에 담겨 있습니다.')),
+      SnackBar(content: Text('${merchant.storeName}은 이미 플래너에 담겨 있습니다.')),
     );
   }
 
@@ -221,30 +219,33 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
   ) {
     return merchants
         .map(
-          (merchant) => PlaceMapMarkerData(
-            id: merchant.id,
-            name: _merchantDetailCache[merchant.id]?.kakaoPlaceName.isNotEmpty == true
-                ? _merchantDetailCache[merchant.id]!.kakaoPlaceName
-                : (_merchantDetailCache[merchant.id]?.storeName ?? '가맹점'),
-            address: _merchantDetailCache[merchant.id]?.kakaoRoadAddress.isNotEmpty == true
-                ? _merchantDetailCache[merchant.id]!.kakaoRoadAddress
-                : (_merchantDetailCache[merchant.id]?.roadAddress ?? '상세 정보를 불러오는 중입니다.'),
-            latitude: merchant.latitude,
-            longitude: merchant.longitude,
-            selected: selectedPlaces.any(
-              (item) =>
-                  item.placeType == PlaceCategory.merchant &&
-                  item.referencePlaceId == merchant.id,
-            ),
-            regionLabel: regionName,
-            actionLabel: '플래너에 추가',
-            phoneNumber: _merchantDetailCache[merchant.id]?.kakaoPhone,
-            roadAddress: _merchantDetailCache[merchant.id]?.kakaoRoadAddress,
-            categoryName: _merchantDetailCache[merchant.id]?.kakaoCategory.isNotEmpty == true
-                ? _merchantDetailCache[merchant.id]!.kakaoCategory
-                : _merchantDetailCache[merchant.id]?.category,
-            placeUrl: _merchantDetailCache[merchant.id]?.kakaoPlaceUrl,
-          ),
+          (merchant) {
+            final detail = _merchantDetailCache[merchant.id];
+            return PlaceMapMarkerData(
+              id: merchant.id,
+              name: detail?.kakaoPlaceName.isNotEmpty == true
+                  ? detail!.kakaoPlaceName
+                  : (detail?.storeName ?? '가맹점'),
+              address: detail?.kakaoRoadAddress.isNotEmpty == true
+                  ? detail!.kakaoRoadAddress
+                  : (detail?.roadAddress ?? '상세 정보를 불러오는 중입니다.'),
+              latitude: merchant.latitude,
+              longitude: merchant.longitude,
+              selected: selectedPlaces.any(
+                (item) =>
+                    item.placeType == PlaceCategory.merchant &&
+                    item.referencePlaceId == merchant.id,
+              ),
+              regionLabel: regionName,
+              actionLabel: '플래너에 추가',
+              phoneNumber: detail?.kakaoPhone,
+              roadAddress: detail?.kakaoRoadAddress,
+              categoryName: detail?.kakaoCategory.isNotEmpty == true
+                  ? detail!.kakaoCategory
+                  : detail?.category,
+              placeUrl: detail?.kakaoPlaceUrl,
+            );
+          },
         )
         .toList();
   }
@@ -325,7 +326,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
               SectionCard(
                 title: '지도에서 장소 고르기',
                 subtitle: showingMerchants
-                    ? '기본은 시청/군청 등 지역 중심 화면으로 시작하고, 지도를 옮긴 뒤 `이 지역 재검색`을 눌렀을 때만 현재 화면 안의 가맹점을 다시 불러옵니다.'
+                    ? '기본은 시청·군청 등 지역 중심 화면으로 시작하고, 지도를 옮긴 뒤 `이 지역 재검색`을 눌렀을 때만 현재 화면 안의 가맹점을 다시 불러옵니다.'
                     : '카카오맵 마커를 누르면 지정관광지 정보가 지도 위 카드로 열리고, 바로 플래너에 추가할 수 있어요.',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
