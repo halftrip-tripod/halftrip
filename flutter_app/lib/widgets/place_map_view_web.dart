@@ -51,9 +51,9 @@ class _PlaceMapViewState extends State<PlaceMapView> {
 
   StreamSubscription<html.Event>? _resizeSubscription;
   Timer? _relayoutTimer;
-  final List<Function> _markerJsCallbacks = [];
+  final List<js.JsFunction> _markerJsCallbacks = [];
   final List<js.JsObject> _markerOverlayObjects = [];
-  final List<Function> _mapJsCallbacks = [];
+  final List<js.JsFunction> _mapJsCallbacks = [];
   int _renderVersion = 0;
 
   js.JsObject? _map;
@@ -211,7 +211,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
       }
 
       maps.callMethod('load', [
-        js.allowInterop(() {
+        js.JsFunction.withThis((_) {
           if (!mounted || renderVersion != _renderVersion) {
             return;
           }
@@ -327,7 +327,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
             markerData.selected,
       );
 
-      final clickCallback = js.allowInterop(() {
+      final clickCallback = js.JsFunction.withThis((_) {
         openOverlay(markerData, position);
         _invokeMarkerCallback(
           widget.onMarkerTap,
@@ -339,7 +339,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
       markerContent.onClick.listen((event) {
         event.preventDefault();
         event.stopPropagation();
-        clickCallback();
+        clickCallback.callMethod('call', [null]);
       });
 
       final markerOverlay = js.JsObject(
@@ -367,7 +367,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     _bounds = bounds;
 
     if (widget.onViewportChanged != null) {
-      final idleCallback = js.allowInterop(() {
+      final idleCallback = js.JsFunction.withThis((_) {
         _emitViewportChanged();
       });
       _mapJsCallbacks.add(idleCallback);
