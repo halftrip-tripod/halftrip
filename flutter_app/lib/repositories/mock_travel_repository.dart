@@ -526,8 +526,11 @@ class MockTravelRepository implements TravelRepository {
   }
 
   @override
-  Future<RegionDetail> getRegionDetail(int regionId,
-      {String? residence}) async {
+  Future<RegionDetail> getRegionDetail(
+    int regionId, {
+    String? residence,
+    bool includeMerchants = true,
+  }) async {
     final detail = _regionDetails[regionId];
     if (detail == null) {
       throw Exception('지역 정보를 찾을 수 없습니다.');
@@ -556,7 +559,7 @@ class MockTravelRepository implements TravelRepository {
       ),
       halfPricePlaces: detail.halfPricePlaces,
       digitalTourCardPlaces: detail.digitalTourCardPlaces,
-      merchants: detail.merchants,
+      merchants: includeMerchants ? detail.merchants : const [],
       onlineMalls: detail.onlineMalls,
     );
   }

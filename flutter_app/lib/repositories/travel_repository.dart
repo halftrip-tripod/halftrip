@@ -21,7 +21,11 @@ abstract class TravelRepository {
   Future<List<TripSummary>> getTrips(int userId);
   Future<TripDetail> getTripDetail(int tripId);
   Future<List<RegionSummary>> getRegions({String? residence});
-  Future<RegionDetail> getRegionDetail(int regionId, {String? residence});
+  Future<RegionDetail> getRegionDetail(
+    int regionId, {
+    String? residence,
+    bool includeMerchants = true,
+  });
   Future<MerchantMapSearchResult> getMerchantMap({
     required int regionId,
     double? southLat,

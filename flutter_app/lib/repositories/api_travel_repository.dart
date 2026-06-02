@@ -222,13 +222,15 @@ class ApiTravelRepository implements TravelRepository {
   Future<RegionDetail> getRegionDetail(
     int regionId, {
     String? residence,
+    bool includeMerchants = true,
   }) async {
     final response = await _jsonRequest(
       'GET',
       '/regions/$regionId',
-      query: residence == null || residence.isEmpty
-          ? null
-          : {'residence': residence},
+      query: {
+        if (residence != null && residence.isNotEmpty) 'residence': residence,
+        'includeMerchants': includeMerchants,
+      },
     );
     return RegionDetail.fromJson(response['data'] as Map<String, dynamic>);
   }

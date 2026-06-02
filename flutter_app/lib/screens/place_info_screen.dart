@@ -44,6 +44,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
     final regionDetail = await controller.repository.getRegionDetail(
       tripDetail.trip.regionId,
       residence: controller.currentUser?.residence,
+      includeMerchants: false,
     );
     final merchantMap = await controller.repository.getMerchantMap(
       regionId: tripDetail.trip.regionId,
@@ -323,9 +324,6 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
           final places = regionDetail.halfPricePlaces
               .where((place) => place.latitude != null && place.longitude != null)
               .toList();
-          final fallbackMerchants = {
-            for (final merchant in regionDetail.merchants) merchant.id: merchant,
-          };
           final showingMerchants = _selectedTab == _PlaceInfoMapTab.merchants;
 
           final markers = showingMerchants
@@ -333,7 +331,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
                   regionName: tripDetail.trip.regionName,
                   markers: merchantMap.markers,
                   selectedPlaces: tripDetail.selectedPlaces,
-                  fallbackMerchants: fallbackMerchants,
+                  fallbackMerchants: const {},
                 )
               : _buildPlaceMarkers(
                   tripDetail.trip.regionName,
@@ -424,11 +422,10 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
                                 orElse: () => null,
                               );
                           if (marker == null) return;
-                          final fallback = fallbackMerchants[marker.id];
                           await _addMerchantToPlanner(
                             tripDetail: tripDetail,
                             marker: marker,
-                            fallback: fallback,
+                            fallback: null,
                           );
                           _loadMerchantDetail(tripDetail.trip.regionId, markerId);
                         } else {
