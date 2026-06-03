@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:html' as html;
 import 'dart:js' as js;
+import 'dart:js_util' as js_util;
 import 'dart:ui_web' as ui_web;
 
 import 'package:flutter/material.dart';
@@ -56,14 +57,14 @@ class _PlaceMapViewState extends State<PlaceMapView> {
 
   StreamSubscription<html.Event>? _resizeSubscription;
   Timer? _relayoutTimer;
-  final List<js.JsObject> _markerOverlayObjects = [];
+  final List<Object> _markerOverlayObjects = [];
   final List<Object> _mapJsCallbacks = [];
   int _renderVersion = 0;
 
-  js.JsObject? _map;
-  js.JsObject? _bounds;
-  js.JsObject? _polyline;
-  js.JsObject? _activeOverlay;
+  Object? _map;
+  Object? _bounds;
+  Object? _polyline;
+  Object? _activeOverlay;
 
   String? _statusMessage = '카카오맵을 불러오는 중입니다.';
 
@@ -207,8 +208,8 @@ class _PlaceMapViewState extends State<PlaceMapView> {
         return;
       }
 
-      final kakao = _asJsObject(kakaoObject);
-      final maps = kakao == null ? null : _asJsObject(kakao['maps']);
+      final kakao = kakaoObject;
+      final maps = _getProperty(kakao, 'maps');
       if (kakao == null || maps == null) {
         _showMessage(
           '카카오맵 SDK는 로드됐지만 maps 객체를 찾지 못했습니다.',
@@ -257,16 +258,16 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     return completer.future;
   }
 
-  void _buildMap(js.JsObject kakao) {
+  void _buildMap(Object kakao) {
     if (!mounted) {
       return;
     }
-    final maps = _asJsObject(kakao['maps']);
-    final latLngCtor = maps == null ? null : _asJsFunction(maps['LatLng']);
-    final mapCtor = maps == null ? null : _asJsFunction(maps['Map']);
-    final boundsCtor = maps == null ? null : _asJsFunction(maps['LatLngBounds']);
-    final overlayCtor = maps == null ? null : _asJsFunction(maps['CustomOverlay']);
-    final polylineCtor = maps == null ? null : _asJsFunction(maps['Polyline']);
+    final maps = _getProperty(kakao, 'maps');
+    final latLngCtor = maps == null ? null : _getProperty(maps, 'LatLng');
+    final mapCtor = maps == null ? null : _getProperty(maps, 'Map');
+    final boundsCtor = maps == null ? null : _getProperty(maps, 'LatLngBounds');
+    final overlayCtor = maps == null ? null : _getProperty(maps, 'CustomOverlay');
+    final polylineCtor = maps == null ? null : _getProperty(maps, 'Polyline');
     if (maps == null ||
         latLngCtor == null ||
         mapCtor == null ||
@@ -283,7 +284,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     _markerOverlayObjects.clear();
     _mapJsCallbacks.clear();
 
-    final center = js.JsObject(
+    final center = js_util.callConstructor(
       latLngCtor,
       [
         markers.isNotEmpty
@@ -295,27 +296,27 @@ class _PlaceMapViewState extends State<PlaceMapView> {
       ],
     );
 
-    final map = js.JsObject(
+    final map = js_util.callConstructor(
       mapCtor,
       [
         _container,
-        js.JsObject.jsify({
+        js_util.jsify({
           'center': center,
           'level': markers.isNotEmpty ? 9 : 5,
         }),
       ],
     );
 
-    final bounds = js.JsObject(boundsCtor);
+    final bounds = js_util.callConstructor(boundsCtor, const []);
     void openOverlay(
       PlaceMapMarkerData markerData,
-      js.JsObject position,
+      Object position,
     ) {
-      _activeOverlay?.callMethod('setMap', [null]);
-      final overlay = js.JsObject(
+      _callMethod(_activeOverlay, 'setMap', [null]);
+      final overlay = js_util.callConstructor(
         overlayCtor,
         [
-          js.JsObject.jsify({
+          js_util.jsify({
             'position': position,
             'yAnchor': 1.12,
             'xAnchor': 0.5,
@@ -324,18 +325,18 @@ class _PlaceMapViewState extends State<PlaceMapView> {
           }),
         ],
       );
-      overlay.callMethod('setMap', [map]);
+      _callMethod(overlay, 'setMap', [map]);
       _activeOverlay = overlay;
     }
 
     for (var index = 0; index < markers.length; index++) {
       final markerData = markers[index];
 
-      final position = js.JsObject(
+      final position = js_util.callConstructor(
         latLngCtor,
         [markerData.latitude, markerData.longitude],
       );
-      bounds.callMethod('extend', [position]);
+      _callMethod(bounds, 'extend', [position]);
       final markerContent = _buildMarkerContent(
         label: '${index + 1}',
         selected: widget.highlightedMarkerId == markerData.id ||
@@ -356,10 +357,10 @@ class _PlaceMapViewState extends State<PlaceMapView> {
         handleMarkerTap();
       });
 
-      final markerOverlay = js.JsObject(
+      final markerOverlay = js_util.callConstructor(
         overlayCtor,
         [
-          js.JsObject.jsify({
+          js_util.jsify({
             'position': position,
             'yAnchor': 1,
             'xAnchor': 0.5,
@@ -368,7 +369,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
           }),
         ],
       );
-      markerOverlay.callMethod('setMap', [map]);
+      _callMethod(markerOverlay, 'setMap', [map]);
       _markerOverlayObjects.add(markerOverlay);
 
       if (widget.highlightedMarkerId != null &&
@@ -385,8 +386,8 @@ class _PlaceMapViewState extends State<PlaceMapView> {
         _emitViewportChanged();
       });
       _mapJsCallbacks.add(idleCallback);
-      final event = _asJsObject(maps['event']);
-      event?.callMethod('addListener', [map, 'idle', idleCallback]);
+      final event = _getProperty(maps, 'event');
+      _callMethod(event, 'addListener', [map, 'idle', idleCallback]);
     }
 
     if (widget.connectSequentially &&
@@ -395,17 +396,17 @@ class _PlaceMapViewState extends State<PlaceMapView> {
       try {
         final path = widget.routeMarkers
             .map(
-              (point) => js.JsObject(
+              (point) => js_util.callConstructor(
                 latLngCtor,
                 [point.latitude, point.longitude],
               ),
             )
             .toList(growable: false);
 
-        _polyline = js.JsObject(
+        _polyline = js_util.callConstructor(
           polylineCtor,
           [
-            js.JsObject.jsify({
+            js_util.jsify({
               'map': map,
               'path': path,
               'strokeWeight': 4,
@@ -421,7 +422,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     }
 
     if (markers.isNotEmpty) {
-      map.callMethod('setBounds', [bounds]);
+      _callMethod(map, 'setBounds', [bounds]);
     }
     _emitViewportChanged();
     _scheduleRelayout();
@@ -432,24 +433,22 @@ class _PlaceMapViewState extends State<PlaceMapView> {
       return;
     }
     try {
-      final center = _asJsObject(_map!.callMethod('getCenter'));
-      final bounds = _asJsObject(_map!.callMethod('getBounds'));
-      final southWest =
-          bounds == null ? null : _asJsObject(bounds.callMethod('getSouthWest'));
-      final northEast =
-          bounds == null ? null : _asJsObject(bounds.callMethod('getNorthEast'));
+      final center = _callMethod(_map, 'getCenter');
+      final bounds = _callMethod(_map, 'getBounds');
+      final southWest = _callMethod(bounds, 'getSouthWest');
+      final northEast = _callMethod(bounds, 'getNorthEast');
       if (center == null || bounds == null || southWest == null || northEast == null) {
         return;
       }
 
       widget.onViewportChanged!(
         PlaceMapViewport(
-          centerLatitude: _jsNumber(center.callMethod('getLat')),
-          centerLongitude: _jsNumber(center.callMethod('getLng')),
-          minLatitude: _jsNumber(southWest.callMethod('getLat')),
-          maxLatitude: _jsNumber(northEast.callMethod('getLat')),
-          minLongitude: _jsNumber(southWest.callMethod('getLng')),
-          maxLongitude: _jsNumber(northEast.callMethod('getLng')),
+          centerLatitude: _jsNumber(_callMethod(center, 'getLat')),
+          centerLongitude: _jsNumber(_callMethod(center, 'getLng')),
+          minLatitude: _jsNumber(_callMethod(southWest, 'getLat')),
+          maxLatitude: _jsNumber(_callMethod(northEast, 'getLat')),
+          minLongitude: _jsNumber(_callMethod(southWest, 'getLng')),
+          maxLongitude: _jsNumber(_callMethod(northEast, 'getLng')),
         ),
       );
     } catch (_) {
@@ -464,12 +463,26 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     return double.tryParse('$value') ?? 0;
   }
 
-  js.JsObject? _asJsObject(Object? value) {
-    return value is js.JsObject ? value : null;
+  Object? _getProperty(Object? target, String property) {
+    if (target == null) {
+      return null;
+    }
+    try {
+      return js_util.getProperty(target, property);
+    } catch (_) {
+      return null;
+    }
   }
 
-  js.JsFunction? _asJsFunction(Object? value) {
-    return value is js.JsFunction ? value : null;
+  Object? _callMethod(Object? target, String method, [List<dynamic> args = const []]) {
+    if (target == null) {
+      return null;
+    }
+    try {
+      return js_util.callMethod(target, method, args);
+    } catch (_) {
+      return null;
+    }
   }
 
   html.DivElement _buildOverlayContent(PlaceMapMarkerData marker) {
@@ -679,9 +692,9 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     }
 
     try {
-      _map!.callMethod('relayout');
+      _callMethod(_map, 'relayout');
       if (_bounds != null) {
-        _map!.callMethod('setBounds', [_bounds!]);
+        _callMethod(_map, 'setBounds', [_bounds!]);
       }
     } catch (_) {
       // Retry timers handle temporary layout timing.
