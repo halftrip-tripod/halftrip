@@ -210,7 +210,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
 
       final kakao = kakaoObject;
       final maps = _getProperty(kakao, 'maps');
-      if (kakao == null || maps == null) {
+      if (maps == null) {
         _showMessage(
           '카카오맵 SDK는 로드됐지만 maps 객체를 찾지 못했습니다.',
         );
@@ -220,11 +220,28 @@ class _PlaceMapViewState extends State<PlaceMapView> {
       if (!mounted || renderVersion != _renderVersion) {
         return;
       }
-      _buildMap(kakao);
-      if (mounted) {
-        setState(() {
-          _statusMessage = null;
+      final loadFn = _getProperty(maps, 'load');
+      if (loadFn != null) {
+        final loadCallback = package_js.allowInterop(() {
+          if (!mounted || renderVersion != _renderVersion) {
+            return;
+          }
+          _buildMap(kakao);
+          if (mounted) {
+            setState(() {
+              _statusMessage = null;
+            });
+          }
         });
+        _mapJsCallbacks.add(loadCallback);
+        js_util.callMethod(maps, 'load', [loadCallback]);
+      } else {
+        _buildMap(kakao);
+        if (mounted) {
+          setState(() {
+            _statusMessage = null;
+          });
+        }
       }
     } catch (error) {
       _showMessage('카카오맵을 표시하는 중 오류가 발생했습니다.\n$error');
@@ -247,7 +264,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     final script = html.ScriptElement()
       ..id = 'travel-support-kakao-sdk'
       ..src =
-          'https://dapi.kakao.com/v2/maps/sdk.js?appkey=${const String.fromEnvironment('KAKAO_MAP_APP_KEY')}';
+          'https://dapi.kakao.com/v2/maps/sdk.js?appkey=${const String.fromEnvironment('KAKAO_MAP_APP_KEY')}&autoload=false';
 
     script.onLoad.listen((_) => completer.complete());
     script.onError.listen((_) {
