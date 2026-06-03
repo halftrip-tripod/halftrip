@@ -209,7 +209,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
 
       final kakao = _asJsObject(kakaoObject);
       final maps = kakao == null ? null : _asJsObject(kakao['maps']);
-      if (maps == null) {
+      if (kakao == null || maps == null) {
         _showMessage(
           '카카오맵 SDK는 로드됐지만 maps 객체를 찾지 못했습니다.',
         );
