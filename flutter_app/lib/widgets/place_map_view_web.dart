@@ -216,19 +216,15 @@ class _PlaceMapViewState extends State<PlaceMapView> {
         return;
       }
 
-      maps.callMethod('load', [
-        package_js.allowInterop((_) {
-          if (!mounted || renderVersion != _renderVersion) {
-            return;
-          }
-          _buildMap(kakao);
-          if (mounted) {
-            setState(() {
-              _statusMessage = null;
-            });
-          }
-        }),
-      ]);
+      if (!mounted || renderVersion != _renderVersion) {
+        return;
+      }
+      _buildMap(kakao);
+      if (mounted) {
+        setState(() {
+          _statusMessage = null;
+        });
+      }
     } catch (error) {
       _showMessage('카카오맵을 표시하는 중 오류가 발생했습니다.\n$error');
     }
@@ -250,7 +246,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     final script = html.ScriptElement()
       ..id = 'travel-support-kakao-sdk'
       ..src =
-          'https://dapi.kakao.com/v2/maps/sdk.js?appkey=${const String.fromEnvironment('KAKAO_MAP_APP_KEY')}&autoload=false'
+          'https://dapi.kakao.com/v2/maps/sdk.js?appkey=${const String.fromEnvironment('KAKAO_MAP_APP_KEY')}'
       ..async = true;
 
     script.onLoad.listen((_) => completer.complete());
