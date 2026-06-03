@@ -376,6 +376,8 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
                           Expanded(
                             child: Text(
                               '현재 ${merchantMap.merchantCount}개 가맹점',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                     color: const Color(0xFF111827),
                                     fontWeight: FontWeight.w800,

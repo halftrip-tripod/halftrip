@@ -339,7 +339,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
         _container,
         js_util.jsify({
           'center': center,
-          'level': markers.isNotEmpty ? 9 : 5,
+          'level': markers.isNotEmpty ? 9 : 2,
         }),
       ],
     );
