@@ -6,6 +6,7 @@ import 'dart:js' as js;
 import 'dart:ui_web' as ui_web;
 
 import 'package:flutter/material.dart';
+import 'package:js/js.dart' as package_js;
 
 import 'place_map_models.dart';
 
@@ -56,7 +57,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
   StreamSubscription<html.Event>? _resizeSubscription;
   Timer? _relayoutTimer;
   final List<js.JsObject> _markerOverlayObjects = [];
-  final List<js.JsFunction> _mapJsCallbacks = [];
+  final List<Object> _mapJsCallbacks = [];
   int _renderVersion = 0;
 
   js.JsObject? _map;
@@ -216,7 +217,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
       }
 
       maps.callMethod('load', [
-        js.JsFunction.withThis((_) {
+        package_js.allowInterop((_) {
           if (!mounted || renderVersion != _renderVersion) {
             return;
           }
@@ -292,7 +293,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
         _container,
         js.JsObject.jsify({
           'center': center,
-          'level': 9,
+          'level': markers.isNotEmpty ? 9 : 5,
         }),
       ],
     );
@@ -372,7 +373,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     _bounds = bounds;
 
     if (widget.onViewportChanged != null) {
-      final idleCallback = js.JsFunction.withThis((_) {
+      final idleCallback = package_js.allowInterop((_) {
         _emitViewportChanged();
       });
       _mapJsCallbacks.add(idleCallback);
