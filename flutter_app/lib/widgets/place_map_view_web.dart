@@ -199,7 +199,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
         return;
       }
 
-      final kakaoObject = js.context['kakao'];
+      final kakaoObject = _getWindowProperty('kakao');
       html.window.console.log(
         '[halftrip:kakao] origin=${html.window.location.origin} '
         'kakaoLoaded=${kakaoObject != null}',
@@ -213,14 +213,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
       }
 
       final kakao = kakaoObject;
-      var maps = _resolveMapsObject(kakao);
-      if (maps == null) {
-        html.window.console.warn(
-          '[halftrip:kakao] maps missing after first lookup. Retrying...',
-        );
-        await Future<void>.delayed(const Duration(milliseconds: 120));
-        maps = _resolveMapsObject(kakao);
-      }
+      final maps = await _waitForMapsObject(kakao);
       if (maps == null) {
         html.window.console.error(
           '[halftrip:kakao] maps object not found. Check Kakao web origin allowlist.',
@@ -529,6 +522,14 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     }
   }
 
+  Object? _getWindowProperty(String property) {
+    try {
+      return js_util.getProperty(html.window, property);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Object? _resolveMapsObject(Object? kakaoObject) {
     if (kakaoObject == null) {
       return null;
@@ -544,6 +545,27 @@ class _PlaceMapViewState extends State<PlaceMapView> {
       // ignore and try generic property access
     }
     return _getProperty(kakaoObject, 'maps');
+  }
+
+  Future<Object?> _waitForMapsObject(Object kakaoObject) async {
+    for (var attempt = 0; attempt < 10; attempt++) {
+      final maps = _resolveMapsObject(kakaoObject);
+      if (maps != null) {
+        if (attempt > 0) {
+          html.window.console.log(
+            '[halftrip:kakao] maps became available after retry=$attempt',
+          );
+        }
+        return maps;
+      }
+      if (attempt == 0) {
+        html.window.console.warn(
+          '[halftrip:kakao] maps missing after first lookup. Retrying...',
+        );
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+    return null;
   }
 
   html.DivElement _buildOverlayContent(PlaceMapMarkerData marker) {
