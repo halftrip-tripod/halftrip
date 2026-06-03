@@ -209,7 +209,11 @@ class _PlaceMapViewState extends State<PlaceMapView> {
       }
 
       final kakao = kakaoObject;
-      final maps = _getProperty(kakao, 'maps');
+      var maps = _resolveMapsObject(kakao);
+      if (maps == null) {
+        await Future<void>.delayed(const Duration(milliseconds: 120));
+        maps = _resolveMapsObject(kakao);
+      }
       if (maps == null) {
         _showMessage(
           '카카오맵 SDK는 로드됐지만 maps 객체를 찾지 못했습니다.',
@@ -500,6 +504,23 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     } catch (_) {
       return null;
     }
+  }
+
+  Object? _resolveMapsObject(Object? kakaoObject) {
+    if (kakaoObject == null) {
+      return null;
+    }
+    try {
+      if (kakaoObject is js.JsObject) {
+        final viaIndex = kakaoObject['maps'];
+        if (viaIndex != null) {
+          return viaIndex;
+        }
+      }
+    } catch (_) {
+      // ignore and try generic property access
+    }
+    return _getProperty(kakaoObject, 'maps');
   }
 
   html.DivElement _buildOverlayContent(PlaceMapMarkerData marker) {
