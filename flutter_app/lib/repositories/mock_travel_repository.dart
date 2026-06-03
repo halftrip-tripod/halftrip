@@ -565,6 +565,23 @@ class MockTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<PlaceInfoDetail> getPlaceInfoDetail(
+    int regionId, {
+    String? residence,
+  }) async {
+    final detail = await getRegionDetail(
+      regionId,
+      residence: residence,
+      includeMerchants: false,
+    );
+    return PlaceInfoDetail(
+      region: detail.region,
+      halfPricePlaces: detail.halfPricePlaces,
+      onlineMalls: detail.onlineMalls,
+    );
+  }
+
+  @override
   Future<MerchantMapSearchResult> getMerchantMap({
     required int regionId,
     double? southLat,

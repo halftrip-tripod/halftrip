@@ -26,6 +26,7 @@ abstract class TravelRepository {
     String? residence,
     bool includeMerchants = true,
   });
+  Future<PlaceInfoDetail> getPlaceInfoDetail(int regionId, {String? residence});
   Future<MerchantMapSearchResult> getMerchantMap({
     required int regionId,
     double? southLat,

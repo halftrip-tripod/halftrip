@@ -20,7 +20,7 @@ class PlaceInfoScreen extends StatefulWidget {
 }
 
 class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
-  Future<({TripDetail tripDetail, RegionDetail regionDetail, MerchantMapSearchResult merchantMap})>? _future;
+  Future<({TripDetail tripDetail, PlaceInfoDetail placeInfoDetail, MerchantMapSearchResult merchantMap})>? _future;
   bool _initialized = false;
   _PlaceInfoMapTab _selectedTab = _PlaceInfoMapTab.designatedPlaces;
   int? _focusedMarkerId;
@@ -37,15 +37,14 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
     _initialized = true;
   }
 
-  Future<({TripDetail tripDetail, RegionDetail regionDetail, MerchantMapSearchResult merchantMap})> _loadBundle({
+  Future<({TripDetail tripDetail, PlaceInfoDetail placeInfoDetail, MerchantMapSearchResult merchantMap})> _loadBundle({
     PlaceMapViewport? merchantViewport,
   }) async {
     final controller = AppScope.of(context);
     final tripDetail = await controller.repository.getTripDetail(widget.tripId);
-    final regionDetail = await controller.repository.getRegionDetail(
+    final placeInfoDetail = await controller.repository.getPlaceInfoDetail(
       tripDetail.trip.regionId,
       residence: controller.currentUser?.residence,
-      includeMerchants: false,
     );
     final merchantMap = await controller.repository.getMerchantMap(
       regionId: tripDetail.trip.regionId,
@@ -56,7 +55,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
     );
     return (
       tripDetail: tripDetail,
-      regionDetail: regionDetail,
+      placeInfoDetail: placeInfoDetail,
       merchantMap: merchantMap,
     );
   }
@@ -312,7 +311,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
     return AppShell(
       title: '직접 코스 만들기',
       modeName: controller.modeName,
-      child: FutureBuilder<({TripDetail tripDetail, RegionDetail regionDetail, MerchantMapSearchResult merchantMap})>(
+      child: FutureBuilder<({TripDetail tripDetail, PlaceInfoDetail placeInfoDetail, MerchantMapSearchResult merchantMap})>(
         future: _future,
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
@@ -320,9 +319,9 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
           }
 
           final tripDetail = snapshot.data!.tripDetail;
-          final regionDetail = snapshot.data!.regionDetail;
+          final placeInfoDetail = snapshot.data!.placeInfoDetail;
           final merchantMap = snapshot.data!.merchantMap;
-          final places = regionDetail.halfPricePlaces
+          final places = placeInfoDetail.halfPricePlaces
               .where((place) => place.latitude != null && place.longitude != null)
               .toList();
           final showingMerchants = _selectedTab == _PlaceInfoMapTab.merchants;

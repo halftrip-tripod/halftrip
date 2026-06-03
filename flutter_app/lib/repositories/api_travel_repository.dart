@@ -236,6 +236,21 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<PlaceInfoDetail> getPlaceInfoDetail(
+    int regionId, {
+    String? residence,
+  }) async {
+    final response = await _jsonRequest(
+      'GET',
+      '/regions/$regionId/place-info',
+      query: {
+        if (residence != null && residence.isNotEmpty) 'residence': residence,
+      },
+    );
+    return PlaceInfoDetail.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  @override
   Future<MerchantMapSearchResult> getMerchantMap({
     required int regionId,
     double? southLat,

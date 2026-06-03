@@ -473,6 +473,30 @@ class RegionDetail {
   }
 }
 
+class PlaceInfoDetail {
+  const PlaceInfoDetail({
+    required this.region,
+    required this.halfPricePlaces,
+    required this.onlineMalls,
+  });
+
+  final RegionSummary region;
+  final List<PlaceItem> halfPricePlaces;
+  final List<OnlineMallItem> onlineMalls;
+
+  factory PlaceInfoDetail.fromJson(Map<String, dynamic> json) {
+    return PlaceInfoDetail(
+      region: RegionSummary.fromJson(json['region'] as Map<String, dynamic>),
+      halfPricePlaces: ((json['halfPricePlaces'] as List<dynamic>?) ?? [])
+          .map((item) => PlaceItem.fromJson(item as Map<String, dynamic>))
+          .toList(),
+      onlineMalls: ((json['onlineMalls'] as List<dynamic>?) ?? [])
+          .map((item) => OnlineMallItem.fromJson(item as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}
+
 class MerchantMapSearchResult {
   const MerchantMapSearchResult({
     required this.region,
