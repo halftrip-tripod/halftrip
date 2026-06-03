@@ -51,7 +51,6 @@ class _PlaceMapViewState extends State<PlaceMapView> {
 
   StreamSubscription<html.Event>? _resizeSubscription;
   Timer? _relayoutTimer;
-  final List<js.JsFunction> _markerJsCallbacks = [];
   final List<js.JsObject> _markerOverlayObjects = [];
   final List<js.JsFunction> _mapJsCallbacks = [];
   int _renderVersion = 0;
@@ -270,7 +269,6 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     _container.children.clear();
     _polyline = null;
     _activeOverlay = null;
-    _markerJsCallbacks.clear();
     _markerOverlayObjects.clear();
     _mapJsCallbacks.clear();
 
@@ -327,19 +325,18 @@ class _PlaceMapViewState extends State<PlaceMapView> {
             markerData.selected,
       );
 
-      final clickCallback = js.JsFunction.withThis((_) {
+      void handleMarkerTap() {
         openOverlay(markerData, position);
         _invokeMarkerCallback(
           widget.onMarkerTap,
           markerData.id,
         );
-      });
-      _markerJsCallbacks.add(clickCallback);
+      }
 
       markerContent.onClick.listen((event) {
         event.preventDefault();
         event.stopPropagation();
-        clickCallback.callMethod('call', [null]);
+        handleMarkerTap();
       });
 
       final markerOverlay = js.JsObject(
