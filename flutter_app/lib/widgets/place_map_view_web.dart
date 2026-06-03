@@ -200,6 +200,10 @@ class _PlaceMapViewState extends State<PlaceMapView> {
       }
 
       final kakaoObject = js.context['kakao'];
+      html.window.console.log(
+        '[halftrip:kakao] origin=${html.window.location.origin} '
+        'kakaoLoaded=${kakaoObject != null}',
+      );
       if (kakaoObject == null) {
         _showMessage(
           '카카오맵 SDK를 불러오지 못했습니다. '
@@ -211,10 +215,16 @@ class _PlaceMapViewState extends State<PlaceMapView> {
       final kakao = kakaoObject;
       var maps = _resolveMapsObject(kakao);
       if (maps == null) {
+        html.window.console.warn(
+          '[halftrip:kakao] maps missing after first lookup. Retrying...',
+        );
         await Future<void>.delayed(const Duration(milliseconds: 120));
         maps = _resolveMapsObject(kakao);
       }
       if (maps == null) {
+        html.window.console.error(
+          '[halftrip:kakao] maps object not found. Check Kakao web origin allowlist.',
+        );
         _showMessage(
           '카카오맵 SDK는 로드됐지만 maps 객체를 찾지 못했습니다.',
         );
@@ -225,11 +235,15 @@ class _PlaceMapViewState extends State<PlaceMapView> {
         return;
       }
       final loadFn = _getProperty(maps, 'load');
+      html.window.console.log(
+        '[halftrip:kakao] mapsFound=true loadFn=${loadFn != null}',
+      );
       if (loadFn != null) {
         final loadCallback = package_js.allowInterop(() {
           if (!mounted || renderVersion != _renderVersion) {
             return;
           }
+          html.window.console.log('[halftrip:kakao] maps.load callback fired');
           _buildMap(kakao);
           if (mounted) {
             setState(() {
@@ -270,8 +284,12 @@ class _PlaceMapViewState extends State<PlaceMapView> {
       ..src =
           'https://dapi.kakao.com/v2/maps/sdk.js?appkey=${const String.fromEnvironment('KAKAO_MAP_APP_KEY')}&autoload=false';
 
-    script.onLoad.listen((_) => completer.complete());
+    script.onLoad.listen((_) {
+      html.window.console.log('[halftrip:kakao] sdk script loaded');
+      completer.complete();
+    });
     script.onError.listen((_) {
+      html.window.console.error('[halftrip:kakao] sdk script failed to load');
       completer.completeError(StateError('Failed to load Kakao Map SDK'));
     });
 
@@ -294,6 +312,11 @@ class _PlaceMapViewState extends State<PlaceMapView> {
         mapCtor == null ||
         boundsCtor == null ||
         overlayCtor == null) {
+      html.window.console.error(
+        '[halftrip:kakao] constructor missing '
+        'maps=${maps != null} latLng=${latLngCtor != null} map=${mapCtor != null} '
+        'bounds=${boundsCtor != null} overlay=${overlayCtor != null} polyline=${polylineCtor != null}',
+      );
       _showMessage('Kakao map object initialization failed.');
       return;
     }
