@@ -26,6 +26,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
   int? _focusedMarkerId;
   PlaceMapViewport? _searchedViewport;
   PlaceMapViewport? _pendingViewport;
+  bool _merchantInitialViewportQueued = false;
   final Map<int, MerchantDetailItem> _merchantDetailCache = {};
 
   @override
@@ -362,6 +363,10 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
                         setState(() {
                           _selectedTab = tab;
                           _focusedMarkerId = null;
+                          if (tab == _PlaceInfoMapTab.merchants &&
+                              _searchedViewport == null) {
+                            _merchantInitialViewportQueued = false;
+                          }
                         });
                       },
                     ),
@@ -442,7 +447,24 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
                               setState(() {
                                 _pendingViewport = viewport;
                               });
+                              if (_selectedTab == _PlaceInfoMapTab.merchants &&
+                                  _searchedViewport == null &&
+                                  !_merchantInitialViewportQueued) {
+                                _merchantInitialViewportQueued = true;
+                                WidgetsBinding.instance.addPostFrameCallback((_) {
+                                  if (!mounted || _searchedViewport != null) {
+                                    return;
+                                  }
+                                  _researchMerchants();
+                                });
+                              }
                             }
+                          : null,
+                      initialCenterLatitude: showingMerchants
+                          ? merchantMap.centerLatitude
+                          : null,
+                      initialCenterLongitude: showingMerchants
+                          ? merchantMap.centerLongitude
                           : null,
                       height: showingMerchants ? 430 : 500,
                     ),

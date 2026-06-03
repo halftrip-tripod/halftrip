@@ -22,6 +22,8 @@ class PlaceMapView extends StatefulWidget {
     this.onMarkerDoubleTap,
     this.onMarkerAction,
     this.onViewportChanged,
+    this.initialCenterLatitude,
+    this.initialCenterLongitude,
     this.height = 420,
   });
 
@@ -35,6 +37,8 @@ class PlaceMapView extends StatefulWidget {
   final ValueChanged<int>? onMarkerDoubleTap;
   final ValueChanged<int>? onMarkerAction;
   final ValueChanged<PlaceMapViewport>? onViewportChanged;
+  final double? initialCenterLatitude;
+  final double? initialCenterLongitude;
   final double height;
 
   @override
@@ -171,7 +175,9 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     }
     final renderVersion = ++_renderVersion;
 
-    if (widget.markers.isEmpty) {
+    if (widget.markers.isEmpty &&
+        (widget.initialCenterLatitude == null ||
+            widget.initialCenterLongitude == null)) {
       _showMessage(widget.emptyMessage);
       return;
     }
@@ -261,10 +267,6 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     }
     final maps = kakao['maps'] as js.JsObject;
     final markers = widget.markers;
-    if (markers.isEmpty) {
-      _showMessage(widget.emptyMessage);
-      return;
-    }
 
     _container.children.clear();
     _polyline = null;
@@ -272,10 +274,16 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     _markerOverlayObjects.clear();
     _mapJsCallbacks.clear();
 
-    final centerMarker = markers.first;
     final center = js.JsObject(
       maps['LatLng'] as js.JsFunction,
-      [centerMarker.latitude, centerMarker.longitude],
+      [
+        markers.isNotEmpty
+            ? markers.first.latitude
+            : widget.initialCenterLatitude ?? 0,
+        markers.isNotEmpty
+            ? markers.first.longitude
+            : widget.initialCenterLongitude ?? 0,
+      ],
     );
 
     final map = js.JsObject(
@@ -401,7 +409,9 @@ class _PlaceMapViewState extends State<PlaceMapView> {
       }
     }
 
-    map.callMethod('setBounds', [bounds]);
+    if (markers.isNotEmpty) {
+      map.callMethod('setBounds', [bounds]);
+    }
     _emitViewportChanged();
     _scheduleRelayout();
   }
@@ -637,7 +647,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
   }
 
   void _relayoutMap() {
-    if (!mounted || _map == null || _bounds == null) {
+    if (!mounted || _map == null) {
       return;
     }
     if (_container.clientWidth == 0 || _container.clientHeight == 0) {
@@ -646,7 +656,9 @@ class _PlaceMapViewState extends State<PlaceMapView> {
 
     try {
       _map!.callMethod('relayout');
-      _map!.callMethod('setBounds', [_bounds!]);
+      if (_bounds != null) {
+        _map!.callMethod('setBounds', [_bounds!]);
+      }
     } catch (_) {
       // Retry timers handle temporary layout timing.
     }

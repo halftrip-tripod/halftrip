@@ -17,6 +17,8 @@ class PlaceMapView extends StatelessWidget {
     this.onMarkerDoubleTap,
     this.onMarkerAction,
     this.onViewportChanged,
+    this.initialCenterLatitude,
+    this.initialCenterLongitude,
     this.height = 420,
   });
 
@@ -30,6 +32,8 @@ class PlaceMapView extends StatelessWidget {
   final ValueChanged<int>? onMarkerDoubleTap;
   final ValueChanged<int>? onMarkerAction;
   final ValueChanged<PlaceMapViewport>? onViewportChanged;
+  final double? initialCenterLatitude;
+  final double? initialCenterLongitude;
   final double height;
 
   @override
