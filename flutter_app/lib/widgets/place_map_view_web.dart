@@ -246,8 +246,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     final script = html.ScriptElement()
       ..id = 'travel-support-kakao-sdk'
       ..src =
-          'https://dapi.kakao.com/v2/maps/sdk.js?appkey=${const String.fromEnvironment('KAKAO_MAP_APP_KEY')}'
-      ..async = true;
+          'https://dapi.kakao.com/v2/maps/sdk.js?appkey=${const String.fromEnvironment('KAKAO_MAP_APP_KEY')}';
 
     script.onLoad.listen((_) => completer.complete());
     script.onError.listen((_) {
