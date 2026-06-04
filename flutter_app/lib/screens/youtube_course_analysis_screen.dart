@@ -11,13 +11,13 @@ import '../widgets/place_map_view.dart';
 class YoutubeCourseAnalysisScreen extends StatefulWidget {
   const YoutubeCourseAnalysisScreen({
     super.key,
-    required this.tripDetail,
-    required this.youtubeUrl,
-    required this.themes,
+    this.tripDetail,
+    this.youtubeUrl = '',
+    this.themes = const [],
     this.jobId,
   });
 
-  final TripDetail tripDetail;
+  final TripDetail? tripDetail;
   final String youtubeUrl;
   final List<String> themes;
   final String? jobId;
@@ -73,7 +73,8 @@ class _YoutubeCourseAnalysisScreenState
       final response = await controller.runTask(
         () => controller.repository.createYoutubeCourseJob(
           userId: userId,
-          regionId: widget.tripDetail.trip.regionId,
+          tripId: widget.tripDetail!.trip.id,
+          regionId: widget.tripDetail!.trip.regionId,
           youtubeUrl: widget.youtubeUrl,
         ),
       );
@@ -115,6 +116,9 @@ class _YoutubeCourseAnalysisScreenState
         _job = job;
         _errorMessage = null;
       });
+      if (widget.tripDetail == null && job.tripId != null) {
+        await AppScope.of(context).repository.getTripDetail(job.tripId!);
+      }
       if (job.isCompleted || job.isFailed) {
         _pollingTimer?.cancel();
       }
@@ -199,8 +203,12 @@ class _YoutubeCourseAnalysisScreenState
       }).toList();
 
       final controller = AppScope.of(context);
+      final tripId = widget.tripDetail?.trip.id ?? _job?.tripId;
+      if (tripId == null) {
+        throw Exception('저장할 여행 정보가 없습니다.');
+      }
       await controller.runTask(
-        () => controller.repository.replaceTripPlaces(widget.tripDetail.trip.id, payload),
+        () => controller.repository.replaceTripPlaces(tripId, payload),
       );
       await controller.refreshTrips();
       if (!mounted) return;

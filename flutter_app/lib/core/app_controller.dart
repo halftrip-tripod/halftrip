@@ -1,10 +1,15 @@
 import 'dart:convert';
+import 'dart:async';
 
+import 'package:firebase_messaging/firebase_messaging.dart'
+    hide NotificationSettings;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/app_models.dart';
 import '../repositories/travel_repository.dart';
+import '../screens/youtube_course_analysis_screen.dart';
 
 class AppController extends ChangeNotifier {
   AppController({required TravelRepository repository})
@@ -23,9 +28,44 @@ class AppController extends ChangeNotifier {
   static const _preopenAlertsKey = 'preopen_alert_regions_v1';
   static const _appliedTripsKey = 'applied_trip_ids_v1';
 
+  final navigatorKey = GlobalKey<NavigatorState>();
+  final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+  StreamSubscription<String>? _tokenRefreshSubscription;
+  StreamSubscription<RemoteMessage>? _messageOpenedSubscription;
+  StreamSubscription<RemoteMessage>? _foregroundMessageSubscription;
+  bool _pushInitialized = false;
+
   TravelRepository get repository => _repository;
   String get modeName => _repository.modeName;
   bool get isLoggedIn => currentUser != null;
+
+  Future<void> initializePushNotifications() async {
+    if (_pushInitialized) return;
+    _pushInitialized = true;
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+
+    await FirebaseMessaging.instance.requestPermission();
+    _foregroundMessageSubscription = FirebaseMessaging.onMessage.listen(
+      _handleForegroundMessage,
+    );
+    _messageOpenedSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
+      _handleNotificationTap,
+    );
+    _tokenRefreshSubscription = FirebaseMessaging.instance.onTokenRefresh.listen(
+      (token) {
+        _registerFcmTokenIfPossible(token);
+      },
+    );
+
+    final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+    if (initialMessage != null) {
+      scheduleMicrotask(() => _handleNotificationTap(initialMessage));
+    }
+
+    await _syncFcmToken();
+  }
 
   Future<void> login(LoginProvider provider) async {
     await _runBusy(() async {
@@ -33,6 +73,7 @@ class AppController extends ChangeNotifier {
       currentUser = await _repository.getUser(authUser.id);
       trips = await _repository.getTrips(authUser.id);
       await _loadLocalDashboardData();
+      await _syncFcmToken();
     });
   }
 
@@ -48,6 +89,7 @@ class AppController extends ChangeNotifier {
       currentUser = await _repository.getUser(authUser.id);
       trips = await _repository.getTrips(authUser.id);
       await _loadLocalDashboardData();
+      await _syncFcmToken();
     });
   }
 
@@ -69,6 +111,7 @@ class AppController extends ChangeNotifier {
       currentUser = await _repository.getUser(authUser.id);
       trips = await _repository.getTrips(authUser.id);
       await _loadLocalDashboardData();
+      await _syncFcmToken();
     });
   }
 
@@ -224,6 +267,62 @@ class AppController extends ChangeNotifier {
     await preferences.setStringList(
       _appliedTripsKey,
       appliedTripIds.map((item) => item.toString()).toList(),
+    );
+  }
+
+  Future<void> _syncFcmToken() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+    final token = await FirebaseMessaging.instance.getToken();
+    await _registerFcmTokenIfPossible(token);
+  }
+
+  Future<void> _registerFcmTokenIfPossible(String? token) async {
+    final user = currentUser;
+    if (user == null || token == null || token.isEmpty) {
+      return;
+    }
+    try {
+      await _repository.registerFcmToken(
+        userId: user.id,
+        fcmToken: token,
+        platform: 'android',
+      );
+    } catch (_) {
+      // Ignore push token registration failures to avoid blocking app usage.
+    }
+  }
+
+  void _handleForegroundMessage(RemoteMessage message) {
+    final type = message.data['type'];
+    final jobId = message.data['jobId'];
+    if (type == 'YOUTUBE_COURSE_COMPLETED' && jobId is String && jobId.isNotEmpty) {
+      scaffoldMessengerKey.currentState?.showSnackBar(
+        SnackBar(
+          content: const Text('유튜브 코스 생성이 완료되었습니다.'),
+          action: SnackBarAction(
+            label: '보기',
+            onPressed: () => _openYoutubeJob(jobId),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _handleNotificationTap(RemoteMessage message) {
+    final type = message.data['type'];
+    final jobId = message.data['jobId'];
+    if (type == 'YOUTUBE_COURSE_COMPLETED' && jobId is String && jobId.isNotEmpty) {
+      _openYoutubeJob(jobId);
+    }
+  }
+
+  Future<void> _openYoutubeJob(String jobId) async {
+    await navigatorKey.currentState?.push(
+      MaterialPageRoute(
+        builder: (_) => YoutubeCourseAnalysisScreen(jobId: jobId),
+      ),
     );
   }
 }

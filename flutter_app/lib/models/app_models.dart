@@ -1375,6 +1375,7 @@ class YoutubeCourseJobItem {
   const YoutubeCourseJobItem({
     required this.jobId,
     required this.userId,
+    required this.tripId,
     required this.regionId,
     required this.regionName,
     required this.youtubeUrl,
@@ -1387,6 +1388,7 @@ class YoutubeCourseJobItem {
 
   final String jobId;
   final int userId;
+  final int? tripId;
   final int regionId;
   final String regionName;
   final String youtubeUrl;
@@ -1405,6 +1407,7 @@ class YoutubeCourseJobItem {
     return YoutubeCourseJobItem(
       jobId: json['jobId'] as String? ?? '',
       userId: json['userId'] as int? ?? 0,
+      tripId: json['tripId'] as int?,
       regionId: json['regionId'] as int? ?? 0,
       regionName: json['regionName'] as String? ?? '',
       youtubeUrl: json['youtubeUrl'] as String? ?? '',

@@ -688,6 +688,7 @@ class MockTravelRepository implements TravelRepository {
   @override
   Future<CreateYoutubeCourseJobResponse> createYoutubeCourseJob({
     required int userId,
+    required int tripId,
     required int regionId,
     required String youtubeUrl,
   }) async {
@@ -718,6 +719,7 @@ class MockTravelRepository implements TravelRepository {
     _youtubeJobs[jobId] = YoutubeCourseJobItem(
       jobId: jobId,
       userId: userId,
+      tripId: tripId,
       regionId: regionId,
       regionName: detail.region.name,
       youtubeUrl: youtubeUrl,

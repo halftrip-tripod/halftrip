@@ -1,3 +1,5 @@
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
@@ -10,10 +12,16 @@ import 'repositories/travel_repository.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_navigation_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    await Firebase.initializeApp();
+  }
   final config = AppConfig.fromEnvironment();
   final repository = _buildRepository(config);
-  runApp(TravelSupportApp(config: config, repository: repository));
+  final controller = AppController(repository: repository);
+  await controller.initializePushNotifications();
+  runApp(TravelSupportApp(config: config, repository: repository, controller: controller));
 }
 
 TravelRepository _buildRepository(AppConfig config) {
@@ -28,15 +36,15 @@ class TravelSupportApp extends StatelessWidget {
     super.key,
     required this.config,
     required this.repository,
+    required this.controller,
   });
 
   final AppConfig config;
   final TravelRepository repository;
+  final AppController controller;
 
   @override
   Widget build(BuildContext context) {
-    final controller = AppController(repository: repository);
-
     final base = ThemeData(
       useMaterial3: true,
       colorScheme: ColorScheme.fromSeed(
@@ -50,6 +58,8 @@ class TravelSupportApp extends StatelessWidget {
     return AppScope(
       controller: controller,
       child: MaterialApp(
+        navigatorKey: controller.navigatorKey,
+        scaffoldMessengerKey: controller.scaffoldMessengerKey,
         debugShowCheckedModeBanner: false,
         locale: const Locale('ko', 'KR'),
         supportedLocales: const [

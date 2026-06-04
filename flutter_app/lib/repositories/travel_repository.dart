@@ -45,6 +45,7 @@ abstract class TravelRepository {
   });
   Future<CreateYoutubeCourseJobResponse> createYoutubeCourseJob({
     required int userId,
+    required int tripId,
     required int regionId,
     required String youtubeUrl,
   });
