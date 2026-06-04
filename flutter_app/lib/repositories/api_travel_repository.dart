@@ -341,6 +341,28 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<YoutubeCourseJobItem?> getActiveYoutubeCourseJob({
+    required int userId,
+    required int tripId,
+  }) async {
+    try {
+      final response = await _jsonRequest(
+        'GET',
+        '/youtube-course-jobs/active',
+        query: {
+          'userId': userId,
+          'tripId': tripId,
+        },
+      );
+      return YoutubeCourseJobItem.fromJson(
+        response['data'] as Map<String, dynamic>,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
   Future<void> registerFcmToken({
     required int userId,
     required String fcmToken,

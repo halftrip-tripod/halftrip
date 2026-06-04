@@ -746,6 +746,19 @@ class MockTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<YoutubeCourseJobItem?> getActiveYoutubeCourseJob({
+    required int userId,
+    required int tripId,
+  }) async {
+    final jobs = _youtubeJobs.values
+        .where((job) => job.userId == userId && job.tripId == tripId)
+        .where((job) => job.status == 'PENDING' || job.status == 'PROCESSING')
+        .toList()
+      ..sort((a, b) => (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now()));
+    return jobs.isEmpty ? null : jobs.first;
+  }
+
+  @override
   Future<void> registerFcmToken({
     required int userId,
     required String fcmToken,

@@ -10,6 +10,7 @@ import 'place_info_screen.dart';
 import 'planner_screen.dart';
 import 'receipt_evidence_screen.dart';
 import 'region_course_builder_screen.dart';
+import 'saved_course_list_screen.dart';
 import 'settlement_screen.dart';
 import 'submission_package_screen.dart';
 import 'youtube_course_analysis_screen.dart';
@@ -173,6 +174,27 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         ),
       );
       return;
+    }
+
+    final controller = AppScope.of(context);
+    final userId = controller.currentUser?.id;
+    if (userId != null) {
+      final activeJob = await controller.repository.getActiveYoutubeCourseJob(
+        userId: userId,
+        tripId: detail.trip.id,
+      );
+      if (activeJob != null) {
+        if (!mounted) return;
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => YoutubeCourseAnalysisScreen(
+              tripDetail: detail,
+              jobId: activeJob.jobId,
+            ),
+          ),
+        );
+        return;
+      }
     }
 
     await Navigator.of(context).push(
@@ -845,7 +867,7 @@ class _TripCourseActionSheet extends StatelessWidget {
                 Navigator.of(context).pop();
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => PlannerScreen(tripId: detail.trip.id),
+                    builder: (_) => SavedCourseListScreen(tripDetail: detail),
                   ),
                 );
               },

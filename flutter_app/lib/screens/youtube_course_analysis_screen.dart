@@ -35,6 +35,7 @@ class _YoutubeCourseAnalysisScreenState
   bool _creating = true;
   Timer? _pollingTimer;
   bool _saving = false;
+  final TextEditingController _titleController = TextEditingController();
 
   @override
   void initState() {
@@ -45,6 +46,7 @@ class _YoutubeCourseAnalysisScreenState
   @override
   void dispose() {
     _pollingTimer?.cancel();
+    _titleController.dispose();
     super.dispose();
   }
 
@@ -116,6 +118,9 @@ class _YoutubeCourseAnalysisScreenState
         _job = job;
         _errorMessage = null;
       });
+      if (job.result != null && _titleController.text.trim().isEmpty) {
+        _titleController.text = job.result!.title;
+      }
       if (widget.tripDetail == null && job.tripId != null) {
         await AppScope.of(context).repository.getTripDetail(job.tripId!);
       }
@@ -203,6 +208,31 @@ class _YoutubeCourseAnalysisScreenState
       }).toList();
 
       final controller = AppScope.of(context);
+      final regionName = widget.tripDetail?.trip.regionName ?? _job?.regionName ?? '유튜브 코스';
+      await controller.saveCourse(
+        SavedCourse(
+          id: _job!.jobId,
+          regionId: _job!.regionId,
+          regionName: regionName,
+          title: _titleController.text.trim().isEmpty
+              ? (result.title.isEmpty ? '$regionName 추천 코스' : result.title)
+              : _titleController.text.trim(),
+          preferences: widget.themes,
+          stops: result.stops
+              .map(
+                (stop) => SavedCourseStop(
+                  placeId: stop.order,
+                  name: stop.placeName,
+                  address: stop.address,
+                  latitude: stop.latitude,
+                  longitude: stop.longitude,
+                  sourceType: stop.source,
+                ),
+              )
+              .toList(),
+          createdAt: DateTime.now(),
+        ),
+      );
       final tripId = widget.tripDetail?.trip.id ?? _job?.tripId;
       if (tripId == null) {
         throw Exception('저장할 여행 정보가 없습니다.');
@@ -255,6 +285,20 @@ class _YoutubeCourseAnalysisScreenState
             _YoutubeJobFailedCard(message: job.errorMessage ?? '알 수 없는 오류'),
           if (result != null) ...[
             _YoutubeJobResultCard(result: result),
+            const SizedBox(height: 16),
+            SectionCard(
+              title: '코스 이름',
+              subtitle: '저장할 때 사용할 이름을 직접 정할 수 있습니다.',
+              child: TextField(
+                controller: _titleController,
+                decoration: InputDecoration(
+                  hintText: result.title.isEmpty ? '완도 유튜브 추천 코스' : result.title,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(height: 16),
             SectionCard(
               title: '생성된 코스 지도',

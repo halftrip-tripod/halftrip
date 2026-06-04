@@ -49,6 +49,10 @@ abstract class TravelRepository {
     required int regionId,
     required String youtubeUrl,
   });
+  Future<YoutubeCourseJobItem?> getActiveYoutubeCourseJob({
+    required int userId,
+    required int tripId,
+  });
   Future<YoutubeCourseJobItem> getYoutubeCourseJob(String jobId);
   Future<void> registerFcmToken({
     required int userId,
