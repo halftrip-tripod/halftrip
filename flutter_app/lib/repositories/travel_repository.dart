@@ -43,6 +43,17 @@ abstract class TravelRepository {
     required TripDraft draft,
     required int regionId,
   });
+  Future<CreateYoutubeCourseJobResponse> createYoutubeCourseJob({
+    required int userId,
+    required int regionId,
+    required String youtubeUrl,
+  });
+  Future<YoutubeCourseJobItem> getYoutubeCourseJob(String jobId);
+  Future<void> registerFcmToken({
+    required int userId,
+    required String fcmToken,
+    required String platform,
+  });
   Future<List<TripPlaceItem>> replaceTripPlaces(
     int tripId,
     List<TripPlaceItem> places,

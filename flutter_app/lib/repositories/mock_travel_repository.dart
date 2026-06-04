@@ -25,6 +25,7 @@ class MockTravelRepository implements TravelRepository {
   final Map<int, List<ReceiptItem>> _tripReceipts = {};
   final Map<int, LodgingInfo> _tripLodging = {};
   final Map<int, List<int>> _uploadedFileBytesById = {};
+  final Map<String, YoutubeCourseJobItem> _youtubeJobs = {};
   int _nextTripId = 10;
   int _nextTripPlaceId = 100;
   int _nextUploadedFileId = 1000;
@@ -682,6 +683,73 @@ class MockTravelRepository implements TravelRepository {
     _tripFiles[trip.id] = [];
     _tripReceipts[trip.id] = [];
     return trip;
+  }
+
+  @override
+  Future<CreateYoutubeCourseJobResponse> createYoutubeCourseJob({
+    required int userId,
+    required int regionId,
+    required String youtubeUrl,
+  }) async {
+    final detail = _regionDetails[regionId];
+    if (detail == null) {
+      throw Exception('지역 정보를 찾을 수 없습니다.');
+    }
+    final jobId = 'mock-job-${DateTime.now().millisecondsSinceEpoch}';
+    final stops = detail.halfPricePlaces
+        .where((item) => item.latitude != null && item.longitude != null)
+        .take(4)
+        .toList()
+        .asMap()
+        .entries
+        .map(
+          (entry) => YoutubeCourseJobStop(
+            order: entry.key + 1,
+            placeName: entry.value.name,
+            address: entry.value.address,
+            latitude: entry.value.latitude ?? 0,
+            longitude: entry.value.longitude ?? 0,
+            category: '관광지',
+            source: 'youtube_mock',
+            reason: 'Mock 유튜브 분석 결과',
+          ),
+        )
+        .toList();
+    _youtubeJobs[jobId] = YoutubeCourseJobItem(
+      jobId: jobId,
+      userId: userId,
+      regionId: regionId,
+      regionName: detail.region.name,
+      youtubeUrl: youtubeUrl,
+      status: 'COMPLETED',
+      result: YoutubeCourseJobResult(
+        title: '${detail.region.name} 유튜브 추천 코스',
+        summary: 'Mock 유튜브 분석 결과입니다.',
+        stops: stops,
+      ),
+      errorMessage: null,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+    return CreateYoutubeCourseJobResponse(jobId: jobId, status: 'PENDING');
+  }
+
+  @override
+  Future<YoutubeCourseJobItem> getYoutubeCourseJob(String jobId) async {
+    final job = _youtubeJobs[jobId];
+    if (job == null) {
+      throw Exception('유튜브 코스 작업을 찾을 수 없습니다.');
+    }
+    return job;
+  }
+
+  @override
+  Future<void> registerFcmToken({
+    required int userId,
+    required String fcmToken,
+    required String platform,
+  }) async {
+    return;
   }
 
   @override

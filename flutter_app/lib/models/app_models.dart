@@ -1297,3 +1297,125 @@ class SavedCourse {
       };
 }
 
+class CreateYoutubeCourseJobResponse {
+  const CreateYoutubeCourseJobResponse({
+    required this.jobId,
+    required this.status,
+  });
+
+  final String jobId;
+  final String status;
+
+  factory CreateYoutubeCourseJobResponse.fromJson(Map<String, dynamic> json) {
+    return CreateYoutubeCourseJobResponse(
+      jobId: json['jobId'] as String? ?? '',
+      status: json['status'] as String? ?? 'PENDING',
+    );
+  }
+}
+
+class YoutubeCourseJobStop {
+  const YoutubeCourseJobStop({
+    required this.order,
+    required this.placeName,
+    required this.address,
+    required this.latitude,
+    required this.longitude,
+    required this.category,
+    required this.source,
+    required this.reason,
+  });
+
+  final int order;
+  final String placeName;
+  final String address;
+  final double latitude;
+  final double longitude;
+  final String category;
+  final String source;
+  final String reason;
+
+  factory YoutubeCourseJobStop.fromJson(Map<String, dynamic> json) {
+    return YoutubeCourseJobStop(
+      order: json['order'] as int? ?? 0,
+      placeName: json['placeName'] as String? ?? '',
+      address: json['address'] as String? ?? '',
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
+      category: json['category'] as String? ?? '',
+      source: json['source'] as String? ?? '',
+      reason: json['reason'] as String? ?? '',
+    );
+  }
+}
+
+class YoutubeCourseJobResult {
+  const YoutubeCourseJobResult({
+    required this.title,
+    required this.summary,
+    required this.stops,
+  });
+
+  final String title;
+  final String summary;
+  final List<YoutubeCourseJobStop> stops;
+
+  factory YoutubeCourseJobResult.fromJson(Map<String, dynamic> json) {
+    return YoutubeCourseJobResult(
+      title: json['title'] as String? ?? '',
+      summary: json['summary'] as String? ?? '',
+      stops: ((json['stops'] as List<dynamic>?) ?? const [])
+          .map((item) => YoutubeCourseJobStop.fromJson(item as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}
+
+class YoutubeCourseJobItem {
+  const YoutubeCourseJobItem({
+    required this.jobId,
+    required this.userId,
+    required this.regionId,
+    required this.regionName,
+    required this.youtubeUrl,
+    required this.status,
+    required this.result,
+    required this.errorMessage,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String jobId;
+  final int userId;
+  final int regionId;
+  final String regionName;
+  final String youtubeUrl;
+  final String status;
+  final YoutubeCourseJobResult? result;
+  final String? errorMessage;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  bool get isPending => status == 'PENDING';
+  bool get isProcessing => status == 'PROCESSING';
+  bool get isCompleted => status == 'COMPLETED';
+  bool get isFailed => status == 'FAILED';
+
+  factory YoutubeCourseJobItem.fromJson(Map<String, dynamic> json) {
+    return YoutubeCourseJobItem(
+      jobId: json['jobId'] as String? ?? '',
+      userId: json['userId'] as int? ?? 0,
+      regionId: json['regionId'] as int? ?? 0,
+      regionName: json['regionName'] as String? ?? '',
+      youtubeUrl: json['youtubeUrl'] as String? ?? '',
+      status: json['status'] as String? ?? 'PENDING',
+      result: json['result'] is Map<String, dynamic>
+          ? YoutubeCourseJobResult.fromJson(json['result'] as Map<String, dynamic>)
+          : null,
+      errorMessage: json['errorMessage'] as String?,
+      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
+      updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? ''),
+    );
+  }
+}
+

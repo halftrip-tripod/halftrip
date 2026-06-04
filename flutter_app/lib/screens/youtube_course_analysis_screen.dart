@@ -1,11 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../core/app_config.dart';
 import '../core/app_scope.dart';
 import '../models/app_models.dart';
-import '../services/youtube_course_analysis_service.dart';
 import '../widgets/app_shell.dart';
-import 'region_course_builder_screen.dart';
+import '../widgets/place_map_view.dart';
 
 class YoutubeCourseAnalysisScreen extends StatefulWidget {
   const YoutubeCourseAnalysisScreen({
@@ -13,11 +14,13 @@ class YoutubeCourseAnalysisScreen extends StatefulWidget {
     required this.tripDetail,
     required this.youtubeUrl,
     required this.themes,
+    this.jobId,
   });
 
   final TripDetail tripDetail;
   final String youtubeUrl;
   final List<String> themes;
+  final String? jobId;
 
   @override
   State<YoutubeCourseAnalysisScreen> createState() =>
@@ -26,280 +29,327 @@ class YoutubeCourseAnalysisScreen extends StatefulWidget {
 
 class _YoutubeCourseAnalysisScreenState
     extends State<YoutubeCourseAnalysisScreen> {
-  Future<_YoutubeCoursePreparedResult>? _future;
-  bool _initialized = false;
+  String? _jobId;
+  YoutubeCourseJobItem? _job;
+  String? _errorMessage;
+  bool _creating = true;
+  Timer? _pollingTimer;
+  bool _saving = false;
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_initialized) return;
-    _future = _prepare();
-    _initialized = true;
+  void initState() {
+    super.initState();
+    _boot();
   }
 
-  Future<_YoutubeCoursePreparedResult> _prepare() async {
+  @override
+  void dispose() {
+    _pollingTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _boot() async {
+    if (widget.jobId != null && widget.jobId!.isNotEmpty) {
+      _jobId = widget.jobId;
+      setState(() {
+        _creating = false;
+      });
+      await _refreshJob();
+      _startPollingIfNeeded();
+      return;
+    }
+
     final controller = AppScope.of(context);
-    final regionDetail = await controller.repository.getRegionDetail(
-      widget.tripDetail.trip.regionId,
-      residence: controller.currentUser?.residence,
-    );
+    final userId = controller.currentUser?.id;
+    if (userId == null) {
+      setState(() {
+        _creating = false;
+        _errorMessage = '로그인 정보가 없어 작업을 시작할 수 없습니다.';
+      });
+      return;
+    }
 
-    final analysis = await controller.runTask(
-      () => YoutubeCourseAnalysisService(AppConfig.fromEnvironment()).analyze(
-        url: widget.youtubeUrl,
-        regionName: widget.tripDetail.trip.regionName,
-        themes: widget.themes,
-      ),
-    );
-
-    final matchedStops = _selectYoutubeStops(
-      detail: regionDetail,
-      themes: widget.themes,
-      analysis: analysis,
-    );
-
-    final initialCourse = SavedCourse(
-      id: 'youtube-${widget.tripDetail.trip.id}-${DateTime.now().millisecondsSinceEpoch}',
-      regionId: widget.tripDetail.trip.regionId,
-      regionName: widget.tripDetail.trip.regionName,
-      title: analysis.title?.isNotEmpty == true
-          ? '${widget.tripDetail.trip.regionName} 유튜브 추천 코스'
-          : '${widget.tripDetail.trip.regionName} AI 추천 코스',
-      preferences: widget.themes,
-      stops: matchedStops,
-      createdAt: DateTime.now(),
-    );
-
-    return _YoutubeCoursePreparedResult(
-      regionDetail: regionDetail,
-      analysis: analysis,
-      initialCourse: initialCourse,
-    );
+    try {
+      final response = await controller.runTask(
+        () => controller.repository.createYoutubeCourseJob(
+          userId: userId,
+          regionId: widget.tripDetail.trip.regionId,
+          youtubeUrl: widget.youtubeUrl,
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _jobId = response.jobId;
+        _creating = false;
+      });
+      await _refreshJob();
+      _startPollingIfNeeded();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _creating = false;
+        _errorMessage = '유튜브 코스 작업을 시작하지 못했습니다.\n$error';
+      });
+    }
   }
 
-  List<SavedCourseStop> _selectYoutubeStops({
-    required RegionDetail detail,
-    required List<String> themes,
-    required YoutubeCourseAnalysisResult analysis,
-  }) {
-    final scored = detail.halfPricePlaces
-        .where((place) => place.latitude != null && place.longitude != null)
-        .map(
-          (place) => (
-            place: place,
-            score: _scoreYoutubePlace(place, themes, analysis),
-          ),
-        )
-        .toList()
-      ..sort((a, b) => b.score.compareTo(a.score));
-
-    final selected = <PlaceItem>[];
-    for (final item in scored) {
-      if (item.score <= 0) {
-        continue;
-      }
-      if (selected.any((element) => element.id == item.place.id)) {
-        continue;
-      }
-      selected.add(item.place);
-      if (selected.length >= 4) {
-        break;
-      }
+  void _startPollingIfNeeded() {
+    _pollingTimer?.cancel();
+    if (_job == null || _job!.isCompleted || _job!.isFailed) {
+      return;
     }
+    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      _refreshJob();
+    });
+  }
 
-    if (selected.length < 2) {
-      final fallback = detail.halfPricePlaces
-          .where((place) => place.latitude != null && place.longitude != null)
-          .take(3)
-          .toList();
-      selected
-        ..clear()
-        ..addAll(fallback);
+  Future<void> _refreshJob() async {
+    final jobId = _jobId;
+    if (jobId == null || jobId.isEmpty) {
+      return;
     }
+    try {
+      final job = await AppScope.of(context).repository.getYoutubeCourseJob(jobId);
+      if (!mounted) return;
+      setState(() {
+        _job = job;
+        _errorMessage = null;
+      });
+      if (job.isCompleted || job.isFailed) {
+        _pollingTimer?.cancel();
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = '작업 상태를 불러오지 못했습니다.\n$error';
+      });
+    }
+  }
 
-    return selected
+  List<PlaceMapMarkerData> _buildMarkers(YoutubeCourseJobResult result) {
+    return result.stops
         .map(
-          (place) => SavedCourseStop(
-            placeId: place.id,
-            name: place.name,
-            address: place.address,
-            latitude: place.latitude ?? 0,
-            longitude: place.longitude ?? 0,
-            sourceType: PlaceCategory.halfPrice.wireName,
+          (stop) => PlaceMapMarkerData(
+            id: stop.order,
+            name: stop.placeName,
+            address: stop.address,
+            latitude: stop.latitude,
+            longitude: stop.longitude,
+            selected: true,
+            regionLabel: stop.category,
           ),
         )
         .toList();
   }
 
-  int _scoreYoutubePlace(
-    PlaceItem place,
-    List<String> themes,
-    YoutubeCourseAnalysisResult analysis,
-  ) {
-    final text = '${place.name} ${place.address} ${place.description}'.toLowerCase();
-    var total = 0;
-
-    for (final theme in themes) {
-      if (_placeTags(place).contains(theme)) {
-        total += 20;
-      }
-    }
-
-    for (final keyword in analysis.keywords) {
-      final normalized = keyword.toLowerCase().trim();
-      if (normalized.isNotEmpty && text.contains(normalized)) {
-        total += 28;
-      }
-    }
-
-    for (final candidate in analysis.suggestedPlaceNames) {
-      final normalized = candidate.toLowerCase().trim();
-      if (normalized.isEmpty) continue;
-      if (text.contains(normalized) ||
-          normalized.contains(place.name.toLowerCase())) {
-        total += 120;
-      }
-    }
-
-    return total;
+  List<PlaceMapRoutePoint> _buildRoutePoints(YoutubeCourseJobResult result) {
+    return result.stops
+        .map(
+          (stop) => PlaceMapRoutePoint(
+            id: stop.order,
+            latitude: stop.latitude,
+            longitude: stop.longitude,
+          ),
+        )
+        .toList();
   }
 
-  Set<String> _placeTags(PlaceItem place) {
-    final text = '${place.name} ${place.address} ${place.description}';
-    final tags = <String>{};
-    if (_containsAny(text, ['해수욕장', '해안', '섬', '수목원', '생태', '산', '공원', '숲'])) {
-      tags.addAll(['자연', '힐링']);
+  PlaceCategory _resolvePlaceCategory(YoutubeCourseJobStop stop) {
+    final category = stop.category.toLowerCase();
+    if (category.contains('식당') ||
+        category.contains('카페') ||
+        category.contains('음식') ||
+        category.contains('디저트')) {
+      return PlaceCategory.merchant;
     }
-    if (_containsAny(text, ['박물관', '기념관', '전시관', '유적', '향교', '서원', '관아'])) {
-      tags.addAll(['문화', '체험']);
-    }
-    if (_containsAny(text, ['체험', '치유', '모노레일', '케이블카', '전망대', '타워', '축제'])) {
-      tags.addAll(['체험', '사진']);
-    }
-    if (_containsAny(text, ['시장', '몰', '카페', '맛', '먹', '식당'])) {
-      tags.add('맛집');
-    }
-    if (tags.isEmpty) {
-      tags.addAll(['자연', '문화']);
-    }
-    return tags;
+    return PlaceCategory.halfPrice;
   }
 
-  bool _containsAny(String source, List<String> keywords) {
-    return keywords.any(source.contains);
-  }
+  Future<void> _saveToPlanner() async {
+    if (_saving || _job?.result == null) return;
+    final result = _job!.result!;
+    if (result.stops.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('저장할 코스 장소가 충분하지 않습니다.')),
+      );
+      return;
+    }
 
-  Future<void> _openBuilder(_YoutubeCoursePreparedResult prepared) async {
-    await Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => RegionCourseBuilderScreen(
-          regionId: widget.tripDetail.trip.regionId,
-          regionName: widget.tripDetail.trip.regionName,
-          initialCourse: prepared.initialCourse,
-          tripId: widget.tripDetail.trip.id,
-          initialTripPlaces: widget.tripDetail.selectedPlaces,
-          initialMode: CourseBuildMode.ai,
-        ),
-      ),
-    );
+    setState(() {
+      _saving = true;
+    });
+
+    try {
+      final payload = result.stops.asMap().entries.map((entry) {
+        final stop = entry.value;
+        final syntheticReferenceId =
+            (stop.placeName.hashCode.abs() + stop.address.hashCode.abs() + entry.key + 1) *
+                -1;
+        return TripPlaceItem(
+          id: 0,
+          placeType: _resolvePlaceCategory(stop),
+          referencePlaceId: syntheticReferenceId,
+          placeName: stop.placeName,
+          address: stop.address,
+          visitOrder: entry.key + 1,
+          latitude: stop.latitude,
+          longitude: stop.longitude,
+          checked: true,
+        );
+      }).toList();
+
+      final controller = AppScope.of(context);
+      await controller.runTask(
+        () => controller.repository.replaceTripPlaces(widget.tripDetail.trip.id, payload),
+      );
+      await controller.refreshTrips();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('생성된 코스를 플래너에 저장했습니다.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('코스 저장에 실패했습니다.\n$error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final job = _job;
+    final result = job?.result;
+    final markers = result == null ? const <PlaceMapMarkerData>[] : _buildMarkers(result);
+    final routePoints = result == null ? const <PlaceMapRoutePoint>[] : _buildRoutePoints(result);
+
     return AppShell(
       title: '영상 분석 코스 생성',
       modeName: AppScope.of(context).modeName,
-      child: FutureBuilder<_YoutubeCoursePreparedResult>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-              children: const [
-                _YoutubeAnalysisLoadingCard(),
-              ],
-            );
-          }
-
-          final prepared = snapshot.data!;
-          final analysis = prepared.analysis;
-          final transcriptPlaces = analysis.transcriptPlaceNames;
-          final extractedPlaces = analysis.frameOnlyPlaceNames;
-          final matchedStops = prepared.initialCourse.stops;
-
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-            children: [
-              _YoutubeAnalysisSummaryCard(
-                title: analysis.title,
-                youtubeUrl: widget.youtubeUrl,
-                usedTranscript: analysis.usedTranscript,
-                usedThumbnailOcr: analysis.usedThumbnailOcr,
-                usedFrameOcr: analysis.usedFrameOcr,
-                frameCount: analysis.frameCount,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+        children: [
+          _JobHeaderCard(
+            jobId: _jobId,
+            youtubeUrl: widget.youtubeUrl,
+            status: job?.status ?? (_creating ? 'PENDING' : 'UNKNOWN'),
+            errorMessage: _errorMessage,
+          ),
+          const SizedBox(height: 16),
+          if (_creating || job == null || job.isPending || job.isProcessing)
+            const _YoutubeJobPendingCard(),
+          if (job != null && job.isFailed)
+            _YoutubeJobFailedCard(message: job.errorMessage ?? '알 수 없는 오류'),
+          if (result != null) ...[
+            _YoutubeJobResultCard(result: result),
+            const SizedBox(height: 16),
+            SectionCard(
+              title: '생성된 코스 지도',
+              subtitle: '분석된 장소를 순서대로 지도 마커와 경로로 표시합니다.',
+              child: PlaceMapView(
+                markers: markers,
+                routeMarkers: routePoints,
+                connectSequentially: true,
+                emptyMessage: '생성된 지도 마커가 없습니다.',
+                kakaoEnabled: AppConfig.fromEnvironment().canUseKakaoMap,
+                height: 420,
               ),
-              const SizedBox(height: 16),
-              _PlaceListCard(
-                title: '자막에 없는 영상 추출 장소',
-                subtitle: '프레임/썸네일 OCR로 추가 확인한 관광지·식당 후보만 보여줍니다.',
-                items: extractedPlaces,
-                emptyMessage: '자막에 없는 추가 장소는 감지되지 않았습니다.',
+            ),
+            const SizedBox(height: 16),
+            SectionCard(
+              title: '생성된 장소 순서',
+              subtitle: '저장 시 아래 순서대로 기존 플래너(trip_places)에 저장됩니다.',
+              child: Column(
+                children: result.stops
+                    .map(
+                      (stop) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: CircleAvatar(
+                          radius: 16,
+                          backgroundColor: const Color(0xFFE8F7EE),
+                          child: Text(
+                            '${stop.order}',
+                            style: const TextStyle(
+                              color: Color(0xFF15803D),
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        title: Text(stop.placeName),
+                        subtitle: Text('${stop.address}\n${stop.reason}'),
+                      ),
+                    )
+                    .toList(),
               ),
-              const SizedBox(height: 16),
-              _PlaceListCard(
-                title: '자막에서 확인된 장소',
-                subtitle: '영상 자막에 직접 언급된 장소 목록입니다. 중복 추천 방지를 위해 별도로 분리했습니다.',
-                items: transcriptPlaces,
-                emptyMessage: '자막에서 직접 확인된 장소가 없습니다.',
-              ),
-              const SizedBox(height: 16),
-              _PlaceListCard(
-                title: '현재 지역 데이터와 매칭된 추천 코스',
-                subtitle: '자막에 없는 영상 추출 장소를 현재 지역 지정관광지 목록과 맞춰 코스 초안을 만들었습니다.',
-                items: matchedStops.map((item) => item.name).toList(),
-                emptyMessage: '직접 매칭된 장소가 부족해 기본 추천 코스로 채웠습니다.',
-              ),
-              if (analysis.warnings.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                _WarningCard(warnings: analysis.warnings),
-              ],
-              const SizedBox(height: 20),
-              FilledButton(
-                onPressed: () => _openBuilder(prepared),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(56),
-                  backgroundColor: const Color(0xFF16A34A),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                ),
-                child: const Text(
-                  '이 정보로 코스 구성하기',
-                  style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 20),
+            FilledButton(
+              onPressed: _saving ? null : _saveToPlanner,
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(56),
+                backgroundColor: const Color(0xFF16A34A),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
                 ),
               ),
-            ],
-          );
-        },
+              child: Text(
+                _saving ? '저장 중...' : '이 코스 저장하기',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
 }
 
-class _YoutubeCoursePreparedResult {
-  const _YoutubeCoursePreparedResult({
-    required this.regionDetail,
-    required this.analysis,
-    required this.initialCourse,
+class _JobHeaderCard extends StatelessWidget {
+  const _JobHeaderCard({
+    required this.jobId,
+    required this.youtubeUrl,
+    required this.status,
+    required this.errorMessage,
   });
 
-  final RegionDetail regionDetail;
-  final YoutubeCourseAnalysisResult analysis;
-  final SavedCourse initialCourse;
+  final String? jobId;
+  final String youtubeUrl;
+  final String status;
+  final String? errorMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    return SectionCard(
+      title: '유튜브 코스 작업',
+      subtitle: 'jobId 기준으로 백그라운드 작업 상태를 조회합니다.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('jobId: ${jobId ?? '생성 중'}'),
+          const SizedBox(height: 8),
+          Text('상태: $status'),
+          const SizedBox(height: 8),
+          Text(youtubeUrl),
+          if (errorMessage != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              errorMessage!,
+              style: const TextStyle(color: Color(0xFFB91C1C)),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
-class _YoutubeAnalysisLoadingCard extends StatelessWidget {
-  const _YoutubeAnalysisLoadingCard();
+class _YoutubeJobPendingCard extends StatelessWidget {
+  const _YoutubeJobPendingCard();
 
   @override
   Widget build(BuildContext context) {
@@ -319,7 +369,7 @@ class _YoutubeAnalysisLoadingCard extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           Text(
-            '영상 분석 중입니다',
+            '백그라운드에서 분석 중입니다',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   color: const Color(0xFF111827),
                   fontWeight: FontWeight.w900,
@@ -327,7 +377,7 @@ class _YoutubeAnalysisLoadingCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            '유튜브 자막을 먼저 읽고, 부족한 장면은 썸네일과 추출 프레임을 OCR/비전 분석해서 장소 정보를 모으고 있어요.',
+            '유튜브 자막, 프레임, OCR, 장소 추출을 백그라운드에서 처리하고 있습니다. 다른 화면으로 이동해도 작업은 계속됩니다.',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: const Color(0xFF64748B),
@@ -340,222 +390,40 @@ class _YoutubeAnalysisLoadingCard extends StatelessWidget {
   }
 }
 
-class _YoutubeAnalysisSummaryCard extends StatelessWidget {
-  const _YoutubeAnalysisSummaryCard({
-    required this.title,
-    required this.youtubeUrl,
-    required this.usedTranscript,
-    required this.usedThumbnailOcr,
-    required this.usedFrameOcr,
-    required this.frameCount,
-  });
+class _YoutubeJobFailedCard extends StatelessWidget {
+  const _YoutubeJobFailedCard({required this.message});
 
-  final String? title;
-  final String youtubeUrl;
-  final bool usedTranscript;
-  final bool usedThumbnailOcr;
-  final bool usedFrameOcr;
-  final int frameCount;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
-    final chips = <String>[
-      if (usedTranscript) '자막 사용',
-      if (usedThumbnailOcr) '썸네일 OCR',
-      if (usedFrameOcr) '프레임 OCR ${frameCount}장',
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title?.isNotEmpty == true ? title! : '유튜브 영상 분석 결과',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: const Color(0xFF111827),
-                  fontWeight: FontWeight.w900,
-                ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            youtubeUrl,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF64748B),
-                  height: 1.5,
-                ),
-          ),
-          if (chips.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: chips
-                  .map(
-                    (chip) => Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF0FDF4),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: const Color(0xFFBBF7D0)),
-                      ),
-                      child: Text(
-                        chip,
-                        style: const TextStyle(
-                          color: Color(0xFF15803D),
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
-          ],
-        ],
+    return SectionCard(
+      title: '분석 실패',
+      subtitle: '백그라운드 작업이 실패했습니다.',
+      child: Text(
+        message,
+        style: const TextStyle(color: Color(0xFFB91C1C)),
       ),
     );
   }
 }
 
-class _PlaceListCard extends StatelessWidget {
-  const _PlaceListCard({
-    required this.title,
-    required this.subtitle,
-    required this.items,
-    required this.emptyMessage,
-  });
+class _YoutubeJobResultCard extends StatelessWidget {
+  const _YoutubeJobResultCard({required this.result});
 
-  final String title;
-  final String subtitle;
-  final List<String> items;
-  final String emptyMessage;
+  final YoutubeCourseJobResult result;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: const Color(0xFF111827),
-                  fontWeight: FontWeight.w900,
-                ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF64748B),
-                  height: 1.5,
-                ),
-          ),
-          const SizedBox(height: 14),
-          if (items.isEmpty)
-            Text(
-              emptyMessage,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF64748B),
-                    fontWeight: FontWeight.w600,
-                  ),
-            )
-          else
-            ...items.asMap().entries.map(
-                  (entry) => Padding(
-                    padding: EdgeInsets.only(bottom: entry.key == items.length - 1 ? 0 : 10),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 26,
-                          height: 26,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFE8F8EE),
-                            shape: BoxShape.circle,
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            '${entry.key + 1}',
-                            style: const TextStyle(
-                              color: Color(0xFF16A34A),
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            entry.value,
-                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                  color: const Color(0xFF111827),
-                                  fontWeight: FontWeight.w700,
-                                  height: 1.45,
-                                ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WarningCard extends StatelessWidget {
-  const _WarningCard({required this.warnings});
-
-  final List<String> warnings;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFFBEB),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFFDE68A)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '분석 참고 메모',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: const Color(0xFF92400E),
-                  fontWeight: FontWeight.w900,
-                ),
-          ),
-          const SizedBox(height: 10),
-          ...warnings.map(
-            (warning) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                '• $warning',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFF92400E),
-                      height: 1.5,
-                    ),
-              ),
+    return SectionCard(
+      title: result.title,
+      subtitle: result.summary,
+      child: Text(
+        '총 ${result.stops.length}개의 장소를 생성했습니다.',
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: const Color(0xFF475569),
+              fontWeight: FontWeight.w700,
             ),
-          ),
-        ],
       ),
     );
   }
