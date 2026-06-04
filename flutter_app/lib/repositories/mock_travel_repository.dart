@@ -652,6 +652,7 @@ class MockTravelRepository implements TravelRepository {
       kakaoRoadAddress: merchant.kakaoRoadAddress,
       kakaoCategory: merchant.kakaoCategoryName,
       kakaoPlaceUrl: merchant.kakaoPlaceUrl,
+      externalInfoAvailable: merchant.kakaoPlaceName.isNotEmpty,
     );
   }
 

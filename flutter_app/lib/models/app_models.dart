@@ -558,6 +558,7 @@ class MerchantDetailItem {
     required this.kakaoRoadAddress,
     required this.kakaoCategory,
     required this.kakaoPlaceUrl,
+    required this.externalInfoAvailable,
   });
 
   final int id;
@@ -571,6 +572,7 @@ class MerchantDetailItem {
   final String kakaoRoadAddress;
   final String kakaoCategory;
   final String kakaoPlaceUrl;
+  final bool externalInfoAvailable;
 
   factory MerchantDetailItem.fromJson(Map<String, dynamic> json) {
     return MerchantDetailItem(
@@ -585,6 +587,7 @@ class MerchantDetailItem {
       kakaoRoadAddress: json['kakaoRoadAddress'] as String? ?? '',
       kakaoCategory: json['kakaoCategory'] as String? ?? '',
       kakaoPlaceUrl: json['kakaoPlaceUrl'] as String? ?? '',
+      externalInfoAvailable: json['externalInfoAvailable'] as bool? ?? false,
     );
   }
 }

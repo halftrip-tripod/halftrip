@@ -276,8 +276,12 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
     }).toList();
   }
 
-  Future<void> _loadMerchantDetail(int regionId, int merchantId) async {
-    if (_merchantDetailCache.containsKey(merchantId)) return;
+  Future<void> _loadMerchantDetail(
+    int regionId,
+    int merchantId, {
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh && _merchantDetailCache.containsKey(merchantId)) return;
     try {
       final detail = await AppScope.of(context).repository.getMerchantDetail(
         regionId: regionId,
@@ -287,6 +291,12 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
       setState(() {
         _merchantDetailCache[merchantId] = detail;
       });
+      if (!detail.externalInfoAvailable && !forceRefresh) {
+        Future<void>.delayed(const Duration(milliseconds: 900), () {
+          if (!mounted) return;
+          _loadMerchantDetail(regionId, merchantId, forceRefresh: true);
+        });
+      }
     } catch (_) {
       // Read 실패는 허용. Write(플래너 추가)는 marker 기본값으로 계속 가능해야 함.
     }
