@@ -358,7 +358,13 @@ class _PlaceMapViewState extends State<PlaceMapView> {
             'yAnchor': 1.12,
             'xAnchor': 0.5,
             'clickable': true,
-            'content': _buildOverlayContent(markerData),
+            'content': _buildOverlayContent(
+              markerData,
+              onClose: () {
+                _callMethod(_activeOverlay, 'setMap', [null]);
+                _activeOverlay = null;
+              },
+            ),
           }),
         ],
       );
@@ -568,14 +574,26 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     return null;
   }
 
-  html.DivElement _buildOverlayContent(PlaceMapMarkerData marker) {
+  html.DivElement _buildOverlayContent(
+    PlaceMapMarkerData marker, {
+    required VoidCallback onClose,
+  }) {
     final root = html.DivElement()
-      ..style.width = '248px'
+      ..style.width = '220px'
+      ..style.maxWidth = '220px'
+      ..style.boxSizing = 'border-box'
       ..style.background = '#ffffff'
       ..style.border = '1px solid #dbe4ee'
       ..style.borderRadius = '22px'
       ..style.boxShadow = '0 16px 32px rgba(15, 23, 42, 0.18)'
       ..style.padding = '14px';
+
+    final topRow = html.DivElement()
+      ..style.display = 'flex'
+      ..style.alignItems = 'flex-start'
+      ..style.justifyContent = 'space-between'
+      ..style.gap = '8px'
+      ..style.marginBottom = '10px';
 
     final imageBox = html.DivElement()
       ..style.width = '100%'
@@ -605,10 +623,8 @@ class _PlaceMapViewState extends State<PlaceMapView> {
       );
     }
 
-    root.append(imageBox);
-
     if ((marker.regionLabel ?? '').isNotEmpty) {
-      root.append(
+      topRow.append(
         html.SpanElement()
           ..text = marker.regionLabel!
           ..style.display = 'inline-block'
@@ -617,10 +633,31 @@ class _PlaceMapViewState extends State<PlaceMapView> {
           ..style.background = '#e8f7ee'
           ..style.color = '#15803d'
           ..style.fontSize = '12px'
-          ..style.fontWeight = '800'
-          ..style.marginBottom = '10px',
+          ..style.fontWeight = '800',
       );
+    } else {
+      topRow.append(html.DivElement());
     }
+
+    final closeButton = html.ButtonElement()
+      ..text = '닫기'
+      ..style.border = '0'
+      ..style.background = '#f1f5f9'
+      ..style.color = '#334155'
+      ..style.borderRadius = '999px'
+      ..style.padding = '6px 10px'
+      ..style.fontSize = '11px'
+      ..style.fontWeight = '800'
+      ..style.cursor = 'pointer';
+    closeButton.onClick.listen((event) {
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+    });
+    topRow.append(closeButton);
+
+    root.append(topRow);
+    root.append(imageBox);
 
     root.append(
       html.DivElement()
@@ -628,7 +665,9 @@ class _PlaceMapViewState extends State<PlaceMapView> {
         ..style.fontSize = '18px'
         ..style.fontWeight = '900'
         ..style.color = '#0f172a'
-        ..style.marginBottom = '8px',
+        ..style.marginBottom = '8px'
+        ..style.wordBreak = 'keep-all'
+        ..style.overflowWrap = 'anywhere',
     );
 
     root.append(
@@ -637,8 +676,15 @@ class _PlaceMapViewState extends State<PlaceMapView> {
         ..style.fontSize = '13px'
         ..style.lineHeight = '1.5'
         ..style.color = '#64748b'
-        ..style.marginBottom = '10px',
+        ..style.marginBottom = '10px'
+        ..style.wordBreak = 'keep-all'
+        ..style.overflowWrap = 'anywhere',
     );
+
+    final actionSection = html.DivElement()
+      ..style.display = 'flex'
+      ..style.flexDirection = 'column'
+      ..style.gap = '10px';
 
     if ((marker.roadAddress ?? '').isNotEmpty) {
       root.append(
@@ -672,12 +718,11 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     }
 
     if ((marker.placeUrl ?? '').isNotEmpty) {
-      root.append(
+      actionSection.append(
         html.AnchorElement(href: marker.placeUrl!)
           ..text = '카카오 장소 상세 보기'
           ..target = '_blank'
           ..style.display = 'inline-block'
-          ..style.marginBottom = marker.actionLabel == null ? '0' : '14px'
           ..style.color = '#0F766E'
           ..style.fontSize = '12px'
           ..style.fontWeight = '800'
@@ -689,20 +734,25 @@ class _PlaceMapViewState extends State<PlaceMapView> {
       final button = html.ButtonElement()
         ..text = marker.actionLabel!
         ..style.width = '100%'
-        ..style.height = '46px'
+        ..style.height = '44px'
         ..style.border = '0'
         ..style.cursor = 'pointer'
         ..style.borderRadius = '14px'
         ..style.background = '#16a34a'
         ..style.color = '#ffffff'
         ..style.fontSize = '14px'
+        ..style.boxSizing = 'border-box'
         ..style.fontWeight = '800';
       button.onClick.listen((event) {
         event.preventDefault();
         event.stopPropagation();
         _invokeMarkerCallback(widget.onMarkerAction, marker.id);
       });
-      root.append(button);
+      actionSection.append(button);
+    }
+
+    if (actionSection.children.isNotEmpty) {
+      root.append(actionSection);
     }
 
     return root;
