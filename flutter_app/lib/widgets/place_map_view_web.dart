@@ -579,8 +579,8 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     required VoidCallback onClose,
   }) {
     final root = html.DivElement()
-      ..style.width = '248px'
-      ..style.maxWidth = '248px'
+      ..style.width = '288px'
+      ..style.maxWidth = '288px'
       ..style.boxSizing = 'border-box'
       ..style.background = '#ffffff'
       ..style.border = '1px solid #dbe4ee'
