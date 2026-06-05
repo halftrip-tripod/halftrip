@@ -20,7 +20,8 @@ class PlaceInfoScreen extends StatefulWidget {
 }
 
 class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
-  Future<({TripDetail tripDetail, PlaceInfoDetail placeInfoDetail, MerchantMapSearchResult merchantMap})>? _future;
+  Future<({TripDetail tripDetail, PlaceInfoDetail placeInfoDetail})>? _future;
+  MerchantMapSearchResult? _merchantMap;
   bool _initialized = false;
   _PlaceInfoMapTab _selectedTab = _PlaceInfoMapTab.designatedPlaces;
   int? _focusedMarkerId;
@@ -37,43 +38,42 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
     _initialized = true;
   }
 
-  Future<({TripDetail tripDetail, PlaceInfoDetail placeInfoDetail, MerchantMapSearchResult merchantMap})> _loadBundle({
-    PlaceMapViewport? merchantViewport,
-  }) async {
+  Future<({TripDetail tripDetail, PlaceInfoDetail placeInfoDetail})> _loadBundle() async {
     final controller = AppScope.of(context);
     final tripDetail = await controller.repository.getTripDetail(widget.tripId);
     final placeInfoDetail = await controller.repository.getPlaceInfoDetail(
       tripDetail.trip.regionId,
       residence: controller.currentUser?.residence,
     );
-    final merchantMap = await controller.repository.getMerchantMap(
-      regionId: tripDetail.trip.regionId,
-      southLat: merchantViewport?.minLatitude,
-      northLat: merchantViewport?.maxLatitude,
-      westLng: merchantViewport?.minLongitude,
-      eastLng: merchantViewport?.maxLongitude,
-    );
     return (
       tripDetail: tripDetail,
       placeInfoDetail: placeInfoDetail,
-      merchantMap: merchantMap,
     );
   }
 
   Future<void> _refresh() async {
     setState(() {
-      _future = _loadBundle(merchantViewport: _searchedViewport);
+      _future = _loadBundle();
     });
   }
 
   Future<void> _researchMerchants() async {
     final viewport = _pendingViewport;
     if (viewport == null) return;
+    final tripDetail = await AppScope.of(context).repository.getTripDetail(widget.tripId);
+    final merchantMap = await AppScope.of(context).repository.getMerchantMap(
+      regionId: tripDetail.trip.regionId,
+      southLat: viewport.minLatitude,
+      northLat: viewport.maxLatitude,
+      westLng: viewport.minLongitude,
+      eastLng: viewport.maxLongitude,
+    );
+    if (!mounted) return;
     setState(() {
       _searchedViewport = viewport;
       _pendingViewport = null;
       _focusedMarkerId = null;
-      _future = _loadBundle(merchantViewport: viewport);
+      _merchantMap = merchantMap;
     });
   }
 
@@ -319,9 +319,9 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
     final config = AppConfig.fromEnvironment();
 
     return AppShell(
-      title: 'ÏßÅÏ†ë ÏΩîÏä§ ÎßåÎì§Í∏?,
+      title: '¡˜¡¢ ƒ⁄Ω∫ ∏∏µÈ±‚',
       modeName: controller.modeName,
-      child: FutureBuilder<({TripDetail tripDetail, PlaceInfoDetail placeInfoDetail, MerchantMapSearchResult merchantMap})>(
+      child: FutureBuilder<({TripDetail tripDetail, PlaceInfoDetail placeInfoDetail})>(
         future: _future,
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
@@ -330,7 +330,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
 
           final tripDetail = snapshot.data!.tripDetail;
           final placeInfoDetail = snapshot.data!.placeInfoDetail;
-          final merchantMap = snapshot.data!.merchantMap;
+          final merchantMap = _merchantMap;
           final places = placeInfoDetail.halfPricePlaces
               .where((place) => place.latitude != null && place.longitude != null)
               .toList();
@@ -339,7 +339,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
           final markers = showingMerchants
               ? _buildMerchantMarkers(
                   regionName: tripDetail.trip.regionName,
-                  markers: merchantMap.markers,
+                  markers: merchantMap?.markers ?? const [],
                   selectedPlaces: tripDetail.selectedPlaces,
                   fallbackMerchants: const {},
                 )
@@ -359,7 +359,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
               const _IntroCard(),
               const SizedBox(height: 16),
               SectionCard(
-                title: 'ÏßÄ?ÑÏóê???•ÏÜå Í≥†Î•¥Í∏?,
+                title: '¡ˆµµø°º≠ ¿Âº“ ∞Ì∏£±‚',
                 subtitle: showingMerchants
                     ? 'Í∏∞Î≥∏?Ä ?úÏ≤≠/Íµ∞Ï≤≠ ??ÏßÄ??Ï§ëÏã¨ ?îÎ©¥?ºÎ°ú ?úÏûë?òÍ≥†, ÏßÄ?ÑÎ? ??∏¥ ??`??ÏßÄ???¨Í??????åÎ????åÎßå ?ÑÏû¨ ?îÎ©¥ ?àÏùò Í∞ÄÎßπÏ†ê???§Ïãú Î∂àÎü¨?µÎãà??'
                     : 'Ïπ¥Ïπ¥?§Îßµ ÎßàÏª§Î•??ÑÎ•¥Î©?ÏßÄ?ïÍ?Í¥ëÏ? ?ïÎ≥¥Í∞Ä ÏßÄ????Ïπ¥ÎìúÎ°??¥Î¶¨Í≥? Î∞îÎ°ú ?åÎûò?àÏóê Ï∂îÍ??????àÏñ¥??',
@@ -385,7 +385,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '«ˆ¿Á ${merchantMap.merchantCount}∞≥ ∞°∏Õ¡°',
+                            '«ˆ¿Á ${merchantMap?.merchantCount ?? 0}∞≥ ∞°∏Õ¡°',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -436,7 +436,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
                         });
 
                         if (showingMerchants) {
-                          final marker = merchantMap.markers.cast<MerchantMarkerItem?>().firstWhere(
+                          final marker = (merchantMap?.markers ?? const <MerchantMarkerItem>[]).cast<MerchantMarkerItem?>().firstWhere(
                                 (item) => item?.id == markerId,
                                 orElse: () => null,
                               );
@@ -475,10 +475,10 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
                             }
                           : null,
                       initialCenterLatitude: showingMerchants
-                          ? merchantMap.centerLatitude
+                          ? merchantMap?.centerLatitude
                           : null,
                       initialCenterLongitude: showingMerchants
-                          ? merchantMap.centerLongitude
+                          ? merchantMap?.centerLongitude
                           : null,
                       height: showingMerchants ? 430 : 500,
                     ),
@@ -489,7 +489,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
                         onPressed: _openPlanner,
                         icon: const Icon(Icons.route_rounded),
                         label: Text(
-                          '?åÎûò??Î≥¥Í∏∞${tripDetail.selectedPlaces.isNotEmpty ? ' (${tripDetail.selectedPlaces.length})' : ''}',
+                          '«√∑°≥  ∫∏±‚${tripDetail.selectedPlaces.isNotEmpty ? ' (${tripDetail.selectedPlaces.length})' : ''}',
                         ),
                       ),
                     ),
@@ -520,7 +520,7 @@ class _IntroCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'ÏßÅÏ†ë ÏΩîÏä§ ÎßåÎì§Í∏?,
+            '¡˜¡¢ ƒ⁄Ω∫ ∏∏µÈ±‚',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   color: const Color(0xFF111827),
                   fontWeight: FontWeight.w900,
@@ -593,7 +593,10 @@ class _PlaceMapTabSwitcher extends StatelessWidget {
 
 String? _placePhotoAsset(String placeName) {
   const mapping = <String, String>{
-    '?ÑÎèÑ?Ä??: 'assets/spot/wando/wandotower.jpg',
+    'øœµµ≈∏øˆ': 'assets/spot/wando/wandotower.jpg',
   };
   return mapping[placeName];
 }
+
+
+
