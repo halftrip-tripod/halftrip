@@ -596,15 +596,10 @@ class _PlaceMapViewState extends State<PlaceMapView> {
       ..style.marginBottom = '10px';
 
     final imageBox = html.DivElement()
-      ..style.width = '100%'
-      ..style.height = '112px'
-      ..style.borderRadius = '16px'
+      ..style.width = '0'
+      ..style.height = '0'
       ..style.overflow = 'hidden'
-      ..style.background = '#f8fafc'
-      ..style.display = 'flex'
-      ..style.alignItems = 'center'
-      ..style.justifyContent = 'center'
-      ..style.marginBottom = '12px';
+      ..style.marginBottom = '0';
 
     if ((marker.imageAssetPath ?? '').isNotEmpty) {
       imageBox.append(
