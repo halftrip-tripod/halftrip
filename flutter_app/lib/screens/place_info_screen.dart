@@ -58,13 +58,36 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
   }
 
   Future<void> _loadInitialMerchantMap(int regionId) async {
-    final merchantMap = await AppScope.of(context).repository.getMerchantMap(
-      regionId: regionId,
-    );
+    final repository = AppScope.of(context).repository;
+    final seedMap = await repository.getMerchantMap(regionId: regionId);
+    MerchantMapSearchResult merchantMap = seedMap;
+    const spans = <double>[0.0035, 0.006, 0.01];
+    for (final span in spans) {
+      final candidate = await repository.getMerchantMap(
+        regionId: regionId,
+        southLat: seedMap.centerLatitude - span,
+        northLat: seedMap.centerLatitude + span,
+        westLng: seedMap.centerLongitude - span,
+        eastLng: seedMap.centerLongitude + span,
+      );
+      merchantMap = candidate;
+      if (candidate.merchantCount > 0) {
+        break;
+      }
+    }
     if (!mounted) return;
     setState(() {
       _merchantMap = merchantMap;
-      _searchedViewport = null;
+      _searchedViewport = merchantMap.merchantCount > 0
+          ? PlaceMapViewport(
+              centerLatitude: seedMap.centerLatitude,
+              centerLongitude: seedMap.centerLongitude,
+              minLatitude: seedMap.centerLatitude - 0.01,
+              maxLatitude: seedMap.centerLatitude + 0.01,
+              minLongitude: seedMap.centerLongitude - 0.01,
+              maxLongitude: seedMap.centerLongitude + 0.01,
+            )
+          : null;
     });
   }
 
