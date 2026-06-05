@@ -126,14 +126,14 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
       await _refresh();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${place.name}를 플래너에 추가했습니다.')),
+        SnackBar(content: Text('${place.name}�??�래?�에 추�??�습?�다.')),
       );
       return;
     }
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${place.name}은 이미 플래너에 담겨 있습니다.')),
+      SnackBar(content: Text('${place.name}?� ?��? ?�래?�에 ?�겨 ?�습?�다.')),
     );
   }
 
@@ -166,7 +166,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
               ? detail!.roadAddress
               : fallback?.kakaoRoadAddress.isNotEmpty == true
                   ? fallback!.kakaoRoadAddress
-                  : fallback?.address ?? '주소 정보 없음';
+                  : fallback?.address ?? '주소 ?�보 ?�음';
 
       final payload = [
         ...tripDetail.selectedPlaces,
@@ -190,7 +190,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
       await _refresh();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$resolvedName를 플래너에 추가했습니다.')),
+        SnackBar(content: Text('$resolvedName�??�래?�에 추�??�습?�다.')),
       );
       return;
     }
@@ -198,7 +198,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
     final displayName = detail?.storeName ?? fallback?.name ?? '가맹점';
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$displayName은 이미 플래너에 담겨 있습니다.')),
+      SnackBar(content: Text('$displayName?� ?��? ?�래?�에 ?�겨 ?�습?�다.')),
     );
   }
 
@@ -223,7 +223,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
             ),
             regionLabel: regionName,
             imageAssetPath: _placePhotoAsset(place.name),
-            actionLabel: '플래너에 추가',
+            actionLabel: '?�래?�에 추�?',
           ),
         )
         .toList();
@@ -251,7 +251,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
               ? detail!.roadAddress
               : fallback?.kakaoRoadAddress.isNotEmpty == true
                   ? fallback!.kakaoRoadAddress
-                  : fallback?.address ?? '상세 정보 조회 실패';
+                  : fallback?.address ?? '?�세 ?�보 조회 ?�패';
 
       return PlaceMapMarkerData(
         id: marker.id,
@@ -265,7 +265,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
               item.referencePlaceId == marker.id,
         ),
         regionLabel: regionName,
-        actionLabel: '플래너에 추가',
+        actionLabel: '?�래?�에 추�?',
         phoneNumber: detail?.kakaoPhone,
         roadAddress: detail?.kakaoRoadAddress ?? fallback?.kakaoRoadAddress,
         categoryName: detail?.kakaoCategory.isNotEmpty == true
@@ -298,7 +298,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
         });
       }
     } catch (_) {
-      // Read 실패는 허용. Write(플래너 추가)는 marker 기본값으로 계속 가능해야 함.
+      // Read ?�패???�용. Write(?�래??추�?)??marker 기본값으�?계속 가?�해????
     }
   }
 
@@ -319,7 +319,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
     final config = AppConfig.fromEnvironment();
 
     return AppShell(
-      title: '직접 코스 만들기',
+      title: '직접 코스 만들�?,
       modeName: controller.modeName,
       child: FutureBuilder<({TripDetail tripDetail, PlaceInfoDetail placeInfoDetail, MerchantMapSearchResult merchantMap})>(
         future: _future,
@@ -359,10 +359,10 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
               const _IntroCard(),
               const SizedBox(height: 16),
               SectionCard(
-                title: '지도에서 장소 고르기',
+                title: '지?�에???�소 고르�?,
                 subtitle: showingMerchants
-                    ? '기본은 시청/군청 등 지역 중심 화면으로 시작하고, 지도를 옮긴 뒤 `이 지역 재검색`을 눌렀을 때만 현재 화면 안의 가맹점을 다시 불러옵니다.'
-                    : '카카오맵 마커를 누르면 지정관광지 정보가 지도 위 카드로 열리고, 바로 플래너에 추가할 수 있어요.',
+                    ? '기본?� ?�청/군청 ??지??중심 ?�면?�로 ?�작?�고, 지?��? ??�� ??`??지???��??????��????�만 ?�재 ?�면 ?�의 가맹점???�시 불러?�니??'
+                    : '카카?�맵 마커�??�르�?지?��?광�? ?�보가 지????카드�??�리�? 바로 ?�래?�에 추�??????�어??',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -381,24 +381,27 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
                     ),
                     const SizedBox(height: 14),
                     if (showingMerchants) ...[
-                      Row(
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              '현재 ${merchantMap.merchantCount}개 가맹점',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    color: const Color(0xFF111827),
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                            ),
+                          Text(
+                            '���� ${merchantMap.merchantCount}�� ������',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  color: const Color(0xFF111827),
+                                  fontWeight: FontWeight.w800,
+                                ),
                           ),
-                          FilledButton.tonal(
-                            onPressed: _hasPendingMerchantViewport()
-                                ? _researchMerchants
-                                : null,
-                            child: const Text('이 지역 재검색'),
+                          const SizedBox(height: 10),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: FilledButton.tonal(
+                              onPressed: _hasPendingMerchantViewport()
+                                  ? _researchMerchants
+                                  : null,
+                              child: const Text('�� ���� ��˻�'),
+                            ),
                           ),
                         ],
                       ),
@@ -407,8 +410,8 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
                     PlaceMapView(
                       markers: markers,
                       emptyMessage: showingMerchants
-                          ? '표시할 지역화폐 가맹점 좌표가 없습니다.'
-                          : '표시할 지정관광지 좌표가 아직 없습니다.',
+                          ? '?�시??지??��??가맹점 좌표가 ?�습?�다.'
+                          : '?�시??지?��?광�? 좌표가 ?�직 ?�습?�다.',
                       kakaoEnabled: config.canUseKakaoMap,
                       highlightedMarkerId: highlightedMarkerId,
                       onMarkerTap: (markerId) {
@@ -486,7 +489,7 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
                         onPressed: _openPlanner,
                         icon: const Icon(Icons.route_rounded),
                         label: Text(
-                          '플래너 보기${tripDetail.selectedPlaces.isNotEmpty ? ' (${tripDetail.selectedPlaces.length})' : ''}',
+                          '?�래??보기${tripDetail.selectedPlaces.isNotEmpty ? ' (${tripDetail.selectedPlaces.length})' : ''}',
                         ),
                       ),
                     ),
@@ -517,7 +520,7 @@ class _IntroCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '직접 코스 만들기',
+            '직접 코스 만들�?,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   color: const Color(0xFF111827),
                   fontWeight: FontWeight.w900,
@@ -525,7 +528,7 @@ class _IntroCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '카카오맵 마커를 눌러 원하는 관광지와 지역화폐 가맹점을 보고, 플래너에 담아 여행 동선을 완성해 보세요.',
+            '카카?�맵 마커�??�러 ?�하??관광�??� 지??��??가맹점??보고, ?�래?�에 ?�아 ?�행 ?�선???�성??보세??',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: const Color(0xFF64748B),
                   height: 1.45,
@@ -580,9 +583,9 @@ class _PlaceMapTabSwitcher extends StatelessWidget {
 
     return Row(
       children: [
-        buildTab(_PlaceInfoMapTab.designatedPlaces, '지정관광지'),
+        buildTab(_PlaceInfoMapTab.designatedPlaces, '지?��?광�?'),
         const SizedBox(width: 10),
-        buildTab(_PlaceInfoMapTab.merchants, '지역화폐 가맹점'),
+        buildTab(_PlaceInfoMapTab.merchants, '지??��??가맹점'),
       ],
     );
   }
@@ -590,7 +593,7 @@ class _PlaceMapTabSwitcher extends StatelessWidget {
 
 String? _placePhotoAsset(String placeName) {
   const mapping = <String, String>{
-    '완도타워': 'assets/spot/wando/wandotower.jpg',
+    '?�도?�??: 'assets/spot/wando/wandotower.jpg',
   };
   return mapping[placeName];
 }
