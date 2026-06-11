@@ -39,6 +39,14 @@ class AppController extends ChangeNotifier {
   String get modeName => _repository.modeName;
   bool get isLoggedIn => currentUser != null;
 
+  @override
+  void dispose() {
+    _tokenRefreshSubscription?.cancel();
+    _messageOpenedSubscription?.cancel();
+    _foregroundMessageSubscription?.cancel();
+    super.dispose();
+  }
+
   Future<void> initializePushNotifications() async {
     if (_pushInitialized) return;
     _pushInitialized = true;
@@ -188,6 +196,66 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> saveCompletedYoutubeCourse(
+    YoutubeCourseJobItem job, {
+    List<String>? preferredPreferences,
+    String? preferredTitle,
+  }) async {
+    final result = job.result;
+    if (!job.isCompleted || result == null || result.stops.isEmpty) {
+      return false;
+    }
+
+    final existing = savedCourses.cast<SavedCourse?>().firstWhere(
+          (item) => item?.id == job.jobId,
+          orElse: () => null,
+        );
+    final customTitle = preferredTitle?.trim() ?? '';
+    final resolvedTitle = existing?.title.trim().isNotEmpty == true
+        ? existing!.title
+        : customTitle.isNotEmpty
+            ? customTitle
+            : result.title.trim().isNotEmpty
+                ? result.title.trim()
+                : '${job.regionName} 유튜브 추천 코스';
+
+    await saveCourse(
+      SavedCourse(
+        id: job.jobId,
+        regionId: job.regionId,
+        regionName: job.regionName,
+        title: resolvedTitle,
+        preferences: existing?.preferences ?? preferredPreferences ?? const <String>[],
+        stops: result.stops
+            .map(
+              (stop) => SavedCourseStop(
+                placeId: stop.order,
+                name: stop.placeName,
+                address: stop.address,
+                latitude: stop.latitude,
+                longitude: stop.longitude,
+                sourceType: _savedCourseSourceType(stop),
+              ),
+            )
+            .toList(),
+        createdAt: existing?.createdAt ?? job.updatedAt ?? job.createdAt ?? DateTime.now(),
+      ),
+    );
+    return true;
+  }
+
+  String _savedCourseSourceType(YoutubeCourseJobStop stop) {
+    final category = stop.category.toLowerCase();
+    if (category.contains('식당') ||
+        category.contains('카페') ||
+        category.contains('음식') ||
+        category.contains('주점') ||
+        category.contains('미용')) {
+      return PlaceCategory.merchant.wireName;
+    }
+    return PlaceCategory.halfPrice.wireName;
+  }
+
   Future<void> deleteCourse(String courseId) async {
     savedCourses = savedCourses.where((item) => item.id != courseId).toList();
     await _persistLocalDashboardData();
@@ -294,10 +362,11 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  void _handleForegroundMessage(RemoteMessage message) {
+  Future<void> _handleForegroundMessage(RemoteMessage message) async {
     final type = message.data['type'];
     final jobId = message.data['jobId'];
     if (type == 'YOUTUBE_COURSE_COMPLETED' && jobId is String && jobId.isNotEmpty) {
+      await _syncCompletedYoutubeCourse(jobId);
       scaffoldMessengerKey.currentState?.showSnackBar(
         SnackBar(
           content: const Text('유튜브 코스 생성이 완료되었습니다.'),
@@ -310,11 +379,21 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  void _handleNotificationTap(RemoteMessage message) {
+  Future<void> _handleNotificationTap(RemoteMessage message) async {
     final type = message.data['type'];
     final jobId = message.data['jobId'];
     if (type == 'YOUTUBE_COURSE_COMPLETED' && jobId is String && jobId.isNotEmpty) {
+      await _syncCompletedYoutubeCourse(jobId);
       _openYoutubeJob(jobId);
+    }
+  }
+
+  Future<void> _syncCompletedYoutubeCourse(String jobId) async {
+    try {
+      final job = await _repository.getYoutubeCourseJob(jobId);
+      await saveCompletedYoutubeCourse(job);
+    } catch (_) {
+      // Ignore sync failures so push handling does not block the user flow.
     }
   }
 

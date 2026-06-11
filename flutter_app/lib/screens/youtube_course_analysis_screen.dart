@@ -112,7 +112,8 @@ class _YoutubeCourseAnalysisScreenState
       return;
     }
     try {
-      final job = await AppScope.of(context).repository.getYoutubeCourseJob(jobId);
+      final controller = AppScope.of(context);
+      final job = await controller.repository.getYoutubeCourseJob(jobId);
       if (!mounted) return;
       setState(() {
         _job = job;
@@ -121,8 +122,14 @@ class _YoutubeCourseAnalysisScreenState
       if (job.result != null && _titleController.text.trim().isEmpty) {
         _titleController.text = job.result!.title;
       }
+      if (job.isCompleted && job.result != null) {
+        await controller.saveCompletedYoutubeCourse(
+          job,
+          preferredPreferences: widget.themes,
+        );
+      }
       if (widget.tripDetail == null && job.tripId != null) {
-        await AppScope.of(context).repository.getTripDetail(job.tripId!);
+        await controller.repository.getTripDetail(job.tripId!);
       }
       if (job.isCompleted || job.isFailed) {
         _pollingTimer?.cancel();
@@ -208,30 +215,10 @@ class _YoutubeCourseAnalysisScreenState
       }).toList();
 
       final controller = AppScope.of(context);
-      final regionName = widget.tripDetail?.trip.regionName ?? _job?.regionName ?? '유튜브 코스';
-      await controller.saveCourse(
-        SavedCourse(
-          id: _job!.jobId,
-          regionId: _job!.regionId,
-          regionName: regionName,
-          title: _titleController.text.trim().isEmpty
-              ? (result.title.isEmpty ? '$regionName 추천 코스' : result.title)
-              : _titleController.text.trim(),
-          preferences: widget.themes,
-          stops: result.stops
-              .map(
-                (stop) => SavedCourseStop(
-                  placeId: stop.order,
-                  name: stop.placeName,
-                  address: stop.address,
-                  latitude: stop.latitude,
-                  longitude: stop.longitude,
-                  sourceType: stop.source,
-                ),
-              )
-              .toList(),
-          createdAt: DateTime.now(),
-        ),
+      await controller.saveCompletedYoutubeCourse(
+        _job!,
+        preferredPreferences: widget.themes,
+        preferredTitle: _titleController.text.trim(),
       );
       final tripId = widget.tripDetail?.trip.id ?? _job?.tripId;
       if (tripId == null) {
@@ -243,12 +230,12 @@ class _YoutubeCourseAnalysisScreenState
       await controller.refreshTrips();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('생성된 코스를 플래너에 저장했습니다.')),
+        const SnackBar(content: Text('생성된 코스를 현재 여행 플래너에 적용했습니다.')),
       );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('코스 저장에 실패했습니다.\n$error')),
+        SnackBar(content: Text('플래너 적용에 실패했습니다.\n$error')),
       );
     } finally {
       if (mounted) {
@@ -350,7 +337,7 @@ class _YoutubeCourseAnalysisScreenState
                 ),
               ),
               child: Text(
-                _saving ? '저장 중...' : '이 코스 저장하기',
+                _saving ? '적용 중...' : '플래너에 적용하기',
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
             ),

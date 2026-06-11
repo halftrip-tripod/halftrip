@@ -206,7 +206,9 @@ class _RegionCourseBuilderScreenState extends State<RegionCourseBuilderScreen> {
         final sourceType = stop.sourceType.toUpperCase();
         final placeType = sourceType == PlaceCategory.digitalTourCard.wireName
             ? PlaceCategory.digitalTourCard
-            : PlaceCategory.halfPrice;
+            : sourceType == PlaceCategory.merchant.wireName
+                ? PlaceCategory.merchant
+                : PlaceCategory.halfPrice;
         return TripPlaceItem(
           id: 0,
           placeType: placeType,
@@ -462,7 +464,7 @@ class _HeroCourseCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            '현재 플래너 ${stopCount}곳 · 취향 우선순위 ${preferenceSummary.isEmpty ? '미설정' : preferenceSummary}',
+            '현재 플래너 $stopCount곳 · 취향 우선순위 ${preferenceSummary.isEmpty ? '미설정' : preferenceSummary}',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   color: Colors.white.withValues(alpha: 0.88),
                 ),
