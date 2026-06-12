@@ -198,7 +198,6 @@ class AppController extends ChangeNotifier {
 
   Future<bool> saveCompletedYoutubeCourse(
     YoutubeCourseJobItem job, {
-    List<String>? preferredPreferences,
     String? preferredTitle,
   }) async {
     final result = job.result;
@@ -225,7 +224,7 @@ class AppController extends ChangeNotifier {
         regionId: job.regionId,
         regionName: job.regionName,
         title: resolvedTitle,
-        preferences: existing?.preferences ?? preferredPreferences ?? const <String>[],
+        preferences: existing?.preferences ?? const <String>[],
         stops: result.stops
             .map(
               (stop) => SavedCourseStop(

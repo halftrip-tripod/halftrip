@@ -75,7 +75,6 @@ class YoutubeCourseAnalysisService {
   Future<YoutubeCourseAnalysisResult> analyze({
     required String url,
     required String regionName,
-    required List<String> themes,
   }) async {
     final baseUri = Uri.parse(_config.fastApiBaseUrl);
     final mergedPath =
@@ -87,7 +86,6 @@ class YoutubeCourseAnalysisService {
       body: jsonEncode({
         'url': url,
         'region_name': regionName,
-        'themes': themes,
       }),
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {

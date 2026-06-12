@@ -9,7 +9,6 @@ import 'lodging_form_screen.dart';
 import 'place_info_screen.dart';
 import 'planner_screen.dart';
 import 'receipt_evidence_screen.dart';
-import 'region_course_builder_screen.dart';
 import 'saved_course_list_screen.dart';
 import 'settlement_screen.dart';
 import 'submission_package_screen.dart';
@@ -127,20 +126,20 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       isScrollControlled: true,
       builder: (_) => _TripCourseActionSheet(
         detail: detail,
-        onOpenAiCourse: () => _openAiCourseThemeSheet(detail),
+        onOpenAiCourse: () => _openYoutubeCourseSheet(detail),
       ),
     );
     await _reload();
   }
 
-  Future<void> _openAiCourseThemeSheet(TripDetail detail) async {
+  Future<void> _openYoutubeCourseSheet(TripDetail detail) async {
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => _AiCourseThemeSheet(
-        onGenerate: (themes, youtubeUrl) =>
-            _openAiCourseBuilder(detail, themes, youtubeUrl),
+        onGenerate: (youtubeUrl) =>
+            _openAiCourseBuilder(detail, youtubeUrl),
       ),
     );
     await _reload();
@@ -148,30 +147,12 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
   Future<void> _openAiCourseBuilder(
     TripDetail detail,
-    List<String> themes,
     String youtubeUrl,
   ) async {
     if (!mounted) return;
     if (youtubeUrl.trim().isEmpty) {
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => RegionCourseBuilderScreen(
-            regionId: detail.trip.regionId,
-            regionName: detail.trip.regionName,
-            initialCourse: SavedCourse(
-              id: 'ai-${detail.trip.id}-${DateTime.now().millisecondsSinceEpoch}',
-              regionId: detail.trip.regionId,
-              regionName: detail.trip.regionName,
-              title: '${detail.trip.regionName} AI 추천 코스',
-              preferences: themes,
-              stops: const [],
-              createdAt: DateTime.now(),
-            ),
-            tripId: detail.trip.id,
-            initialTripPlaces: detail.selectedPlaces,
-            initialMode: CourseBuildMode.ai,
-          ),
-        ),
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('유튜브 링크를 입력해 주세요.')),
       );
       return;
     }
@@ -197,12 +178,12 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       }
     }
 
+    if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => YoutubeCourseAnalysisScreen(
           tripDetail: detail,
           youtubeUrl: youtubeUrl,
-          themes: themes,
         ),
       ),
     );
@@ -908,7 +889,7 @@ class _AiCourseThemeSheet extends StatefulWidget {
     required this.onGenerate,
   });
 
-  final Future<void> Function(List<String> themes, String youtubeUrl) onGenerate;
+  final Future<void> Function(String youtubeUrl) onGenerate;
 
   @override
   State<_AiCourseThemeSheet> createState() => _AiCourseThemeSheetState();
@@ -916,6 +897,7 @@ class _AiCourseThemeSheet extends StatefulWidget {
 
 class _AiCourseThemeSheetState extends State<_AiCourseThemeSheet> {
   static const List<String> _allThemes = ['자연', '문화', '맛집', '체험'];
+  final bool _showThemeSection = false;
   late final List<String> _availableThemes;
   final List<String> _selectedThemes = [];
   final TextEditingController _youtubeUrlController = TextEditingController();
@@ -947,17 +929,19 @@ class _AiCourseThemeSheetState extends State<_AiCourseThemeSheet> {
 
   Future<void> _goToPlanner() async {
     if (_submitting) return;
+    final youtubeUrl = _youtubeUrlController.text.trim();
+    if (youtubeUrl.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('유튜브 링크를 입력해 주세요.')),
+      );
+      return;
+    }
     setState(() {
       _submitting = true;
     });
     try {
-      final selectedThemes =
-          _selectedThemes.isEmpty ? [..._allThemes] : [..._selectedThemes];
       Navigator.of(context).pop();
-      await widget.onGenerate(
-        selectedThemes,
-        _youtubeUrlController.text.trim(),
-      );
+      await widget.onGenerate(youtubeUrl);
     } finally {
       if (mounted) {
         setState(() {
@@ -1029,6 +1013,7 @@ class _AiCourseThemeSheetState extends State<_AiCourseThemeSheet> {
               keyboardType: TextInputType.url,
               textInputAction: TextInputAction.done,
             ),
+            if (_showThemeSection) ...[
             const SizedBox(height: 20),
             Text(
               '테마 선택',
@@ -1103,6 +1088,7 @@ class _AiCourseThemeSheetState extends State<_AiCourseThemeSheet> {
                 );
               },
             ),
+            ],
             const SizedBox(height: 18),
             SizedBox(
               width: double.infinity,

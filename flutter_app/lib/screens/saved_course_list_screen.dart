@@ -62,7 +62,7 @@ class SavedCourseListScreen extends StatelessWidget {
                                       initialCourse: course,
                                       tripId: tripDetail.trip.id,
                                       initialTripPlaces: tripDetail.selectedPlaces,
-                                      initialMode: CourseBuildMode.ai,
+                                      initialMode: CourseBuildMode.manual,
                                     ),
                                   ),
                                 );

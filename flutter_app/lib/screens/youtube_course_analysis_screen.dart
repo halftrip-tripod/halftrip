@@ -13,13 +13,11 @@ class YoutubeCourseAnalysisScreen extends StatefulWidget {
     super.key,
     this.tripDetail,
     this.youtubeUrl = '',
-    this.themes = const [],
     this.jobId,
   });
 
   final TripDetail? tripDetail;
   final String youtubeUrl;
-  final List<String> themes;
   final String? jobId;
 
   @override
@@ -125,7 +123,6 @@ class _YoutubeCourseAnalysisScreenState
       if (job.isCompleted && job.result != null) {
         await controller.saveCompletedYoutubeCourse(
           job,
-          preferredPreferences: widget.themes,
         );
       }
       if (widget.tripDetail == null && job.tripId != null) {
@@ -217,7 +214,6 @@ class _YoutubeCourseAnalysisScreenState
       final controller = AppScope.of(context);
       await controller.saveCompletedYoutubeCourse(
         _job!,
-        preferredPreferences: widget.themes,
         preferredTitle: _titleController.text.trim(),
       );
       final tripId = widget.tripDetail?.trip.id ?? _job?.tripId;
