@@ -216,6 +216,7 @@ class _YoutubeCourseAnalysisScreenState
         _job!,
         preferredTitle: _titleController.text.trim(),
       );
+      final savedCourse = controller.findSavedCourse(_job!.jobId);
       final tripId = widget.tripDetail?.trip.id ?? _job?.tripId;
       if (tripId == null) {
         throw Exception('저장할 여행 정보가 없습니다.');
@@ -223,6 +224,12 @@ class _YoutubeCourseAnalysisScreenState
       await controller.runTask(
         () => controller.repository.replaceTripPlaces(tripId, payload),
       );
+      if (savedCourse != null) {
+        await controller.selectCourseForTrip(
+          tripId: tripId,
+          courseId: savedCourse.id,
+        );
+      }
       await controller.refreshTrips();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

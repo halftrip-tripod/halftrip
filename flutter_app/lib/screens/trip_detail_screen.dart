@@ -243,10 +243,35 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
+          final controller = AppScope.of(context);
           final detail = snapshot.data!;
           final trip = detail.trip;
-          final places = [...detail.selectedPlaces]
+          final plannerPlaces = [...detail.selectedPlaces]
             ..sort((a, b) => a.visitOrder.compareTo(b.visitOrder));
+          final selectedCourse = controller.selectedCourseForTrip(trip.id);
+          final places = selectedCourse != null
+              ? selectedCourse.stops
+                  .map(
+                    (stop) => TripPlaceItem(
+                      id: stop.placeId,
+                      placeType: stop.sourceType.toUpperCase() ==
+                              PlaceCategory.merchant.wireName
+                          ? PlaceCategory.merchant
+                          : stop.sourceType.toUpperCase() ==
+                                  PlaceCategory.digitalTourCard.wireName
+                              ? PlaceCategory.digitalTourCard
+                              : PlaceCategory.halfPrice,
+                      referencePlaceId: stop.placeId,
+                      placeName: stop.name,
+                      address: stop.address,
+                      visitOrder: selectedCourse.stops.indexOf(stop) + 1,
+                      latitude: stop.latitude,
+                      longitude: stop.longitude,
+                      checked: true,
+                    ),
+                  )
+                  .toList()
+              : plannerPlaces;
           final progress = trip.refundConditionAmount == 0
               ? 0.0
               : detail.settlementSummary.totalSpentAmount / trip.refundConditionAmount;
@@ -279,6 +304,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                 ),
                 const SizedBox(height: 16),
                 _CourseCard(
+                  courseTitle: selectedCourse?.title,
                   places: places,
                   onCreateCourse: () => _openCourseActions(detail),
                   onOpenPlanner: places.isEmpty ? null : _openPlanner,
@@ -564,11 +590,13 @@ class _ChecklistStatusRow extends StatelessWidget {
 
 class _CourseCard extends StatelessWidget {
   const _CourseCard({
+    this.courseTitle,
     required this.places,
     required this.onCreateCourse,
     required this.onOpenPlanner,
   });
 
+  final String? courseTitle;
   final List<TripPlaceItem> places;
   final VoidCallback onCreateCourse;
   final VoidCallback? onOpenPlanner;
@@ -611,6 +639,17 @@ class _CourseCard extends StatelessWidget {
                 ),
             ],
           ),
+          if (courseTitle != null && courseTitle!.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                courseTitle!,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: const Color(0xFF16A34A),
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ),
           const SizedBox(height: 10),
           if (previewPlaces.isEmpty)
             Container(

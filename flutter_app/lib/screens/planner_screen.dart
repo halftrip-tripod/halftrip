@@ -54,12 +54,19 @@ class _PlannerScreenState extends State<PlannerScreen> {
 
   Future<void> _savePlaces(
     List<TripPlaceItem> places, {
+    required TripSummary trip,
     required String snackBarMessage,
   }) async {
     final controller = AppScope.of(context);
     final payload = _rebuildPlaces(places);
     await controller.runTask(
       () => controller.repository.replaceTripPlaces(widget.tripId, payload),
+    );
+    await controller.syncTripPlacesToSelectedCourse(
+      tripId: widget.tripId,
+      regionId: trip.regionId,
+      regionName: trip.regionName,
+      places: payload,
     );
     await controller.refreshTrips();
 
@@ -73,6 +80,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
   Future<void> _removePlace(
     List<TripPlaceItem> places,
     TripPlaceItem target,
+    TripSummary trip,
   ) async {
     final updated = places
         .where(
@@ -89,7 +97,11 @@ class _PlannerScreenState extends State<PlannerScreen> {
       });
     }
 
-    await _savePlaces(updated, snackBarMessage: '플래너에서 장소를 제거했습니다.');
+    await _savePlaces(
+      updated,
+      trip: trip,
+      snackBarMessage: '플래너에서 장소를 제거했습니다.',
+    );
   }
 
   @override
@@ -208,6 +220,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
 
                           await _savePlaces(
                             reordered,
+                            trip: tripDetail.trip,
                             snackBarMessage: '방문 순서를 변경했습니다.',
                           );
                         },
@@ -280,7 +293,8 @@ class _PlannerScreenState extends State<PlannerScreen> {
                                       ),
                                     ),
                                     IconButton(
-                                      onPressed: () => _removePlace(places, item),
+                                      onPressed: () =>
+                                          _removePlace(places, item, tripDetail.trip),
                                       icon: const Icon(Icons.close_rounded),
                                       tooltip: '제거',
                                     ),

@@ -224,6 +224,10 @@ class _RegionCourseBuilderScreenState extends State<RegionCourseBuilderScreen> {
       await controller.runTask(
         () => controller.repository.replaceTripPlaces(widget.tripId!, payload),
       );
+      await controller.selectCourseForTrip(
+        tripId: widget.tripId!,
+        courseId: course.id,
+      );
       await controller.refreshTrips();
     }
     if (!mounted) {

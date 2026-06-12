@@ -21,10 +21,12 @@ class AppController extends ChangeNotifier {
   AppUser? currentUser;
   List<TripSummary> trips = const [];
   List<SavedCourse> savedCourses = const [];
+  Map<int, String> selectedCourseIdsByTrip = const <int, String>{};
   Set<int> preopenAlertRegionIds = const <int>{};
   Set<int> appliedTripIds = const <int>{};
 
   static const _savedCoursesKey = 'saved_courses_v1';
+  static const _selectedCoursesKey = 'selected_course_ids_by_trip_v1';
   static const _preopenAlertsKey = 'preopen_alert_regions_v1';
   static const _appliedTripsKey = 'applied_trip_ids_v1';
 
@@ -243,6 +245,82 @@ class AppController extends ChangeNotifier {
     return true;
   }
 
+  SavedCourse? findSavedCourse(String courseId) {
+    return savedCourses.cast<SavedCourse?>().firstWhere(
+          (item) => item?.id == courseId,
+          orElse: () => null,
+        );
+  }
+
+  String? selectedCourseIdForTrip(int tripId) => selectedCourseIdsByTrip[tripId];
+
+  SavedCourse? selectedCourseForTrip(int tripId) {
+    final courseId = selectedCourseIdsByTrip[tripId];
+    if (courseId == null || courseId.isEmpty) {
+      return null;
+    }
+    return findSavedCourse(courseId);
+  }
+
+  Future<void> selectCourseForTrip({
+    required int tripId,
+    required String courseId,
+  }) async {
+    final next = {...selectedCourseIdsByTrip};
+    next[tripId] = courseId;
+    selectedCourseIdsByTrip = next;
+    await _persistLocalDashboardData();
+    notifyListeners();
+  }
+
+  Future<SavedCourse?> syncTripPlacesToSelectedCourse({
+    required int tripId,
+    required int regionId,
+    required String regionName,
+    required List<TripPlaceItem> places,
+    String? preferredTitle,
+  }) async {
+    if (places.isEmpty) {
+      final next = {...selectedCourseIdsByTrip}..remove(tripId);
+      selectedCourseIdsByTrip = next;
+      await _persistLocalDashboardData();
+      notifyListeners();
+      return null;
+    }
+
+    final existing = selectedCourseForTrip(tripId);
+    final resolvedTitle = existing?.title.trim().isNotEmpty == true
+        ? existing!.title
+        : (preferredTitle?.trim().isNotEmpty == true
+            ? preferredTitle!.trim()
+            : '$regionName 직접 코스');
+
+    final course = SavedCourse(
+      id: existing?.id ?? 'manual-$tripId-${DateTime.now().millisecondsSinceEpoch}',
+      regionId: regionId,
+      regionName: regionName,
+      title: resolvedTitle,
+      preferences: existing?.preferences ?? const <String>[],
+      stops: places
+          .map(
+            (place) => SavedCourseStop(
+              placeId: place.referencePlaceId,
+              name: place.placeName,
+              address: place.address,
+              latitude: place.latitude ?? 0,
+              longitude: place.longitude ?? 0,
+              sourceType: place.placeType.wireName,
+            ),
+          )
+          .toList(),
+      createdAt: existing?.createdAt ?? DateTime.now(),
+    );
+
+    await saveCourse(course);
+    await selectCourseForTrip(tripId: tripId, courseId: course.id);
+    return course;
+  }
+
   String _savedCourseSourceType(YoutubeCourseJobStop stop) {
     final category = stop.category.toLowerCase();
     if (category.contains('식당') ||
@@ -257,6 +335,9 @@ class AppController extends ChangeNotifier {
 
   Future<void> deleteCourse(String courseId) async {
     savedCourses = savedCourses.where((item) => item.id != courseId).toList();
+    final nextSelected = {...selectedCourseIdsByTrip}
+      ..removeWhere((_, selectedCourseId) => selectedCourseId == courseId);
+    selectedCourseIdsByTrip = nextSelected;
     await _persistLocalDashboardData();
     notifyListeners();
   }
@@ -311,6 +392,15 @@ class AppController extends ChangeNotifier {
     savedCourses = rawCourses
         .map((item) => SavedCourse.fromJson(jsonDecode(item) as Map<String, dynamic>))
         .toList();
+    final rawSelectedCourseIds = preferences.getString(_selectedCoursesKey);
+    if (rawSelectedCourseIds == null || rawSelectedCourseIds.isEmpty) {
+      selectedCourseIdsByTrip = const <int, String>{};
+    } else {
+      final decoded = jsonDecode(rawSelectedCourseIds) as Map<String, dynamic>;
+      selectedCourseIdsByTrip = decoded.map(
+        (key, value) => MapEntry(int.tryParse(key) ?? 0, value.toString()),
+      )..remove(0);
+    }
     preopenAlertRegionIds = (preferences.getStringList(_preopenAlertsKey) ?? const [])
         .map(int.tryParse)
         .whereType<int>()
@@ -326,6 +416,14 @@ class AppController extends ChangeNotifier {
     await preferences.setStringList(
       _savedCoursesKey,
       savedCourses.map((item) => jsonEncode(item.toJson())).toList(),
+    );
+    await preferences.setString(
+      _selectedCoursesKey,
+      jsonEncode(
+        selectedCourseIdsByTrip.map(
+          (key, value) => MapEntry(key.toString(), value),
+        ),
+      ),
     );
     await preferences.setStringList(
       _preopenAlertsKey,

@@ -94,10 +94,11 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
   Future<void> _researchMerchants() async {
     final viewport = _pendingViewport;
     if (viewport == null) return;
-    final tripDetail = await AppScope.of(context).repository.getTripDetail(
+    final repository = AppScope.of(context).repository;
+    final tripDetail = await repository.getTripDetail(
       widget.tripId,
     );
-    final merchantMap = await AppScope.of(context).repository.getMerchantMap(
+    final merchantMap = await repository.getMerchantMap(
       regionId: tripDetail.trip.regionId,
       southLat: viewport.minLatitude,
       northLat: viewport.maxLatitude,
@@ -157,6 +158,12 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
 
       await controller.runTask(
         () => controller.repository.replaceTripPlaces(widget.tripId, payload),
+      );
+      await controller.syncTripPlacesToSelectedCourse(
+        tripId: widget.tripId,
+        regionId: tripDetail.trip.regionId,
+        regionName: tripDetail.trip.regionName,
+        places: payload,
       );
       await controller.refreshTrips();
       await _refresh();
@@ -221,6 +228,12 @@ class _PlaceInfoScreenState extends State<PlaceInfoScreen> {
 
       await controller.runTask(
         () => controller.repository.replaceTripPlaces(widget.tripId, payload),
+      );
+      await controller.syncTripPlacesToSelectedCourse(
+        tripId: widget.tripId,
+        regionId: tripDetail.trip.regionId,
+        regionName: tripDetail.trip.regionName,
+        places: payload,
       );
       await controller.refreshTrips();
       await _refresh();
