@@ -501,7 +501,6 @@ class _ChecklistCard extends StatelessWidget {
                       color: const Color(0xFF111827),
                     ),
               ),
-              const Spacer(),
               Text(
                 '$completedCount/${items.length} 완료',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -647,12 +646,6 @@ class _CourseCard extends StatelessWidget {
                       color: const Color(0xFF111827),
                     ),
               ),
-              const Spacer(),
-              if (onOpenPlanner != null)
-                TextButton(
-                  onPressed: onOpenPlanner,
-                  child: const Text('전체 보기'),
-                ),
             ],
           ),
           if (courseTitle != null && courseTitle!.trim().isNotEmpty)
