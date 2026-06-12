@@ -1300,6 +1300,45 @@ class SavedCourse {
       };
 }
 
+class PendingYoutubeCourseJob {
+  const PendingYoutubeCourseJob({
+    required this.jobId,
+    required this.tripId,
+    required this.regionId,
+    required this.regionName,
+    required this.youtubeUrl,
+    required this.createdAt,
+  });
+
+  final String jobId;
+  final int tripId;
+  final int regionId;
+  final String regionName;
+  final String youtubeUrl;
+  final DateTime createdAt;
+
+  factory PendingYoutubeCourseJob.fromJson(Map<String, dynamic> json) {
+    return PendingYoutubeCourseJob(
+      jobId: json['jobId'] as String? ?? '',
+      tripId: json['tripId'] as int? ?? 0,
+      regionId: json['regionId'] as int? ?? 0,
+      regionName: json['regionName'] as String? ?? '',
+      youtubeUrl: json['youtubeUrl'] as String? ?? '',
+      createdAt:
+          DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'jobId': jobId,
+        'tripId': tripId,
+        'regionId': regionId,
+        'regionName': regionName,
+        'youtubeUrl': youtubeUrl,
+        'createdAt': createdAt.toIso8601String(),
+      };
+}
+
 class CreateYoutubeCourseJobResponse {
   const CreateYoutubeCourseJobResponse({
     required this.jobId,

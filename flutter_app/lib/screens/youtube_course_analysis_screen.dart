@@ -83,6 +83,16 @@ class _YoutubeCourseAnalysisScreenState
         _jobId = response.jobId;
         _creating = false;
       });
+      await controller.trackPendingYoutubeCourseJob(
+        PendingYoutubeCourseJob(
+          jobId: response.jobId,
+          tripId: widget.tripDetail!.trip.id,
+          regionId: widget.tripDetail!.trip.regionId,
+          regionName: widget.tripDetail!.trip.regionName,
+          youtubeUrl: widget.youtubeUrl,
+          createdAt: DateTime.now(),
+        ),
+      );
       await _refreshJob();
       _startPollingIfNeeded();
     } catch (error) {
@@ -119,6 +129,18 @@ class _YoutubeCourseAnalysisScreenState
       });
       if (job.result != null && _titleController.text.trim().isEmpty) {
         _titleController.text = job.result!.title;
+      }
+      if (job.tripId != null && (job.isPending || job.isProcessing)) {
+        await controller.trackPendingYoutubeCourseJob(
+          PendingYoutubeCourseJob(
+            jobId: job.jobId,
+            tripId: job.tripId!,
+            regionId: job.regionId,
+            regionName: job.regionName,
+            youtubeUrl: job.youtubeUrl,
+            createdAt: job.createdAt ?? DateTime.now(),
+          ),
+        );
       }
       if (job.isCompleted && job.result != null) {
         await controller.saveCompletedYoutubeCourse(

@@ -36,7 +36,23 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   }
 
   Future<TripDetail> _loadDetail() {
-    return AppScope.of(context).repository.getTripDetail(widget.tripId);
+    return _loadAndSyncDetail();
+  }
+
+  Future<TripDetail> _loadAndSyncDetail() async {
+    final controller = AppScope.of(context);
+    final detail = await controller.repository.getTripDetail(widget.tripId);
+    await controller.syncPendingYoutubeCourseJobsForTrip(detail.trip.id);
+    if (controller.selectedCourseForTrip(detail.trip.id) == null &&
+        detail.selectedPlaces.isNotEmpty) {
+      await controller.syncTripPlacesToSelectedCourse(
+        tripId: detail.trip.id,
+        regionId: detail.trip.regionId,
+        regionName: detail.trip.regionName,
+        places: detail.selectedPlaces,
+      );
+    }
+    return detail;
   }
 
   Future<void> _reload() async {

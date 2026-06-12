@@ -46,6 +46,42 @@ void main() {
       expect(controller.selectedCourseIdForTrip(101), isNull);
       expect(controller.selectedCourseForTrip(101), isNull);
     });
+
+    test('tracks pending youtube jobs per trip', () async {
+      final controller = AppController(repository: MockTravelRepository());
+      final pending = PendingYoutubeCourseJob(
+        jobId: 'job-1',
+        tripId: 101,
+        regionId: 1,
+        regionName: 'Wando',
+        youtubeUrl: 'https://youtu.be/test',
+        createdAt: DateTime(2026, 6, 12, 11),
+      );
+
+      await controller.trackPendingYoutubeCourseJob(pending);
+
+      expect(controller.pendingYoutubeJobsForTrip(101), hasLength(1));
+      expect(controller.pendingYoutubeJobsForTrip(101).first.jobId, 'job-1');
+    });
+
+    test('moves completed pending youtube job into saved courses', () async {
+      final repository = _CompletedJobRepository();
+      final controller = AppController(repository: repository);
+      final pending = PendingYoutubeCourseJob(
+        jobId: 'job-complete',
+        tripId: 101,
+        regionId: 1,
+        regionName: 'Wando',
+        youtubeUrl: 'https://youtu.be/test',
+        createdAt: DateTime(2026, 6, 12, 11),
+      );
+
+      await controller.trackPendingYoutubeCourseJob(pending);
+      await controller.syncPendingYoutubeCourseJobsForTrip(101);
+
+      expect(controller.pendingYoutubeJobsForTrip(101), isEmpty);
+      expect(controller.savedCourses.any((item) => item.id == 'job-complete'), isTrue);
+    });
   });
 }
 
@@ -76,4 +112,38 @@ SavedCourse _sampleCourse(String id) {
     ],
     createdAt: DateTime(2026, 6, 12, 10),
   );
+}
+
+class _CompletedJobRepository extends MockTravelRepository {
+  @override
+  Future<YoutubeCourseJobItem> getYoutubeCourseJob(String jobId) async {
+    return YoutubeCourseJobItem(
+      jobId: 'job-complete',
+      userId: 1,
+      tripId: 101,
+      regionId: 1,
+      regionName: 'Wando',
+      youtubeUrl: 'https://youtu.be/test',
+      status: 'COMPLETED',
+      result: const YoutubeCourseJobResult(
+        title: 'Completed Course',
+        summary: 'done',
+        stops: [
+          YoutubeCourseJobStop(
+            order: 1,
+            placeName: 'Wando Tower',
+            address: 'Wando address',
+            latitude: 34.31,
+            longitude: 126.75,
+            category: '관광지',
+            source: 'youtube_transcript',
+            reason: 'done',
+          ),
+        ],
+      ),
+      errorMessage: null,
+      createdAt: DateTime(2026, 6, 12, 11),
+      updatedAt: DateTime(2026, 6, 12, 11, 5),
+    );
+  }
 }

@@ -22,11 +22,13 @@ class AppController extends ChangeNotifier {
   List<TripSummary> trips = const [];
   List<SavedCourse> savedCourses = const [];
   Map<int, String> selectedCourseIdsByTrip = const <int, String>{};
+  List<PendingYoutubeCourseJob> pendingYoutubeCourseJobs = const [];
   Set<int> preopenAlertRegionIds = const <int>{};
   Set<int> appliedTripIds = const <int>{};
 
   static const _savedCoursesKey = 'saved_courses_v1';
   static const _selectedCoursesKey = 'selected_course_ids_by_trip_v1';
+  static const _pendingYoutubeJobsKey = 'pending_youtube_jobs_v1';
   static const _preopenAlertsKey = 'preopen_alert_regions_v1';
   static const _appliedTripsKey = 'applied_trip_ids_v1';
 
@@ -242,6 +244,7 @@ class AppController extends ChangeNotifier {
         createdAt: existing?.createdAt ?? job.updatedAt ?? job.createdAt ?? DateTime.now(),
       ),
     );
+    await _removePendingYoutubeCourseJob(job.jobId);
     return true;
   }
 
@@ -262,6 +265,13 @@ class AppController extends ChangeNotifier {
     return findSavedCourse(courseId);
   }
 
+  List<PendingYoutubeCourseJob> pendingYoutubeJobsForTrip(int tripId) {
+    return pendingYoutubeCourseJobs
+        .where((job) => job.tripId == tripId)
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
   Future<void> selectCourseForTrip({
     required int tripId,
     required String courseId,
@@ -271,6 +281,42 @@ class AppController extends ChangeNotifier {
     selectedCourseIdsByTrip = next;
     await _persistLocalDashboardData();
     notifyListeners();
+  }
+
+  Future<void> trackPendingYoutubeCourseJob(PendingYoutubeCourseJob job) async {
+    final next = [...pendingYoutubeCourseJobs];
+    next.removeWhere((item) => item.jobId == job.jobId);
+    next.insert(0, job);
+    pendingYoutubeCourseJobs = next;
+    await _persistLocalDashboardData();
+    notifyListeners();
+  }
+
+  Future<void> syncPendingYoutubeCourseJobsForTrip(int tripId) async {
+    final jobs = pendingYoutubeJobsForTrip(tripId);
+    if (jobs.isEmpty) {
+      return;
+    }
+
+    var changed = false;
+    for (final pending in jobs) {
+      try {
+        final job = await _repository.getYoutubeCourseJob(pending.jobId);
+        if (job.isCompleted) {
+          await saveCompletedYoutubeCourse(job);
+          changed = true;
+        } else if (job.isFailed) {
+          await _removePendingYoutubeCourseJob(job.jobId);
+          changed = true;
+        }
+      } catch (_) {
+        // Ignore transient sync errors; keep pending item visible.
+      }
+    }
+
+    if (changed) {
+      notifyListeners();
+    }
   }
 
   Future<SavedCourse?> syncTripPlacesToSelectedCourse({
@@ -401,6 +447,14 @@ class AppController extends ChangeNotifier {
         (key, value) => MapEntry(int.tryParse(key) ?? 0, value.toString()),
       )..remove(0);
     }
+    final rawPendingJobs = preferences.getStringList(_pendingYoutubeJobsKey) ?? const [];
+    pendingYoutubeCourseJobs = rawPendingJobs
+        .map(
+          (item) => PendingYoutubeCourseJob.fromJson(
+            jsonDecode(item) as Map<String, dynamic>,
+          ),
+        )
+        .toList();
     preopenAlertRegionIds = (preferences.getStringList(_preopenAlertsKey) ?? const [])
         .map(int.tryParse)
         .whereType<int>()
@@ -424,6 +478,10 @@ class AppController extends ChangeNotifier {
           (key, value) => MapEntry(key.toString(), value),
         ),
       ),
+    );
+    await preferences.setStringList(
+      _pendingYoutubeJobsKey,
+      pendingYoutubeCourseJobs.map((item) => jsonEncode(item.toJson())).toList(),
     );
     await preferences.setStringList(
       _preopenAlertsKey,
@@ -488,9 +546,33 @@ class AppController extends ChangeNotifier {
   Future<void> _syncCompletedYoutubeCourse(String jobId) async {
     try {
       final job = await _repository.getYoutubeCourseJob(jobId);
+      if (job.tripId != null &&
+          (job.isPending || job.isProcessing) &&
+          pendingYoutubeCourseJobs.every((item) => item.jobId != job.jobId)) {
+        await trackPendingYoutubeCourseJob(
+          PendingYoutubeCourseJob(
+            jobId: job.jobId,
+            tripId: job.tripId!,
+            regionId: job.regionId,
+            regionName: job.regionName,
+            youtubeUrl: job.youtubeUrl,
+            createdAt: job.createdAt ?? DateTime.now(),
+          ),
+        );
+      }
       await saveCompletedYoutubeCourse(job);
     } catch (_) {
       // Ignore sync failures so push handling does not block the user flow.
+    }
+  }
+
+  Future<void> _removePendingYoutubeCourseJob(String jobId) async {
+    final before = pendingYoutubeCourseJobs.length;
+    pendingYoutubeCourseJobs =
+        pendingYoutubeCourseJobs.where((item) => item.jobId != jobId).toList();
+    if (pendingYoutubeCourseJobs.length != before) {
+      await _persistLocalDashboardData();
+      notifyListeners();
     }
   }
 
