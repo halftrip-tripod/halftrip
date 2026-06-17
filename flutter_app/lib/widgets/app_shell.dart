@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../screens/main_navigation_screen.dart';
+import '../theme/app_colors.dart';
 
 class AppShell extends StatelessWidget {
   const AppShell({
@@ -62,7 +63,7 @@ class AppShell extends StatelessWidget {
     final selectedIndex = currentTabIndex ?? _fallbackTabIndex();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7F3),
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
         automaticallyImplyLeading: false,
         leading: shouldShowBackButton
@@ -73,7 +74,7 @@ class AppShell extends StatelessWidget {
               )
             : null,
         leadingWidth: shouldShowBackButton ? 56 : null,
-        backgroundColor: const Color(0xFFF6F7F3),
+        backgroundColor: AppColors.bg,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         toolbarHeight: 90,
@@ -113,7 +114,7 @@ class AppShell extends StatelessWidget {
                           (index) => _handleFallbackTabSelected(context, index),
                       height: 84,
                       backgroundColor: Colors.white,
-                      indicatorColor: const Color(0xFFE7F7F0),
+                      indicatorColor: AppColors.p100,
                       shadowColor: Colors.transparent,
                       labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
                       destinations: const [
@@ -210,26 +211,23 @@ class SectionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        boxShadow: AppShadows.card,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             title,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                ),
+            style: Theme.of(context).textTheme.titleLarge,
           ),
           if (subtitle.trim().isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
               subtitle,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF64748B),
+                    color: AppColors.ink5,
                     height: 1.5,
                   ),
             ),
