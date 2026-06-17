@@ -1,6 +1,6 @@
 ﻿import 'dart:convert';
 
-enum LoginProvider { kakao, google, guest }
+enum LoginProvider { kakao, naver, google, guest }
 
 enum PlaceCategory { halfPrice, digitalTourCard, merchant }
 
@@ -126,12 +126,14 @@ extension ReceiptReviewStatusWire on ReceiptReviewStatus {
 extension LoginProviderWire on LoginProvider {
   String get wireName => switch (this) {
         LoginProvider.kakao => 'KAKAO',
+        LoginProvider.naver => 'NAVER',
         LoginProvider.google => 'GOOGLE',
         LoginProvider.guest => 'GUEST',
       };
 
   String get label => switch (this) {
-        LoginProvider.kakao => '카카오톡',
+        LoginProvider.kakao => '카카오',
+        LoginProvider.naver => '네이버',
         LoginProvider.google => '구글',
         LoginProvider.guest => '게스트',
       };
