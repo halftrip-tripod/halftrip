@@ -19,6 +19,8 @@ class AppController extends ChangeNotifier {
   bool isBusy = false;
   String? errorMessage;
   AppUser? currentUser;
+  // 소셜 신규 가입 직후 거주지 입력 온보딩이 필요한지 여부.
+  bool needsResidenceSetup = false;
   List<TripSummary> trips = const [];
   List<SavedCourse> savedCourses = const [];
   Map<int, String> selectedCourseIdsByTrip = const <int, String>{};
@@ -86,7 +88,16 @@ class AppController extends ChangeNotifier {
       trips = await _repository.getTrips(authUser.id);
       await _loadLocalDashboardData();
       await _syncFcmToken();
+      // 소셜 가입은 거주지 입력 온보딩을 거치도록 한다.
+      needsResidenceSetup = true;
     });
+  }
+
+  /// 거주지 온보딩 완료 — 현재 사용자 거주지를 갱신하고 메인으로 진입한다.
+  void completeResidenceSetup(String residence) {
+    currentUser = currentUser?.copyWith(residence: residence);
+    needsResidenceSetup = false;
+    notifyListeners();
   }
 
   Future<void> loginWithCredentials({

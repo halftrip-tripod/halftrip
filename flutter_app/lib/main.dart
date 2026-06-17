@@ -11,6 +11,7 @@ import 'repositories/mock_travel_repository.dart';
 import 'repositories/travel_repository.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_navigation_screen.dart';
+import 'screens/residence_screen.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_theme.dart';
 
@@ -88,6 +89,9 @@ class _RootPage extends StatelessWidget {
       builder: (context, _) {
         if (!controller.isLoggedIn) {
           return const LoginScreen();
+        }
+        if (controller.needsResidenceSetup) {
+          return const ResidenceScreen();
         }
         return const MainNavigationScreen();
       },
