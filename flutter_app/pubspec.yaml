@@ -38,3 +38,7 @@ flutter:
     - assets/localmoney/
     - assets/spot/
     - assets/region_hero/
+  fonts:
+    - family: Pretendard
+      fonts:
+        - asset: assets/fonts/PretendardVariable.ttf
