@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../screens/main_navigation_screen.dart';
+import '../screens/mypage_screen.dart';
+import '../screens/notification_center_screen.dart';
 import '../theme/app_colors.dart';
 
 class AppShell extends StatelessWidget {
@@ -82,6 +84,7 @@ class AppShell extends StatelessWidget {
         title: _TopBar(
           actions: actions,
           showBackButton: shouldShowBackButton,
+          showUtilityActions: showBottomNavigation,
         ),
       ),
       body: SafeArea(
@@ -153,22 +156,62 @@ class _TopBar extends StatelessWidget {
   const _TopBar({
     this.actions,
     required this.showBackButton,
+    this.showUtilityActions = false,
   });
 
   final List<Widget>? actions;
   final bool showBackButton;
+  final bool showUtilityActions;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(left: showBackButton ? 4 : 20, right: 12),
+      padding: EdgeInsets.only(left: showBackButton ? 4 : 20, right: 8),
       child: Row(
         children: [
           const _BrandLogo(),
           const Spacer(),
           if (actions != null) ...actions!,
+          if (showUtilityActions) ...[
+            _TopIconButton(
+              icon: Icons.notifications_none_rounded,
+              tooltip: '알림',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                    builder: (_) => const NotificationCenterScreen()),
+              ),
+            ),
+            _TopIconButton(
+              icon: Icons.person_outline_rounded,
+              tooltip: '마이페이지',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const MyPageScreen()),
+              ),
+            ),
+          ],
         ],
       ),
+    );
+  }
+}
+
+class _TopIconButton extends StatelessWidget {
+  const _TopIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: onPressed,
+      tooltip: tooltip,
+      icon: Icon(icon, color: AppColors.ink7, size: 24),
     );
   }
 }

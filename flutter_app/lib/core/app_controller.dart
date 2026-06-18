@@ -100,6 +100,14 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 로그아웃 — 세션 상태를 비우고 로그인 화면으로 되돌린다.
+  void logout() {
+    currentUser = null;
+    trips = const [];
+    needsResidenceSetup = false;
+    notifyListeners();
+  }
+
   Future<void> loginWithCredentials({
     required String loginId,
     required String password,
