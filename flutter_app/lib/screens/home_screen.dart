@@ -32,8 +32,12 @@ class _HomeScreenState extends State<HomeScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_initialized) return;
-    _future = _loadData();
     _initialized = true;
+    // 데이터 로딩(컨트롤러 notifyListeners 동반)을 첫 프레임 이후로 미뤄
+    // 빌드 도중 markNeedsBuild 예외를 방지한다.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _future = _loadData());
+    });
   }
 
   Future<_HomeDashboardData> _loadData() async {
