@@ -5,7 +5,6 @@ import '../models/app_models.dart';
 import '../widgets/app_shell.dart';
 import 'region_action_screen.dart';
 import 'region_course_builder_screen.dart';
-import 'settings_screen.dart';
 
 enum _RegionFilter { all, applying, preparing, closed }
 
@@ -36,7 +35,10 @@ class _HomeScreenState extends State<HomeScreen> {
     // 데이터 로딩(컨트롤러 notifyListeners 동반)을 첫 프레임 이후로 미뤄
     // 빌드 도중 markNeedsBuild 예외를 방지한다.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) setState(() => _future = _loadData());
+      if (!mounted) return;
+      setState(() {
+        _future = _loadData();
+      });
     });
   }
 
@@ -100,28 +102,6 @@ class _HomeScreenState extends State<HomeScreen> {
       modeName: controller.modeName,
       currentTabIndex: widget.currentTabIndex,
       onTabSelected: widget.onTabSelected,
-      actions: [
-        Padding(
-          padding: const EdgeInsets.only(right: 12),
-          child: IconButton(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const SettingsScreen()),
-              );
-            },
-            icon: Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: const Icon(Icons.menu_rounded),
-            ),
-          ),
-        ),
-      ],
       child: FutureBuilder<_HomeDashboardData>(
         future: _future,
         builder: (context, snapshot) {
