@@ -57,7 +57,9 @@ ThemeData buildHalftripTheme() {
         foregroundColor: AppColors.ink7,
         backgroundColor: AppColors.surf,
         side: BorderSide.none,
-        minimumSize: const Size.fromHeight(50),
+        // 최소 높이만 보장(너비 강제 X). Size.fromHeight는 최소 너비=∞라
+        // Row 인라인 버튼에서 무한폭 크래시 → Size(0, h)로.
+        minimumSize: const Size(0, 50),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         textStyle: const TextStyle(
           fontFamily: 'Pretendard',
