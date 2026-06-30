@@ -8,6 +8,7 @@ import '../widgets/ui/pill.dart';
 import 'auth_photo_upload_screen.dart';
 import 'lodging_form_screen.dart';
 import 'planner_screen.dart';
+import 'receipt_card_screen.dart';
 import 'receipt_evidence_screen.dart';
 import 'settlement_screen.dart';
 import 'submission_package_screen.dart';
@@ -346,7 +347,9 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         title: '이번 여행 후기 남기기',
         subtitle: '영수증 카드로 이번 여행을 커뮤니티에 공유해보세요 (금액 비공개).',
         child: _NextBar(
-            label: '후기 올리기', onTap: () => _todo('커뮤니티 연동 준비 중이에요.')),
+            label: '후기 올리기',
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => ReceiptCardScreen(tripId: detail.trip.id)))),
       ),
     ];
   }

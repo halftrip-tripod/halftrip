@@ -8,6 +8,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/ui/app_card.dart';
 import '../widgets/ui/pill.dart';
+import 'past_trip_screen.dart';
 import 'trip_detail_screen.dart';
 
 class TripListScreen extends StatefulWidget {
@@ -88,7 +89,8 @@ class _TripListScreenState extends State<TripListScreen> {
                   padding: const EdgeInsets.only(bottom: 12),
                   child: _PastTripCard(
                     trip: trip,
-                    onTap: () => _openDetail(trip.id),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => PastTripScreen(tripId: trip.id))),
                   ),
                 ),
               ),
