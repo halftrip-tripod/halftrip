@@ -69,10 +69,13 @@ class _SignaturePadDialogState extends State<_SignaturePadDialog> {
                   onPressed: () => setState(_points.clear),
                   child: const Text('지우기'),
                 ),
-                const Spacer(),
-                Text(
-                  'MVP에서는 JSON 좌표로 서명을 저장합니다.',
-                  style: Theme.of(context).textTheme.bodySmall,
+                const SizedBox(width: 12),
+                Flexible(
+                  child: Text(
+                    '손가락으로 이 영역에 서명해 주세요',
+                    textAlign: TextAlign.end,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ),
               ],
             ),
@@ -146,6 +149,8 @@ class _SignaturePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SignaturePainter oldDelegate) {
-    return oldDelegate.points != points;
+    // points는 같은 리스트를 in-place로 add하므로 참조 비교로는 갱신 감지 불가
+    // → 항상 다시 그려 실시간 획이 보이게 한다.
+    return true;
   }
 }

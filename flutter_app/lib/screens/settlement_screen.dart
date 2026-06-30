@@ -3,10 +3,12 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/app_scope.dart';
 import '../models/app_models.dart';
-import '../widgets/app_shell.dart';
-import 'lodging_form_screen.dart';
+import '../theme/app_colors.dart';
+import '../widgets/ui/app_card.dart';
 import 'submission_package_screen.dart';
 
+/// 정산 신청 — 제출서류 체크 + 외부 정산 페이지 이동 + "신청 완료" 자가 표시.
+/// (환급 완료는 외부라 앱이 모름 — 앱이 아는 마지막 상태 = 정산 신청 완료)
 class SettlementScreen extends StatefulWidget {
   const SettlementScreen({super.key, required this.tripId});
 
@@ -17,243 +19,278 @@ class SettlementScreen extends StatefulWidget {
 }
 
 class _SettlementScreenState extends State<SettlementScreen> {
-  Future<(TripDetail, LodgingFormData?)>? _future;
+  Future<TripDetail>? _future;
   bool _initialized = false;
+  bool _busy = false;
 
   static const Map<String, String> _settlementUrlsByRegion = {
     '평창': 'https://www.wandotrip.kr/bbs/apply_date.php',
-    '횡성': 'https://www.wandotrip.kr/bbs/apply_date.php',
     '영월': 'https://halftour.kr/application/1',
     '제천': 'https://www.jctour.kr/menu2/1',
     '거창': 'https://geochangtour.kr/content/expenses_info',
     '고창': 'https://gochangtrip.co.kr/',
-    '합천': 'https://hctour.kr/bbs/content.php?co_id=expenses_info',
-    '영광': 'https://www.yeonggwang.go.kr/subpage/?site=travel&mn=16095',
-    '밀양': 'https://mybanhada.com/',
-    '영암': 'https://www.yeongam.go.kr/oneplusone',
-    '하동': 'https://hadongtrip.kr/bbs/content.php?co_id=expenses_info',
     '강진': 'https://www.gangjintour.com/main/main.html?',
     '남해': 'https://www.namhae.go.kr/tour/01057/01058.web',
-    '해남': 'https://www.haenam50.kr/',
-    '고흥':
-        'https://tour.goheung.go.kr/front/M0000361/content/view.do',
     '완도': 'https://www.wandotrip.kr/bbs/apply_date.php',
   };
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_initialized) {
-      return;
-    }
-    _future = _load();
+    if (_initialized) return;
     _initialized = true;
+    _future = _load();
   }
 
-  Future<(TripDetail, LodgingFormData?)> _load() async {
-    final repo = AppScope.of(context).repository;
-    final detail = await repo.getTripDetail(widget.tripId);
-    LodgingFormData? formData;
-    try {
-      formData = await repo.getLodgingFormData(widget.tripId);
-    } catch (_) {
-      formData = null;
-    }
-    return (detail, formData);
-  }
+  Future<TripDetail> _load() =>
+      AppScope.of(context).repository.getTripDetail(widget.tripId);
 
-  @override
-  Widget build(BuildContext context) {
-    final controller = AppScope.of(context);
-    return AppShell(
-      title: '정산 신청',
-      modeName: controller.modeName,
-      child: FutureBuilder<(TripDetail, LodgingFormData?)>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final detail = snapshot.data!.$1;
-          final formData = snapshot.data!.$2;
-
-          return ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              SectionCard(
-                title: '정산 상태',
-                child: Text(detail.settlementSummary.statusMessage),
-              ),
-              SectionCard(
-                title: '지역별 정산 페이지 이동',
-                subtitle:
-                    '${detail.trip.regionName} 지역 정산 사이트로 이동해 제출을 이어갈 수 있습니다.',
-                child: SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () => _openSettlementSite(detail.trip.regionName),
-                    child: const Text('정산 신청하러 가기'),
-                  ),
-                ),
-              ),
-              SectionCard(
-                title: '제출물 준비',
-                subtitle: '모은 파일을 합친 PDF를 내려받거나 숙박확인서를 이어서 작성할 수 있습니다.',
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    OutlinedButton(
-                      onPressed: () => _openSubmissionPackage(detail),
-                      child: const Text('제출물 내려받기'),
-                    ),
-                    OutlinedButton(
-                      onPressed: _openLodgingForm,
-                      child: const Text('숙박확인서 작성'),
-                    ),
-                    if (formData != null)
-                      OutlinedButton(
-                        onPressed: _downloadLodgingPdf,
-                        child: const Text('숙박확인서 PDF'),
-                      ),
-                  ],
-                ),
-              ),
-              SectionCard(
-                title: '정산 상태 반영',
-                subtitle: 'MVP 단계에서는 내부 상태를 정산 신청 완료로 먼저 바꿔볼 수 있습니다.',
-                child: SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.tonal(
-                    onPressed:
-                        detail.trip.settlementApplied ? null : _applySettlement,
-                    child: Text(
-                      detail.trip.settlementApplied
-                          ? '정산 신청 완료'
-                          : '정산 신청 완료로 표시',
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
+  Future<void> _reload() async {
+    setState(() => _future = _load());
+    await AppScope.of(context).refreshTrips();
   }
 
   Future<void> _openSettlementSite(String regionName) async {
     final url =
         _settlementUrlsByRegion[regionName] ?? _settlementUrlsByRegion['완도']!;
-    final uri = Uri.parse(url);
-    final launched = await launchUrl(
-      uri,
-      mode: LaunchMode.externalApplication,
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    if (!launched) {
+    final launched =
+        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    if (mounted && !launched) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$regionName 정산 페이지를 열지 못했습니다.')),
-      );
+          SnackBar(content: Text('$regionName 정산 페이지를 열지 못했어요.')));
     }
-  }
-
-  Future<void> _openSubmissionPackage(TripDetail detail) async {
-    final hasEvidence =
-        detail.uploadedFiles.isNotEmpty || detail.lodgingInfo?.uploadedFileId != null;
-
-    if (!mounted) {
-      return;
-    }
-
-    if (!hasEvidence) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('제출할 증빙이 아직 없습니다.')),
-      );
-      return;
-    }
-
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => SubmissionPackageScreen(
-          tripId: widget.tripId,
-          detail: detail,
-          showSettlementButton: false,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _downloadBundle(TripDetail detail) async {
-    final controller = AppScope.of(context);
-    final path = await controller.runTask(
-      () => controller.repository.downloadMergedPdf(
-        widget.tripId,
-        detail.uploadedFiles.map((file) => file.id).toList(),
-      ),
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('제출물 파일 위치: $path')),
-    );
-  }
-
-  Future<void> _downloadLodgingPdf() async {
-    final controller = AppScope.of(context);
-    final path = await controller.runTask(
-      () => controller.repository.downloadLodgingFormPdf(widget.tripId),
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('숙박확인서 PDF 위치: $path')),
-    );
-  }
-
-  Future<void> _openLodgingForm() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => LodgingFormScreen(tripId: widget.tripId),
-      ),
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _future = _load();
-    });
   }
 
   Future<void> _applySettlement() async {
+    setState(() => _busy = true);
     final controller = AppScope.of(context);
-    await controller.runTask(
-      () => controller.repository.applySettlement(widget.tripId),
-    );
-    await controller.refreshTrips();
-
-    if (!mounted) {
-      return;
+    try {
+      await controller.runTask(
+          () => controller.repository.applySettlement(widget.tripId));
+      await _reload();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('정산 신청 완료로 표시했어요.')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
+  }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('정산 신청 완료 상태로 반영했습니다.')),
+  Future<void> _openSubmission(TripDetail detail) async {
+    await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => SubmissionPackageScreen(
+            tripId: widget.tripId, detail: detail, showSettlementButton: false)));
+    await _reload();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      appBar: AppBar(title: const Text('정산 신청')),
+      body: FutureBuilder<TripDetail>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final detail = snapshot.data!;
+          final applied = detail.trip.settlementApplied;
+          final authCount = detail.uploadedFiles
+              .where((f) => f.fileCategory == FileCategory.authPhoto)
+              .length;
+          final hasLodging = detail.uploadedFiles
+                  .any((f) => f.fileCategory == FileCategory.lodgingConfirmation) ||
+              detail.lodgingInfo?.uploadedFileId != null;
+
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+            children: [
+              if (applied)
+                AppCard(
+                  child: Column(children: [
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: const BoxDecoration(
+                          color: AppColors.p50, shape: BoxShape.circle),
+                      child: const Icon(Icons.check_rounded,
+                          color: AppColors.p600, size: 26),
+                    ),
+                    const SizedBox(height: 10),
+                    Text('정산 신청 완료',
+                        style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 6),
+                    const Text('환급은 보통 1~2개월 뒤 지자체에서 개별 안내돼요.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            fontFamily: 'Pretendard',
+                            fontSize: 13,
+                            height: 1.5,
+                            color: AppColors.ink5)),
+                  ]),
+                )
+              else ...[
+                // 제출서류 준비
+                AppCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text('제출서류 준비',
+                          style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 12),
+                      _CheckItem(
+                          label: '관광지 인증샷',
+                          value: '${authCount.clamp(0, 2)}/2곳',
+                          done: authCount >= 2),
+                      _CheckItem(
+                          label: '영수증 · 소비',
+                          value: '${detail.receipts.length}건',
+                          done: detail.receipts.isNotEmpty),
+                      _CheckItem(
+                          label: '숙박확인서',
+                          value: hasLodging ? '완료' : '미작성',
+                          done: hasLodging,
+                          last: true),
+                      const SizedBox(height: 14),
+                      OutlinedButton.icon(
+                        onPressed: () => _openSubmission(detail),
+                        icon: const Icon(Icons.folder_zip_outlined, size: 18),
+                        label: const Text('증빙 패키지 보기'),
+                        style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(0, 48),
+                            shape: RoundedRectangleBorder(
+                                borderRadius:
+                                    BorderRadius.circular(AppRadius.field))),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _Note(
+                    '${detail.trip.regionName} 정산 페이지에서 증빙을 제출하세요. 심사를 거쳐 지역화폐가 지급돼요.'),
+              ],
+            ],
+          );
+        },
+      ),
+      bottomNavigationBar: FutureBuilder<TripDetail>(
+        future: _future,
+        builder: (context, snapshot) {
+          final detail = snapshot.data;
+          if (detail == null || detail.trip.settlementApplied) {
+            return const SizedBox.shrink();
+          }
+          return SafeArea(
+            minimum: const EdgeInsets.fromLTRB(20, 12, 20, 26),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              FilledButton.icon(
+                onPressed: _busy
+                    ? null
+                    : () => _openSettlementSite(detail.trip.regionName),
+                icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                label: const Text('정산 신청하러 가기'),
+              ),
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: _busy ? null : _applySettlement,
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 6),
+                  child: Text.rich(
+                    TextSpan(children: [
+                      TextSpan(
+                          text: '이미 신청했어요 · ',
+                          style: TextStyle(color: AppColors.ink5)),
+                      TextSpan(
+                          text: '완료로 표시',
+                          style: TextStyle(
+                              color: AppColors.p600,
+                              fontWeight: FontWeight.w800,
+                              decoration: TextDecoration.underline)),
+                    ]),
+                    style: TextStyle(fontFamily: 'Pretendard', fontSize: 13),
+                  ),
+                ),
+              ),
+            ]),
+          );
+        },
+      ),
     );
-    setState(() {
-      _future = _load();
-    });
+  }
+}
+
+class _CheckItem extends StatelessWidget {
+  const _CheckItem({
+    required this.label,
+    required this.value,
+    required this.done,
+    this.last = false,
+  });
+  final String label;
+  final String value;
+  final bool done;
+  final bool last;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(top: 8, bottom: last ? 0 : 8),
+      child: Row(children: [
+        Container(
+          width: 22,
+          height: 22,
+          decoration: BoxDecoration(
+              color: done ? AppColors.p500 : AppColors.track,
+              shape: BoxShape.circle),
+          child: Icon(Icons.check_rounded,
+              size: 14, color: done ? Colors.white : AppColors.ink4),
+        ),
+        const SizedBox(width: 12),
+        Text(label,
+            style: const TextStyle(
+                fontFamily: 'Pretendard',
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AppColors.ink9)),
+        const Spacer(),
+        Text(value,
+            style: TextStyle(
+                fontFamily: 'Pretendard',
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: done ? AppColors.ink5 : AppColors.ink4)),
+      ]),
+    );
+  }
+}
+
+class _Note extends StatelessWidget {
+  const _Note(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: AppColors.surf,
+        borderRadius: BorderRadius.circular(AppRadius.field),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Icon(Icons.info_outline_rounded, size: 17, color: AppColors.ink4),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Text(text,
+              style: const TextStyle(
+                  fontFamily: 'Pretendard',
+                  fontSize: 12.5,
+                  height: 1.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.ink5)),
+        ),
+      ]),
+    );
   }
 }
