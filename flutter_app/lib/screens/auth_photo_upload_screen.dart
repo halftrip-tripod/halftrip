@@ -5,8 +5,11 @@ import 'package:flutter/material.dart';
 
 import '../core/app_scope.dart';
 import '../models/app_models.dart';
-import '../widgets/app_shell.dart';
+import '../theme/app_colors.dart';
+import '../widgets/ui/app_card.dart';
 
+/// 관광지 인증샷 — 기본 카메라 사진 업로드 → 위치·시간(EXIF)·인원·얼굴/배경 자동 판정.
+/// 디자인: halftrip-design/auth-photo.html
 class AuthPhotoUploadScreen extends StatefulWidget {
   const AuthPhotoUploadScreen({super.key, required this.tripId});
 
@@ -22,12 +25,18 @@ class _AuthPhotoUploadScreenState extends State<AuthPhotoUploadScreen> {
   bool _uploading = false;
   final Map<int, Uint8List> _previewBytesByFileId = {};
 
+  // 가장 최근 분석한 사진의 미리보기·판정 결과 (판정 패널 표시용)
+  Uint8List? _lastPreview;
+  AuthPhotoReviewResult? _lastReview;
+
+  static const _required = 2;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_initialized) return;
-    _future = _loadDetail();
     _initialized = true;
+    _future = _loadDetail();
   }
 
   Future<TripDetail> _loadDetail() async {
@@ -44,35 +53,31 @@ class _AuthPhotoUploadScreenState extends State<AuthPhotoUploadScreen> {
           file.fileCategory == FileCategory.authPhoto &&
           !_previewBytesByFileId.containsKey(file.id),
     );
-
     for (final file in authFiles) {
       try {
-        final bytes = await repository.downloadUploadedFileBytes(
+        _previewBytesByFileId[file.id] =
+            await repository.downloadUploadedFileBytes(
           tripId: widget.tripId,
           uploadedFileId: file.id,
         );
-        _previewBytesByFileId[file.id] = bytes;
       } catch (_) {
-        // Ignore preview failures so the screen remains usable.
+        // 미리보기 실패는 무시.
       }
     }
   }
 
   Future<void> _reload() async {
-    setState(() {
-      _future = _loadDetail();
-    });
+    setState(() => _future = _loadDetail());
     await AppScope.of(context).refreshTrips();
   }
 
-  Future<void> _pickAndUploadPhoto(TripDetail detail) async {
-    final existingCount = detail.uploadedFiles
-        .where((file) => file.fileCategory == FileCategory.authPhoto)
+  Future<void> _pickAndUpload(TripDetail detail) async {
+    final repository = AppScope.of(context).repository;
+    final count = detail.uploadedFiles
+        .where((f) => f.fileCategory == FileCategory.authPhoto)
         .length;
-    if (existingCount >= 2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('관광지 인증사진은 최대 2장까지 등록할 수 있어요.')),
-      );
+    if (count >= _required) {
+      _snack('관광지 인증사진은 최대 $_required장까지 등록할 수 있어요.');
       return;
     }
 
@@ -82,168 +87,171 @@ class _AuthPhotoUploadScreenState extends State<AuthPhotoUploadScreen> {
       type: FileType.custom,
       allowedExtensions: const ['jpg', 'jpeg', 'png'],
     );
-    if (result == null || result.files.isEmpty) {
-      return;
-    }
-
+    if (result == null || result.files.isEmpty) return;
     final file = result.files.single;
     if (file.bytes == null || file.bytes!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('이미지 파일을 읽지 못했습니다. 다시 시도해 주세요.')),
-      );
+      if (mounted) _snack('이미지 파일을 읽지 못했어요. 다시 시도해 주세요.');
       return;
     }
 
-    setState(() {
-      _uploading = true;
-    });
-
+    setState(() => _uploading = true);
     try {
-      final repository = AppScope.of(context).repository;
       final uploaded = await repository.uploadFile(
         tripId: widget.tripId,
         category: FileCategory.authPhoto,
         file: UploadBinary(
           fileName: file.name,
           bytes: file.bytes!,
-          mimeType: _guessMimeType(file.extension),
+          mimeType: _guessMime(file.extension),
         ),
       );
-      _previewBytesByFileId[uploaded.id] = file.bytes!;
-
       final review = await repository.analyzeAuthPhoto(
         tripId: widget.tripId,
         uploadedFileId: uploaded.id,
       );
 
-      if (!review.approved) {
+      // 판정 결과는 항상 화면에 표시. 승인이면 보관, 반려면 파일은 지우되 결과는 남김.
+      _lastPreview = file.bytes;
+      _lastReview = review;
+      if (review.approved) {
+        _previewBytesByFileId[uploaded.id] = file.bytes!;
+      } else {
         await repository.deleteUploadedFile(
           tripId: widget.tripId,
           uploadedFileId: uploaded.id,
         );
-        _previewBytesByFileId.remove(uploaded.id);
-        if (!mounted) return;
-        await _reload();
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('인증사진이 반려되었습니다. ${review.reason}')),
-        );
-        return;
       }
-
       if (!mounted) return;
       await _reload();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '인증사진이 승인되었습니다. ${review.detectedPeopleCount}명 얼굴과 배경이 확인되었습니다.',
-          ),
-        ),
-      );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('관광지 인증사진 업로드에 실패했습니다: $error')),
-      );
+      _snack('인증사진 업로드에 실패했어요: $error');
     } finally {
-      if (mounted) {
-        setState(() {
-          _uploading = false;
-        });
-      }
+      if (mounted) setState(() => _uploading = false);
     }
   }
 
-  Future<void> _deletePhoto(int uploadedFileId) async {
-    await AppScope.of(context).repository.deleteUploadedFile(
-      tripId: widget.tripId,
-      uploadedFileId: uploadedFileId,
-    );
-    _previewBytesByFileId.remove(uploadedFileId);
+  Future<void> _deletePhoto(int fileId) async {
+    await AppScope.of(context)
+        .repository
+        .deleteUploadedFile(tripId: widget.tripId, uploadedFileId: fileId);
+    _previewBytesByFileId.remove(fileId);
     await _reload();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('관광지 인증사진을 삭제했습니다.')),
-    );
   }
 
-  String _guessMimeType(String? extension) {
-    return switch ((extension ?? '').toLowerCase()) {
-      'jpg' || 'jpeg' => 'image/jpeg',
-      'png' => 'image/png',
-      _ => 'application/octet-stream',
-    };
-  }
+  String _guessMime(String? ext) => switch ((ext ?? '').toLowerCase()) {
+        'jpg' || 'jpeg' => 'image/jpeg',
+        'png' => 'image/png',
+        _ => 'application/octet-stream',
+      };
+
+  void _snack(String m) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 
   @override
   Widget build(BuildContext context) {
-    return AppShell(
-      title: '인증샷 업로드',
-      modeName: AppScope.of(context).modeName,
-      child: FutureBuilder<TripDetail>(
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      appBar: AppBar(title: const Text('관광지 인증')),
+      body: FutureBuilder<TripDetail>(
         future: _future,
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-
           final detail = snapshot.data!;
           final authFiles = detail.uploadedFiles
-              .where((file) => file.fileCategory == FileCategory.authPhoto)
+              .where((f) => f.fileCategory == FileCategory.authPhoto)
               .toList();
-          final requiredPlaces = detail.selectedPlaces.take(2).toList();
+          final count = authFiles.length;
+          final review = _lastReview;
 
           return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
             children: [
-              _EvidenceStatusHeader(
-                title: '관광지 인증사진 (${authFiles.length}/2)',
-                icon: Icons.photo_camera_back_rounded,
-                completed: authFiles.length >= 2,
-                subtitle: '필수 관광지 사진을 2장까지 등록해 주세요.',
+              // 진행 헤더
+              Row(children: [
+                const Icon(Icons.photo_camera_outlined,
+                    size: 20, color: AppColors.p600),
+                const SizedBox(width: 8),
+                const Text('지정관광지 인증',
+                    style: TextStyle(
+                        fontFamily: 'Pretendard',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.ink9)),
+                const Spacer(),
+                Text('$count / $_required곳',
+                    style: const TextStyle(
+                        fontFamily: 'Pretendard',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.p600)),
+              ]),
+              const SizedBox(height: 16),
+
+              // 사진 영역
+              _PhotoArea(
+                bytes: _lastPreview,
+                uploading: _uploading,
+                onTap: _uploading ? null : () => _pickAndUpload(detail),
               ),
-              const SizedBox(height: 18),
-              _PrimaryUploadBox(
-                icon: Icons.add_a_photo_rounded,
-                title: _uploading ? '업로드 중입니다' : '관광지 사진 업로드',
-                subtitle:
-                    '등록 인원수만큼 얼굴이 모두 보이고, 배경이 선명한 사진만 통과됩니다.',
-                loading: _uploading,
-                onTap: _uploading ? null : () => _pickAndUploadPhoto(detail),
-              ),
-              const SizedBox(height: 18),
-              _PhotoGuideCard(travelerCount: detail.trip.travelerCount),
-              const SizedBox(height: 22),
-              Text(
-                '등록된 인증샷',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: const Color(0xFF111827),
-                      fontWeight: FontWeight.w900,
+              const SizedBox(height: 10),
+              const _Note(
+                  '기본 카메라로 찍은 사진을 올려주세요. 위치·시간(GPS) 정보가 있어야 자동 인증돼요. 캡처·SNS 저장 사진은 정보가 지워질 수 있어요.'),
+
+              // 자동 판정
+              if (review != null) ...[
+                const SizedBox(height: 16),
+                _ReviewBanner(review: review),
+                const SizedBox(height: 10),
+                _ReviewList(review: review),
+              ],
+
+              // 등록 현황
+              if (count > 0) ...[
+                const SizedBox(height: 18),
+                const Text('등록된 인증샷',
+                    style: TextStyle(
+                        fontFamily: 'Pretendard',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.ink9)),
+                const SizedBox(height: 12),
+                for (var i = 0; i < authFiles.length; i++)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _UploadedRow(
+                      index: i + 1,
+                      bytes: _previewBytesByFileId[authFiles[i].id],
+                      onDelete: () => _deletePhoto(authFiles[i].id),
                     ),
-              ),
-              const SizedBox(height: 14),
-              if (authFiles.isEmpty)
-                const _EmptyEvidenceBlock(
-                  message: '아직 등록된 관광지 인증사진이 없습니다.',
-                )
-              else
-                _EvidencePhotoGrid(
-                  items: authFiles.asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final file = entry.value;
-                    final label = index < requiredPlaces.length
-                        ? requiredPlaces[index].placeName
-                        : '관광지 인증샷 ${index + 1}';
-                    return _PreviewTileData(
-                      id: file.id,
-                      label: label,
-                      bytes: _previewBytesByFileId[file.id],
-                    );
-                  }).toList(),
-                  onDelete: _deletePhoto,
-                ),
+                  ),
+              ],
             ],
+          );
+        },
+      ),
+      bottomNavigationBar: FutureBuilder<TripDetail>(
+        future: _future,
+        builder: (context, snapshot) {
+          final detail = snapshot.data;
+          final full = detail != null &&
+              detail.uploadedFiles
+                      .where((f) => f.fileCategory == FileCategory.authPhoto)
+                      .length >=
+                  _required;
+          return SafeArea(
+            minimum: const EdgeInsets.fromLTRB(20, 12, 20, 26),
+            child: FilledButton.icon(
+              onPressed: (_uploading || detail == null || full)
+                  ? null
+                  : () => _pickAndUpload(detail),
+              icon: const Icon(Icons.photo_camera_rounded, size: 18),
+              label: Text(full
+                  ? '인증 완료 ($_required/$_required)'
+                  : (_lastReview != null ? '다시 촬영하기' : '기본 카메라 사진 올리기')),
+            ),
           );
         },
       ),
@@ -251,355 +259,234 @@ class _AuthPhotoUploadScreenState extends State<AuthPhotoUploadScreen> {
   }
 }
 
-class _EvidenceStatusHeader extends StatelessWidget {
-  const _EvidenceStatusHeader({
-    required this.title,
-    required this.icon,
-    required this.completed,
-    required this.subtitle,
-  });
-
-  final String title;
-  final IconData icon;
-  final bool completed;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Icon(icon, color: const Color(0xFF0F172A)),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: const Color(0xFF111827),
-                        fontWeight: FontWeight.w900,
-                      ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  subtitle,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xFF64748B),
-                        height: 1.45,
-                      ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color:
-                  completed ? const Color(0xFFE8F8EE) : const Color(0xFFFFF3E8),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              completed ? '완료' : '인증 대기',
-              style: TextStyle(
-                color:
-                    completed ? const Color(0xFF16A34A) : const Color(0xFFEA580C),
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PrimaryUploadBox extends StatelessWidget {
-  const _PrimaryUploadBox({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.loading,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool loading;
+class _PhotoArea extends StatelessWidget {
+  const _PhotoArea(
+      {required this.bytes, required this.uploading, required this.onTap});
+  final Uint8List? bytes;
+  final bool uploading;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(28),
-      child: Ink(
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 28),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-        ),
-        child: Column(
-          children: [
-            loading
-                ? const SizedBox(
-                    width: 32,
-                    height: 32,
-                    child: CircularProgressIndicator(strokeWidth: 3),
-                  )
-                : Container(
-                    width: 68,
-                    height: 68,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF3F7F5),
-                      borderRadius: BorderRadius.circular(22),
+    return Material(
+      color: AppColors.surf,
+      borderRadius: BorderRadius.circular(AppRadius.card),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        onTap: onTap,
+        child: AspectRatio(
+          aspectRatio: 4 / 3,
+          child: uploading
+              ? const Center(child: CircularProgressIndicator())
+              : bytes != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(AppRadius.card),
+                      child: Image.memory(bytes!, fit: BoxFit.cover),
+                    )
+                  : const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.add_a_photo_outlined,
+                            size: 36, color: AppColors.ink4),
+                        SizedBox(height: 10),
+                        Text('기본 카메라 사진 올리기',
+                            style: TextStyle(
+                                fontFamily: 'Pretendard',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.ink5)),
+                      ],
                     ),
-                    child: Icon(icon, size: 34, color: const Color(0xFF16A34A)),
-                  ),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: const Color(0xFF111827),
-                    fontWeight: FontWeight.w900,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF64748B),
-                    height: 1.45,
-                  ),
-            ),
-          ],
         ),
       ),
     );
   }
 }
 
-class _PhotoGuideCard extends StatelessWidget {
-  const _PhotoGuideCard({required this.travelerCount});
-
-  final int travelerCount;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF6FBF7),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFD6F1DE)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '촬영 안내',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: const Color(0xFF111827),
-                  fontWeight: FontWeight.w900,
-                ),
-          ),
-          const SizedBox(height: 14),
-          _GuideLine(text: '등록 인원 ${travelerCount}명이 모두 사진에 보여야 합니다.'),
-          const SizedBox(height: 10),
-          const _GuideLine(text: '얼굴이 가리지 않게 정면에 가깝게 또렷하게 촬영해 주세요.'),
-          const SizedBox(height: 10),
-          const _GuideLine(text: '관광지 배경이 선명하게 보여야 AI 인증을 통과할 수 있습니다.'),
-        ],
-      ),
-    );
-  }
-}
-
-class _GuideLine extends StatelessWidget {
-  const _GuideLine({required this.text});
-
+class _Note extends StatelessWidget {
+  const _Note(this.text);
   final String text;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 24,
-          height: 24,
-          decoration: const BoxDecoration(
-            color: Color(0xFFE8F8EE),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
-            Icons.check_rounded,
-            size: 16,
-            color: Color(0xFF16A34A),
-          ),
+    return Container(
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF6E9),
+        borderRadius: BorderRadius.circular(AppRadius.field),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Icon(Icons.info_outline_rounded,
+            size: 17, color: AppColors.warning),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Text(text,
+              style: const TextStyle(
+                  fontFamily: 'Pretendard',
+                  fontSize: 12.5,
+                  height: 1.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF9A6800))),
         ),
+      ]),
+    );
+  }
+}
+
+class _ReviewBanner extends StatelessWidget {
+  const _ReviewBanner({required this.review});
+  final AuthPhotoReviewResult review;
+
+  @override
+  Widget build(BuildContext context) {
+    final ok = review.approved;
+    final bg = ok ? const Color(0xFFE7F7EE) : AppColors.coralTint;
+    final fg = ok ? const Color(0xFF1B8E4B) : AppColors.coralDeep;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(AppRadius.field),
+      ),
+      child: Row(children: [
+        Icon(ok ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+            color: fg, size: 22),
         const SizedBox(width: 10),
         Expanded(
-          child: Text(
-            text,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: const Color(0xFF475569),
-                  height: 1.45,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(ok ? '인증 완료됐어요' : '얼굴·배경 확인이 필요해요',
+                style: TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w800,
+                    color: fg)),
+            const SizedBox(height: 2),
+            Text(
+                ok
+                    ? '위치·시각·인원이 모두 확인됐어요'
+                    : (review.reason.isNotEmpty
+                        ? review.reason
+                        : '사람과 배경이 잘 보이게 다시 찍어주세요'),
+                style: TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontSize: 12.5,
+                    height: 1.4,
+                    color: fg.withValues(alpha: 0.85))),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
+class _ReviewList extends StatelessWidget {
+  const _ReviewList({required this.review});
+  final AuthPhotoReviewResult review;
+
+  @override
+  Widget build(BuildContext context) {
+    final faceBg = review.facesClear && review.backgroundVisible;
+    return AppCard(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Column(children: [
+        // 위치·촬영시각: EXIF 검증은 백엔드 추가 예정(현재 모델 미보유) → 승인 기준으로 표시
+        _row(Icons.place_outlined, '위치 · 지정관광지 반경 내',
+            review.approved ? '일치' : '확인 필요', review.approved),
+        _row(Icons.schedule_outlined, '촬영 시각 · 여행 기간 내',
+            review.approved ? '확인' : '확인 필요', review.approved),
+        _row(
+            Icons.people_outline_rounded,
+            '인원',
+            '${review.detectedPeopleCount}명 확인',
+            review.detectedPeopleCount >= review.requiredPeopleCount),
+        _row(Icons.face_outlined, '얼굴 · 배경',
+            faceBg ? '확인' : '확인 안됨', faceBg, last: true),
+      ]),
+    );
+  }
+
+  Widget _row(IconData icon, String label, String value, bool ok,
+      {bool last = false}) {
+    final tint = ok ? const Color(0xFF1B8E4B) : AppColors.coralDeep;
+    final tintBg = ok ? const Color(0xFFE7F7EE) : AppColors.coralTint;
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: last ? 10 : 10),
+      child: Row(children: [
+        Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(color: tintBg, shape: BoxShape.circle),
+          child: Icon(icon, size: 16, color: tint),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(label,
+              style: const TextStyle(
+                  fontFamily: 'Pretendard',
+                  fontSize: 13.5,
                   fontWeight: FontWeight.w600,
-                ),
+                  color: AppColors.ink7)),
+        ),
+        Text(value,
+            style: TextStyle(
+                fontFamily: 'Pretendard',
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: ok ? AppColors.ink7 : AppColors.coralDeep)),
+      ]),
+    );
+  }
+}
+
+class _UploadedRow extends StatelessWidget {
+  const _UploadedRow(
+      {required this.index, required this.bytes, required this.onDelete});
+  final int index;
+  final Uint8List? bytes;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.all(12),
+      child: Row(children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: 52,
+            height: 52,
+            child: bytes != null
+                ? Image.memory(bytes!, fit: BoxFit.cover)
+                : Container(
+                    color: AppColors.track,
+                    child: const Icon(Icons.image_outlined,
+                        color: AppColors.ink4)),
           ),
         ),
-      ],
-    );
-  }
-}
-
-class _PreviewTileData {
-  const _PreviewTileData({
-    required this.id,
-    required this.label,
-    required this.bytes,
-  });
-
-  final int id;
-  final String label;
-  final Uint8List? bytes;
-}
-
-class _EvidencePhotoGrid extends StatelessWidget {
-  const _EvidencePhotoGrid({
-    required this.items,
-    required this.onDelete,
-  });
-
-  final List<_PreviewTileData> items;
-  final ValueChanged<int> onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final singleColumn = constraints.maxWidth < 360;
-        final crossAxisCount = singleColumn ? 1 : 2;
-        final aspectRatio = singleColumn ? 1.45 : 0.78;
-
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: items.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            mainAxisSpacing: 14,
-            crossAxisSpacing: 14,
-            childAspectRatio: aspectRatio,
-          ),
-          itemBuilder: (context, index) {
-            final item = items[index];
-            return Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
-                    child: SizedBox(
-                      height: singleColumn ? 150 : 110,
-                      width: double.infinity,
-                      child: item.bytes != null
-                          ? Image.memory(item.bytes!, fit: BoxFit.cover)
-                          : Container(
-                              color: const Color(0xFFF8FAFC),
-                              alignment: Alignment.center,
-                              child: const Icon(
-                                Icons.landscape_rounded,
-                                color: Color(0xFF94A3B8),
-                              ),
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    item.label,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: const Color(0xFF111827),
-                          fontWeight: FontWeight.w800,
-                          height: 1.25,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: TextButton.icon(
-                      onPressed: () => onDelete(item.id),
-                      style: TextButton.styleFrom(
-                        foregroundColor: const Color(0xFFDC2626),
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                      ),
-                      icon: const Icon(Icons.delete_outline_rounded),
-                      label: const Text(
-                        '삭제',
-                        style: TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-class _EmptyEvidenceBlock extends StatelessWidget {
-  const _EmptyEvidenceBlock({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Text(
-        message,
-        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: const Color(0xFF64748B),
-              fontWeight: FontWeight.w600,
-            ),
-      ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('관광지 인증 $index',
+                style: const TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.ink9)),
+            const SizedBox(height: 2),
+            const Text('인증 완료',
+                style: TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1B8E4B))),
+          ]),
+        ),
+        IconButton(
+          onPressed: onDelete,
+          icon: const Icon(Icons.delete_outline_rounded,
+              color: AppColors.ink4, size: 20),
+        ),
+      ]),
     );
   }
 }
