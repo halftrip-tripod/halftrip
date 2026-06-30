@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../core/app_scope.dart';
 import '../models/app_models.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui/app_card.dart';
@@ -131,8 +132,7 @@ class SubmissionPackageScreen extends StatelessWidget {
               ]),
               const SizedBox(height: 14),
               OutlinedButton.icon(
-                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('패키지 미리보기·다운로드는 준비 중이에요.'))),
+                onPressed: () => _downloadPackage(context),
                 icon: const Icon(Icons.description_outlined, size: 18),
                 label: const Text('패키지 미리보기 · 다운로드'),
                 style: OutlinedButton.styleFrom(
@@ -158,6 +158,24 @@ class SubmissionPackageScreen extends StatelessWidget {
             )
           : null,
     );
+  }
+
+  Future<void> _downloadPackage(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final controller = AppScope.of(context);
+    final fileIds = detail.uploadedFiles.map((f) => f.id).toList();
+    if (fileIds.isEmpty) {
+      messenger.showSnackBar(
+          const SnackBar(content: Text('병합할 증빙 파일이 아직 없어요.')));
+      return;
+    }
+    try {
+      final path = await controller.runTask(
+          () => controller.repository.downloadMergedPdf(tripId, fileIds));
+      messenger.showSnackBar(SnackBar(content: Text('증빙 패키지를 생성했어요: $path')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('패키지 생성에 실패했어요: $e')));
+    }
   }
 }
 
