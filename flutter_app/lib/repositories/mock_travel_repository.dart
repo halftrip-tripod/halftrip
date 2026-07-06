@@ -27,6 +27,7 @@ class MockTravelRepository implements TravelRepository {
   final Map<int, LodgingInfo> _tripLodging = {};
   final Map<int, List<int>> _uploadedFileBytesById = {};
   final Map<String, YoutubeCourseJobItem> _youtubeJobs = {};
+  late List<AppNotification> _notifications = _seedNotifications();
   int _nextTripId = 10;
   int _nextTripPlaceId = 100;
   int _nextUploadedFileId = 1000;
@@ -1260,6 +1261,73 @@ class MockTravelRepository implements TravelRepository {
   ) async {
     _user = _user.copyWith(notificationSettings: settings);
     return settings;
+  }
+
+  @override
+  Future<List<AppNotification>> getNotifications() async {
+    return [..._notifications]
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
+  @override
+  Future<void> markAllNotificationsRead() async {
+    _notifications =
+        _notifications.map((n) => n.copyWith(read: true)).toList();
+  }
+
+  static List<AppNotification> _seedNotifications() {
+    final now = DateTime.now();
+    return [
+      AppNotification(
+        type: NotificationType.regionOpen,
+        title: '강진 반값여행 접수 시작 🎉',
+        body: '관심 등록한 강진의 6월 반값여행 접수가 열렸어요. 지금 신청해보세요.',
+        createdAt: now.subtract(const Duration(minutes: 10)),
+        read: false,
+      ),
+      AppNotification(
+        type: NotificationType.courseDone,
+        title: '유튜브 코스가 완성됐어요',
+        body: '강진 유튜브 추천 코스를 내 코스함에 저장했어요. 확인해보세요.',
+        createdAt: now.subtract(const Duration(hours: 1)),
+        read: false,
+      ),
+      AppNotification(
+        type: NotificationType.communityLike,
+        title: '여행하는민트님 외 4명이 좋아해요',
+        body: '내 글 "강진 여행 후기"에 좋아요가 달렸어요.',
+        createdAt: now.subtract(const Duration(hours: 3)),
+        read: false,
+      ),
+      AppNotification(
+        type: NotificationType.settleDeadline,
+        title: '영월 정산 신청 마감 D-3',
+        body: '여행 종료 다음날부터 7일 이내에 정산을 신청하세요.',
+        createdAt: now.subtract(const Duration(days: 1)),
+        read: true,
+      ),
+      AppNotification(
+        type: NotificationType.communityComment,
+        title: '강진가고파님이 댓글을 남겼어요',
+        body: '가우도 주차는 어디 하셨어요?',
+        createdAt: now.subtract(const Duration(days: 2)),
+        read: true,
+      ),
+      AppNotification(
+        type: NotificationType.settleDeadline,
+        title: '완도 접수 마감 D-1',
+        body: '관심 등록한 완도 반값여행 접수가 곧 마감돼요.',
+        createdAt: now.subtract(const Duration(days: 3)),
+        read: true,
+      ),
+      AppNotification(
+        type: NotificationType.benefit,
+        title: '디지털 관광주민증 혜택 추가',
+        body: '강진 가맹점에 디민증 추가 할인 혜택이 생겼어요.',
+        createdAt: now.subtract(const Duration(days: 7)),
+        read: true,
+      ),
+    ];
   }
 
   @override

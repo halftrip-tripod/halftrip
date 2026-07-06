@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../core/app_scope.dart';
+import '../models/app_models.dart';
 import '../theme/app_colors.dart';
 
-/// 알림 센터. 디자인: halftrip-design/notifications.html
-/// 현재는 mock 목록(알림 모델/리포지토리 미구현 — FCM·서버 연동 예정).
+/// 알림 센터 — 리포지토리(mock/api)에서 알림을 불러와 오늘/지난 알림으로 그룹.
+/// 계약: GET /api/notifications, POST /api/notifications/read-all (docs/backend-handoff G)
 class NotificationCenterScreen extends StatefulWidget {
   const NotificationCenterScreen({super.key});
 
@@ -13,24 +15,34 @@ class NotificationCenterScreen extends StatefulWidget {
 }
 
 class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
-  late List<_Noti> _today;
-  late List<_Noti> _earlier;
+  Future<List<AppNotification>>? _future;
+  bool _initialized = false;
+  bool _busy = false;
 
   @override
-  void initState() {
-    super.initState();
-    _today = List.of(_mockToday);
-    _earlier = List.of(_mockEarlier);
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    _initialized = true;
+    _future = _load();
   }
 
-  bool get _hasUnread =>
-      _today.any((n) => n.unread) || _earlier.any((n) => n.unread);
+  Future<List<AppNotification>> _load() =>
+      AppScope.of(context).repository.getNotifications();
 
-  void _markAllRead() {
-    setState(() {
-      _today = _today.map((n) => n.read()).toList();
-      _earlier = _earlier.map((n) => n.read()).toList();
-    });
+  Future<void> _reload() async {
+    setState(() => _future = _load());
+    await _future;
+  }
+
+  Future<void> _markAllRead() async {
+    setState(() => _busy = true);
+    try {
+      await AppScope.of(context).repository.markAllNotificationsRead();
+      await _reload();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   @override
@@ -40,120 +52,112 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
       appBar: AppBar(
         title: const Text('알림'),
         actions: [
-          if (_hasUnread)
-            TextButton(
-              onPressed: _markAllRead,
-              child: const Text('모두 읽음'),
-            ),
+          FutureBuilder<List<AppNotification>>(
+            future: _future,
+            builder: (context, snapshot) {
+              final hasUnread =
+                  snapshot.data?.any((n) => !n.read) ?? false;
+              if (!hasUnread) return const SizedBox.shrink();
+              return TextButton(
+                onPressed: _busy ? null : _markAllRead,
+                child: const Text('모두 읽음'),
+              );
+            },
+          ),
           const SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-          children: [
-            if (_today.isNotEmpty) ...[
-              const _GroupLabel('오늘'),
-              ..._today.map((n) => _NotiRow(n)),
-            ],
-            if (_earlier.isNotEmpty) ...[
-              const SizedBox(height: 18),
-              const _GroupLabel('지난 알림'),
-              ..._earlier.map((n) => _NotiRow(n)),
-            ],
-          ],
+        child: FutureBuilder<List<AppNotification>>(
+          future: _future,
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final items = snapshot.data!;
+            if (items.isEmpty) return const _EmptyNotifications();
+
+            final now = DateTime.now();
+            final today = items
+                .where((n) => DateUtils.isSameDay(n.createdAt, now))
+                .toList();
+            final earlier = items
+                .where((n) => !DateUtils.isSameDay(n.createdAt, now))
+                .toList();
+
+            return RefreshIndicator(
+              onRefresh: _reload,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                children: [
+                  if (today.isNotEmpty) ...[
+                    const _GroupLabel('오늘'),
+                    ...today.map((n) => _NotiRow(n)),
+                  ],
+                  if (earlier.isNotEmpty) ...[
+                    const SizedBox(height: 18),
+                    const _GroupLabel('지난 알림'),
+                    ...earlier.map((n) => _NotiRow(n)),
+                  ],
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
   }
 }
 
-enum _NotiTone { sky, coral, amber, gray }
+/// 알림 유형 → 아이콘·색 팔레트 매핑 (프레젠테이션 전용).
+(IconData, Color, Color) _presentation(NotificationType type) =>
+    switch (type) {
+      NotificationType.regionOpen => (
+          Icons.flag_outlined,
+          AppColors.p100,
+          AppColors.p600,
+        ),
+      NotificationType.courseDone => (
+          Icons.route_outlined,
+          AppColors.p100,
+          AppColors.p600,
+        ),
+      NotificationType.communityLike => (
+          Icons.favorite,
+          AppColors.coralTint,
+          AppColors.coralDeep,
+        ),
+      NotificationType.communityComment => (
+          Icons.chat_bubble_outline,
+          AppColors.p100,
+          AppColors.p600,
+        ),
+      NotificationType.settleDeadline => (
+          Icons.schedule_outlined,
+          const Color(0xFFFFF3E2),
+          const Color(0xFFB8731B),
+        ),
+      NotificationType.benefit => (
+          Icons.card_giftcard_outlined,
+          AppColors.track,
+          AppColors.ink5,
+        ),
+      NotificationType.unknown => (
+          Icons.notifications_none_rounded,
+          AppColors.track,
+          AppColors.ink5,
+        ),
+    };
 
-class _Noti {
-  const _Noti({
-    required this.tone,
-    required this.icon,
-    required this.title,
-    required this.body,
-    required this.time,
-    this.unread = false,
-  });
-
-  final _NotiTone tone;
-  final IconData icon;
-  final String title;
-  final String body;
-  final String time;
-  final bool unread;
-
-  _Noti read() => _Noti(
-        tone: tone,
-        icon: icon,
-        title: title,
-        body: body,
-        time: time,
-        unread: false,
-      );
+String _relativeTime(DateTime t) {
+  final diff = DateTime.now().difference(t);
+  if (diff.inMinutes < 1) return '방금';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}분 전';
+  if (diff.inHours < 24) return '${diff.inHours}시간 전';
+  if (diff.inDays == 1) return '어제';
+  if (diff.inDays < 7) return '${diff.inDays}일 전';
+  return '${diff.inDays ~/ 7}주 전';
 }
-
-const _mockToday = [
-  _Noti(
-    tone: _NotiTone.sky,
-    icon: Icons.flag_outlined,
-    title: '강진 반값여행 접수 시작 🎉',
-    body: '관심 등록한 강진의 6월 반값여행 접수가 열렸어요. 지금 신청해보세요.',
-    time: '10분 전',
-    unread: true,
-  ),
-  _Noti(
-    tone: _NotiTone.sky,
-    icon: Icons.route_outlined,
-    title: '유튜브 코스가 완성됐어요',
-    body: '강진 유튜브 추천 코스를 내 코스함에 저장했어요. 확인해보세요.',
-    time: '1시간 전',
-    unread: true,
-  ),
-  _Noti(
-    tone: _NotiTone.coral,
-    icon: Icons.favorite,
-    title: '여행하는민트님 외 4명이 좋아해요',
-    body: '내 글 "강진 여행 후기"에 좋아요가 달렸어요.',
-    time: '3시간 전',
-    unread: true,
-  ),
-];
-
-const _mockEarlier = [
-  _Noti(
-    tone: _NotiTone.amber,
-    icon: Icons.schedule_outlined,
-    title: '영월 정산 신청 마감 D-3',
-    body: '여행 종료 다음날부터 7일 이내에 정산을 신청하세요.',
-    time: '어제',
-  ),
-  _Noti(
-    tone: _NotiTone.sky,
-    icon: Icons.chat_bubble_outline,
-    title: '강진가고파님이 댓글을 남겼어요',
-    body: '가우도 주차는 어디 하셨어요?',
-    time: '2일 전',
-  ),
-  _Noti(
-    tone: _NotiTone.amber,
-    icon: Icons.schedule_outlined,
-    title: '완도 접수 마감 D-1',
-    body: '관심 등록한 완도 반값여행 접수가 곧 마감돼요.',
-    time: '3일 전',
-  ),
-  _Noti(
-    tone: _NotiTone.gray,
-    icon: Icons.card_giftcard_outlined,
-    title: '디지털 관광주민증 혜택 추가',
-    body: '강진 가맹점에 디민증 추가 할인 혜택이 생겼어요.',
-    time: '1주 전',
-  ),
-];
 
 class _GroupLabel extends StatelessWidget {
   const _GroupLabel(this.text);
@@ -178,25 +182,19 @@ class _GroupLabel extends StatelessWidget {
 
 class _NotiRow extends StatelessWidget {
   const _NotiRow(this.noti);
-  final _Noti noti;
-
-  (Color, Color) _palette() => switch (noti.tone) {
-        _NotiTone.sky => (AppColors.p100, AppColors.p600),
-        _NotiTone.coral => (AppColors.coralTint, AppColors.coralDeep),
-        _NotiTone.amber => (const Color(0xFFFFF3E2), const Color(0xFFB8731B)),
-        _NotiTone.gray => (AppColors.track, AppColors.ink5),
-      };
+  final AppNotification noti;
 
   @override
   Widget build(BuildContext context) {
-    final (bg, fg) = _palette();
+    final (icon, bg, fg) = _presentation(noti.type);
+    final unread = !noti.read;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: noti.unread ? AppColors.p50 : AppColors.white,
+        color: unread ? AppColors.p50 : AppColors.white,
         borderRadius: BorderRadius.circular(AppRadius.field),
-        boxShadow: noti.unread ? null : AppShadows.soft,
+        boxShadow: unread ? null : AppShadows.soft,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -205,7 +203,7 @@ class _NotiRow extends StatelessWidget {
             width: 38,
             height: 38,
             decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-            child: Icon(noti.icon, size: 19, color: fg),
+            child: Icon(icon, size: 19, color: fg),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -228,7 +226,7 @@ class _NotiRow extends StatelessWidget {
                       color: AppColors.ink5,
                     )),
                 const SizedBox(height: 6),
-                Text(noti.time,
+                Text(_relativeTime(noti.createdAt),
                     style: const TextStyle(
                       fontFamily: 'Pretendard',
                       fontSize: 12,
@@ -238,7 +236,7 @@ class _NotiRow extends StatelessWidget {
               ],
             ),
           ),
-          if (noti.unread)
+          if (unread)
             Container(
               margin: const EdgeInsets.only(left: 8, top: 4),
               width: 8,
@@ -248,6 +246,43 @@ class _NotiRow extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyNotifications extends StatelessWidget {
+  const _EmptyNotifications();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: const BoxDecoration(
+              color: AppColors.surf,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.notifications_none_rounded,
+                size: 30, color: AppColors.ink4),
+          ),
+          const SizedBox(height: 16),
+          Text('새로운 알림이 없어요',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 6),
+          const Text('접수 시작·정산 마감·좋아요 소식이 오면 여기에 모아둘게요.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Pretendard',
+                fontSize: 13,
+                height: 1.5,
+                color: AppColors.ink5,
+              )),
         ],
       ),
     );
