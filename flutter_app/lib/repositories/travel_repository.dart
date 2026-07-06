@@ -111,4 +111,10 @@ abstract class TravelRepository {
   Future<List<RegionSummary>> addFavoriteRegion(int userId, int regionId);
   Future<List<RegionSummary>> removeFavoriteRegion(int userId, int regionId);
   Future<String> downloadMergedPdf(int tripId, List<int> uploadedFileIds);
+
+  /// 알림 센터 — GET /api/notifications (최신순).
+  Future<List<AppNotification>> getNotifications();
+
+  /// 알림 모두 읽음 — POST /api/notifications/read-all.
+  Future<void> markAllNotificationsRead();
 }

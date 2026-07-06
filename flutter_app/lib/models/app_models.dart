@@ -182,6 +182,76 @@ class NotificationSettings {
       };
 }
 
+/// 알림 유형 — 백엔드 wire enum(REGION_OPEN 등)과 매핑.
+/// 계약: GET /api/notifications → [{type,title,body,createdAt,read}]
+enum NotificationType {
+  regionOpen,
+  courseDone,
+  communityLike,
+  communityComment,
+  settleDeadline,
+  benefit,
+  unknown,
+}
+
+class AppNotification {
+  const AppNotification({
+    required this.type,
+    required this.title,
+    required this.body,
+    required this.createdAt,
+    this.read = false,
+    this.refType,
+    this.refId,
+  });
+
+  final NotificationType type;
+  final String title;
+  final String body;
+  final DateTime createdAt;
+  final bool read;
+
+  /// 딥링크 타겟 참조(백엔드 계약: REGION·COURSE·POST·TRIP·MERCHANT).
+  /// 알림 탭 시 이 값으로 관련 화면으로 이동. 백엔드 연동 전까진 mock에서만 채워짐.
+  final String? refType;
+  final int? refId;
+
+  AppNotification copyWith({bool? read}) => AppNotification(
+        type: type,
+        title: title,
+        body: body,
+        createdAt: createdAt,
+        read: read ?? this.read,
+        refType: refType,
+        refId: refId,
+      );
+
+  static NotificationType typeFromWire(String? wire) =>
+      switch (wire?.toUpperCase()) {
+        'REGION_OPEN' => NotificationType.regionOpen,
+        'COURSE_DONE' => NotificationType.courseDone,
+        'COMMUNITY_LIKE' => NotificationType.communityLike,
+        'COMMUNITY_COMMENT' => NotificationType.communityComment,
+        'SETTLE_DEADLINE' => NotificationType.settleDeadline,
+        'BENEFIT' => NotificationType.benefit,
+        _ => NotificationType.unknown,
+      };
+
+  factory AppNotification.fromJson(Map<String, dynamic> json) {
+    return AppNotification(
+      type: typeFromWire(json['type'] as String?),
+      title: json['title'] as String? ?? '',
+      body: json['body'] as String? ?? '',
+      createdAt:
+          DateTime.tryParse(json['createdAt'] as String? ?? '')?.toLocal() ??
+              DateTime.now(),
+      read: json['read'] as bool? ?? false,
+      refType: json['refType'] as String?,
+      refId: json['refId'] as int?,
+    );
+  }
+}
+
 class AppUser {
   const AppUser({
     required this.id,

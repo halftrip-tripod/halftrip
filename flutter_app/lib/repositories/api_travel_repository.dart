@@ -623,4 +623,18 @@ class ApiTravelRepository implements TravelRepository {
         .replace(query: uploadedFileIds.map((id) => 'uploadedFileIds=$id').join('&'));
     return _downloadFromUri(uri, 'trip-$tripId-documents.pdf');
   }
+
+  @override
+  Future<List<AppNotification>> getNotifications() async {
+    final response = await _jsonRequest('GET', '/notifications');
+    final items = response['data'] as List<dynamic>? ?? [];
+    return items
+        .map((item) => AppNotification.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<void> markAllNotificationsRead() async {
+    await _jsonRequest('POST', '/notifications/read-all', body: const {});
+  }
 }
