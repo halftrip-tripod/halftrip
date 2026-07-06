@@ -4,7 +4,10 @@ import '../core/app_scope.dart';
 import '../data/residence_options.dart';
 import '../models/app_models.dart';
 import '../theme/app_colors.dart';
+import '../utils/profile_presets.dart';
 import '../widgets/ui/app_card.dart';
+import 'info_screens.dart';
+import 'profile_edit_screen.dart';
 
 /// 마이페이지 (프로필·커뮤니티·내 정보·알림 설정·이용 안내·계정).
 /// 디자인: halftrip-design/mypage.html
@@ -17,7 +20,6 @@ class MyPageScreen extends StatefulWidget {
 
 class _MyPageScreenState extends State<MyPageScreen> {
   late NotificationSettings _settings;
-  bool _marketing = false;
 
   @override
   void didChangeDependencies() {
@@ -45,7 +47,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
           children: [
-            _ProfileCard(user: user, onEdit: () => _todo('프로필 편집은 준비 중이에요.')),
+            _ProfileCard(user: user, onEdit: _editProfile),
             const _GroupLabel('커뮤니티'),
             _MenuGroup(rows: [
               _MenuRow(
@@ -71,8 +73,8 @@ class _MyPageScreenState extends State<MyPageScreen> {
             const _GroupLabel('알림 설정'),
             _MenuGroup(rows: [
               _ToggleRow(
-                icon: Icons.notifications_none_rounded,
-                label: '오픈 · 마감 알림',
+                icon: Icons.place_outlined,
+                label: '관심 지역 오픈 · 마감 알림',
                 value: _settings.favoriteRegionPreopenAlert,
                 onChanged: (v) => _save(
                     _settings.copyWith(favoriteRegionPreopenAlert: v)),
@@ -84,31 +86,25 @@ class _MyPageScreenState extends State<MyPageScreen> {
                 onChanged: (v) =>
                     _save(_settings.copyWith(tripEndSettlementAlert: v)),
               ),
-              _ToggleRow(
-                icon: Icons.campaign_outlined,
-                label: '혜택 · 마케팅 알림',
-                value: _marketing,
-                onChanged: (v) => setState(() => _marketing = v),
-              ),
             ]),
             const _GroupLabel('이용 안내'),
             _MenuGroup(rows: [
               _MenuRow(
                   icon: Icons.campaign_outlined,
                   label: '공지사항',
-                  onTap: () => _todo('준비 중이에요.')),
+                  onTap: () => _push(const NoticeScreen())),
               _MenuRow(
                   icon: Icons.help_outline_rounded,
                   label: '자주 묻는 질문',
-                  onTap: () => _todo('준비 중이에요.')),
+                  onTap: () => _push(const FaqScreen())),
               _MenuRow(
                   icon: Icons.description_outlined,
                   label: '이용약관',
-                  onTap: () => _todo('준비 중이에요.')),
+                  onTap: () => _push(PolicyScreen.terms())),
               _MenuRow(
                   icon: Icons.shield_outlined,
                   label: '개인정보 처리방침',
-                  onTap: () => _todo('준비 중이에요.')),
+                  onTap: () => _push(PolicyScreen.privacy())),
               const _MenuRow(
                 icon: Icons.info_outline_rounded,
                 label: '버전 정보',
@@ -155,6 +151,17 @@ class _MyPageScreenState extends State<MyPageScreen> {
     // 로그아웃 시 루트가 로그인 화면으로 전환되므로 마이페이지 스택을 닫는다.
     Navigator.of(context).pop();
     AppScope.of(context).logout();
+  }
+
+  void _push(Widget screen) {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+  }
+
+  /// 프로필 편집 — 아바타·닉네임 편집 화면으로 이동.
+  Future<void> _editProfile() async {
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const ProfileEditScreen()));
+    if (mounted) setState(() {});
   }
 
   /// 거주지 변경 — 시/도 → 시/군/구 순으로 고른 뒤 현재 사용자 거주지를 갱신한다.
@@ -248,7 +255,9 @@ class _ProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final initial = user.name.trim().isEmpty ? '나' : user.name.trim()[0];
+    final avatar = decodeAvatar(
+        user.avatarPreset.isNotEmpty ? user.avatarPreset : defaultAvatarPreset);
+    final nickname = user.nickname.trim().isEmpty ? '여행자' : user.nickname.trim();
     return AppCard(
       child: Row(
         children: [
@@ -256,24 +265,18 @@ class _ProfileCard extends StatelessWidget {
             width: 52,
             height: 52,
             alignment: Alignment.center,
-            decoration: const BoxDecoration(
-              color: AppColors.p100,
+            decoration: BoxDecoration(
+              color: avatar.color,
               shape: BoxShape.circle,
             ),
-            child: Text(initial,
-                style: const TextStyle(
-                  fontFamily: 'Pretendard',
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.p700,
-                )),
+            child: Text(avatar.emoji, style: const TextStyle(fontSize: 24)),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${user.name}님',
+                Text('$nickname님',
                     style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 3),
                 Text(_providerLabel(user.authProvider),

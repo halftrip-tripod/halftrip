@@ -8,6 +8,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/ui/app_card.dart';
 import '../widgets/ui/pill.dart';
+import 'favorite_regions_screen.dart';
 import 'past_trip_screen.dart';
 import 'trip_detail_screen.dart';
 
@@ -40,6 +41,7 @@ class _TripListScreenState extends State<TripListScreen> {
     final past = trips.where((t) => t.settlementApplied).toList()
       ..sort((a, b) => b.endDate.compareTo(a.endDate));
     final savedCount = controller.savedCourses.length;
+    final favoriteCount = controller.currentUser?.favoriteRegions.length ?? 0;
 
     return AppShell(
       title: '내 여행',
@@ -79,6 +81,14 @@ class _TripListScreenState extends State<TripListScreen> {
                   const SnackBar(content: Text('저장 코스함은 준비 중이에요.')),
                 );
               },
+            ),
+            const SizedBox(height: 12),
+            _MenuRow(
+              icon: Icons.star_outline_rounded,
+              label: '관심 지역',
+              value: '$favoriteCount개',
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => const FavoriteRegionsScreen())),
             ),
             if (past.isNotEmpty) ...[
               const SizedBox(height: 18),

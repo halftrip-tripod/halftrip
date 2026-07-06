@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 
 import '../models/app_models.dart';
+import '../utils/profile_presets.dart';
 import 'travel_repository.dart';
 
 class MockTravelRepository implements TravelRepository {
@@ -372,6 +373,8 @@ class MockTravelRepository implements TravelRepository {
       phoneNumber: '010-1234-5678',
       residence: '전라남도 완도군',
       authProvider: 'GUEST',
+      nickname: randomNickname(),
+      avatarPreset: randomAvatar(),
       notificationSettings: const NotificationSettings(
         favoriteRegionPreopenAlert: true,
         tripEndSettlementAlert: true,
