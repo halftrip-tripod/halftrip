@@ -153,67 +153,162 @@ class _TripListScreenState extends State<TripListScreen> {
     List<RegionSummary> regions,
   ) {
     RegionSummary selected = regions.first;
-    return _showSheet<RegionSummary>(
-      builder: (sheetContext, setSheetState) => Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('반값여행 신청하셨나요?',
-              style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
-          const Text(
-            '먼저 여행할 지역을 고른 뒤 신청하러 가거나, 이미 신청을 마쳤다면 다음 단계에서 일정·인원을 등록해 주세요.',
-            style: TextStyle(
-              fontFamily: 'Pretendard',
-              fontSize: 14,
-              height: 1.5,
-              color: AppColors.ink5,
+    String query = '';
+    return showModalBottomSheet<RegionSummary>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final q = query.trim();
+          final filtered = q.isEmpty
+              ? regions
+              : regions
+                  .where((r) => r.name.contains(q) || r.province.contains(q))
+                  .toList();
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
             ),
-          ),
-          const SizedBox(height: 20),
-          DropdownButtonFormField<RegionSummary>(
-            initialValue: selected,
-            decoration: const InputDecoration(labelText: '여행 지역'),
-            items: regions
-                .map((r) => DropdownMenuItem(
-                    value: r, child: Text('${r.name} · ${r.province}')))
-                .toList(),
-            onChanged: (v) {
-              if (v != null) setSheetState(() => selected = v);
-            },
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () async {
-                    final url = selected.halfPriceApplyUrl.trim();
-                    if (url.isNotEmpty) {
-                      await launchUrl(Uri.parse(url),
-                          mode: LaunchMode.externalApplication);
-                    }
-                    if (!sheetContext.mounted) return;
-                    ScaffoldMessenger.of(sheetContext).showSnackBar(
-                      SnackBar(
-                          content: Text(
-                              '${selected.name} 신청 페이지로 이동했어요. 신청 완료 후 다시 추가해 주세요.')),
-                    );
-                    Navigator.of(sheetContext).pop(null);
-                  },
-                  child: const Text('신청하러 가기'),
-                ),
+            child: SizedBox(
+              height: MediaQuery.of(ctx).size.height * 0.82,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 0, 22, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('반값여행 신청하셨나요?',
+                            style: Theme.of(ctx).textTheme.titleLarge),
+                        const SizedBox(height: 8),
+                        const Text(
+                          '먼저 여행할 지역을 고른 뒤 신청하러 가거나, 이미 신청을 마쳤다면 다음 단계에서 일정·인원을 등록해 주세요.',
+                          style: TextStyle(
+                            fontFamily: 'Pretendard',
+                            fontSize: 14,
+                            height: 1.5,
+                            color: AppColors.ink5,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          onChanged: (v) => setSheetState(() => query = v),
+                          decoration: InputDecoration(
+                            hintText: '지역 · 도 이름 검색',
+                            prefixIcon: const Icon(Icons.search_rounded,
+                                color: AppColors.ink4),
+                            filled: true,
+                            fillColor: AppColors.surf,
+                            contentPadding:
+                                const EdgeInsets.symmetric(vertical: 0),
+                            border: OutlineInputBorder(
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.field),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? const Center(
+                            child: Text('검색 결과가 없어요',
+                                style: TextStyle(
+                                  fontFamily: 'Pretendard',
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.ink4,
+                                )),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(22, 0, 22, 8),
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 10),
+                            itemBuilder: (_, index) {
+                              final region = filtered[index];
+                              return _RegionPickRow(
+                                region: region,
+                                selected: region.id == selected.id,
+                                onTap: () =>
+                                    setSheetState(() => selected = region),
+                              );
+                            },
+                          ),
+                  ),
+                  SafeArea(
+                    top: false,
+                    minimum: const EdgeInsets.fromLTRB(22, 10, 22, 20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            const Text('선택한 지역  ',
+                                style: TextStyle(
+                                  fontFamily: 'Pretendard',
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.ink5,
+                                )),
+                            Text('${selected.name} · ${selected.province}',
+                                style: const TextStyle(
+                                  fontFamily: 'Pretendard',
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.p600,
+                                )),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () async {
+                                  final url = selected.halfPriceApplyUrl.trim();
+                                  if (url.isNotEmpty) {
+                                    await launchUrl(Uri.parse(url),
+                                        mode: LaunchMode.externalApplication);
+                                  }
+                                  if (!ctx.mounted) return;
+                                  ScaffoldMessenger.of(ctx).showSnackBar(
+                                    SnackBar(
+                                        content: Text(
+                                            '${selected.name} 신청 페이지로 이동했어요. 신청 완료 후 다시 추가해 주세요.')),
+                                  );
+                                  Navigator.of(ctx).pop(null);
+                                },
+                                child: const Text('신청하러 가기'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: FilledButton(
+                                onPressed: () =>
+                                    Navigator.of(ctx).pop(selected),
+                                child: const Text('신청 완료'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton(
-                  onPressed: () => Navigator.of(sheetContext).pop(selected),
-                  child: const Text('신청 완료'),
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -767,6 +862,103 @@ class _StepButton extends StatelessWidget {
           padding: const EdgeInsets.all(6),
           child: Icon(icon,
               size: 18, color: onTap == null ? AppColors.ink4 : AppColors.p600),
+        ),
+      ),
+    );
+  }
+}
+
+/// 여행 추가 시트의 지역 선택 카드 — 선택 시 스카이 테두리·배경으로 강조.
+class _RegionPickRow extends StatelessWidget {
+  const _RegionPickRow({
+    required this.region,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final RegionSummary region;
+  final bool selected;
+  final VoidCallback onTap;
+
+  PillTone get _statusTone => switch (region.statusCode.toUpperCase()) {
+        'APPLYING' => PillTone.success,
+        'CLOSED' => PillTone.gray,
+        _ => PillTone.gold,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? AppColors.p50 : Colors.white,
+      borderRadius: BorderRadius.circular(AppRadius.field),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.field),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.field),
+            border: Border.all(
+              color: selected ? AppColors.p500 : AppColors.line,
+              width: selected ? 1.6 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: selected ? AppColors.p100 : AppColors.surf,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.place_rounded,
+                    size: 20,
+                    color: selected ? AppColors.p600 : AppColors.ink4),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text('${region.name} · ${region.province}',
+                            style: const TextStyle(
+                              fontFamily: 'Pretendard',
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.ink9,
+                            )),
+                        const SizedBox(width: 8),
+                        Pill(region.statusLabel, tone: _statusTone),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      region.refundConditionAmount > 0
+                          ? '최소 소비 ${_man(region.refundConditionAmount)}'
+                          : '반값여행 대상 지역',
+                      style: const TextStyle(
+                        fontFamily: 'Pretendard',
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.ink5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                selected
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_off_rounded,
+                size: 22,
+                color: selected ? AppColors.p500 : AppColors.ink4,
+              ),
+            ],
+          ),
         ),
       ),
     );
