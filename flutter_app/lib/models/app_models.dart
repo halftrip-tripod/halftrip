@@ -192,6 +192,8 @@ class AppUser {
     required this.authProvider,
     required this.notificationSettings,
     required this.favoriteRegions,
+    this.nickname = '',
+    this.avatarPreset = '0:0',
   });
 
   final int id;
@@ -203,6 +205,12 @@ class AppUser {
   final NotificationSettings notificationSettings;
   final List<RegionSummary> favoriteRegions;
 
+  /// 커뮤니티 반익명 닉네임 (화면 표시·인사말용, 실명과 분리).
+  final String nickname;
+
+  /// 아바타 프리셋 (이모지 문자). 계약: community_profiles.avatar_preset.
+  final String avatarPreset;
+
   AppUser copyWith({
     String? name,
     String? email,
@@ -210,6 +218,8 @@ class AppUser {
     String? residence,
     NotificationSettings? notificationSettings,
     List<RegionSummary>? favoriteRegions,
+    String? nickname,
+    String? avatarPreset,
   }) {
     return AppUser(
       id: id,
@@ -220,6 +230,8 @@ class AppUser {
       authProvider: authProvider,
       notificationSettings: notificationSettings ?? this.notificationSettings,
       favoriteRegions: favoriteRegions ?? this.favoriteRegions,
+      nickname: nickname ?? this.nickname,
+      avatarPreset: avatarPreset ?? this.avatarPreset,
     );
   }
 
@@ -231,6 +243,8 @@ class AppUser {
       phoneNumber: json['phoneNumber'] as String? ?? '',
       residence: json['residence'] as String? ?? '',
       authProvider: json['authProvider'] as String? ?? 'GUEST',
+      nickname: json['nickname'] as String? ?? '',
+      avatarPreset: json['avatarPreset'] as String? ?? '0:0',
       notificationSettings: NotificationSettings.fromJson(
         (json['notificationSettings'] as Map<String, dynamic>?) ??
             const <String, dynamic>{

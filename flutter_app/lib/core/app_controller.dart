@@ -107,6 +107,18 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 프로필 편집 — 닉네임·아바타 프리셋 변경. (백엔드 연동 전 로컬 갱신)
+  void updateProfile({String? nickname, String? avatarPreset}) {
+    final user = currentUser;
+    if (user == null) return;
+    final trimmed = nickname?.trim();
+    currentUser = user.copyWith(
+      nickname: (trimmed != null && trimmed.isNotEmpty) ? trimmed : null,
+      avatarPreset: avatarPreset,
+    );
+    notifyListeners();
+  }
+
   /// 로그아웃 — 세션 상태를 비우고 로그인 화면으로 되돌린다.
   void logout() {
     currentUser = null;
