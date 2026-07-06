@@ -100,6 +100,13 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 거주지 변경 — 마이페이지에서 온보딩 완료 후 거주지만 갱신한다.
+  /// (온보딩 진입 플래그를 건드리지 않아 completeResidenceSetup과 구분된다.)
+  void updateResidence(String residence) {
+    currentUser = currentUser?.copyWith(residence: residence);
+    notifyListeners();
+  }
+
   /// 로그아웃 — 세션 상태를 비우고 로그인 화면으로 되돌린다.
   void logout() {
     currentUser = null;

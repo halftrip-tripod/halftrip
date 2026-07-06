@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/app_scope.dart';
+import '../data/residence_options.dart';
 import '../models/app_models.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui/app_card.dart';
@@ -64,7 +65,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
                 icon: Icons.place_outlined,
                 label: '거주지',
                 value: _shortResidence(user.residence),
-                onTap: () => _todo('거주지 변경은 준비 중이에요.'),
+                onTap: _changeResidence,
               ),
             ]),
             const _GroupLabel('알림 설정'),
@@ -154,6 +155,77 @@ class _MyPageScreenState extends State<MyPageScreen> {
     // 로그아웃 시 루트가 로그인 화면으로 전환되므로 마이페이지 스택을 닫는다.
     Navigator.of(context).pop();
     AppScope.of(context).logout();
+  }
+
+  /// 거주지 변경 — 시/도 → 시/군/구 순으로 고른 뒤 현재 사용자 거주지를 갱신한다.
+  Future<void> _changeResidence() async {
+    final province = await _pickOption(
+      title: '시 / 도',
+      options: residenceOptions.keys.toList(),
+    );
+    if (province == null || !mounted) return;
+
+    final cities = residenceOptions[province] ?? const <String>[];
+    final city = await _pickOption(title: '시 / 군 / 구', options: cities);
+    if (city == null || !mounted) return;
+
+    AppScope.of(context).updateResidence('$province $city');
+    if (!mounted) return;
+    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('거주지를 $province $city(으)로 바꿨어요.')));
+  }
+
+  Future<String?> _pickOption({
+    required String title,
+    required List<String> options,
+  }) {
+    return showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        maxChildSize: 0.9,
+        builder: (_, scrollController) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 4, 24, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(title,
+                    style: Theme.of(sheetContext).textTheme.titleLarge),
+              ),
+            ),
+            Flexible(
+              child: ListView.builder(
+                controller: scrollController,
+                itemCount: options.length,
+                itemBuilder: (_, index) {
+                  final option = options[index];
+                  return ListTile(
+                    title: Text(option,
+                        style: const TextStyle(
+                          fontFamily: 'Pretendard',
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.ink9,
+                        )),
+                    onTap: () => Navigator.of(sheetContext).pop(option),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
