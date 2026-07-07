@@ -839,6 +839,10 @@ class AuthPhotoReviewResult {
     required this.facesClear,
     required this.backgroundVisible,
     required this.reason,
+    this.gpsPresent = false,
+    this.capturedAt,
+    this.locationVerified,
+    this.withinTripPeriod,
   });
 
   final bool approved;
@@ -848,6 +852,13 @@ class AuthPhotoReviewResult {
   final bool backgroundVisible;
   final String reason;
 
+  /// EXIF 검증 신호 (백엔드 계약: gpsPresent/capturedAt/locationVerified/withinTripPeriod).
+  /// locationVerified·withinTripPeriod는 판정 불가 시 null(대상 좌표 없음·GPS/시각 정보 없음).
+  final bool gpsPresent;
+  final DateTime? capturedAt;
+  final bool? locationVerified;
+  final bool? withinTripPeriod;
+
   factory AuthPhotoReviewResult.fromJson(Map<String, dynamic> json) {
     return AuthPhotoReviewResult(
       approved: json['approved'] as bool? ?? false,
@@ -856,6 +867,11 @@ class AuthPhotoReviewResult {
       facesClear: json['facesClear'] as bool? ?? false,
       backgroundVisible: json['backgroundVisible'] as bool? ?? false,
       reason: json['reason'] as String? ?? '',
+      gpsPresent: json['gpsPresent'] as bool? ?? false,
+      capturedAt:
+          DateTime.tryParse(json['capturedAt'] as String? ?? '')?.toLocal(),
+      locationVerified: json['locationVerified'] as bool?,
+      withinTripPeriod: json['withinTripPeriod'] as bool?,
     );
   }
 }

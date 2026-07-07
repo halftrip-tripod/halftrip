@@ -842,6 +842,10 @@ class MockTravelRepository implements TravelRepository {
       facesClear: true,
       backgroundVisible: true,
       reason: '모의 환경에서는 인증사진을 자동 승인합니다.',
+      gpsPresent: true,
+      capturedAt: DateTime.now(),
+      locationVerified: true,
+      withinTripPeriod: true,
     );
   }
 

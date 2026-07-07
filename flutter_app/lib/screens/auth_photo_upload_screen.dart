@@ -389,11 +389,25 @@ class _ReviewList extends StatelessWidget {
     return AppCard(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Column(children: [
-        // 위치·촬영시각: EXIF 검증은 백엔드 추가 예정(현재 모델 미보유) → 승인 기준으로 표시
-        _row(Icons.place_outlined, '위치 · 지정관광지 반경 내',
-            review.approved ? '일치' : '확인 필요', review.approved),
-        _row(Icons.schedule_outlined, '촬영 시각 · 여행 기간 내',
-            review.approved ? '확인' : '확인 필요', review.approved),
+        // 위치·촬영시각: EXIF 실검증 결과 (null = GPS/좌표·시각 정보 없음 → 판정 불가)
+        _row(
+            Icons.place_outlined,
+            '위치 · 지정관광지 반경 내',
+            review.locationVerified == true
+                ? '일치'
+                : review.locationVerified == false
+                    ? '반경 밖'
+                    : (review.gpsPresent ? '확인 불가' : 'GPS 정보 없음'),
+            review.locationVerified == true),
+        _row(
+            Icons.schedule_outlined,
+            '촬영 시각 · 여행 기간 내',
+            review.withinTripPeriod == true
+                ? '확인'
+                : review.withinTripPeriod == false
+                    ? '기간 밖'
+                    : '시각 정보 없음',
+            review.withinTripPeriod == true),
         _row(
             Icons.people_outline_rounded,
             '인원',
