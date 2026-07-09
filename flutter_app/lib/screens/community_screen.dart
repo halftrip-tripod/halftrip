@@ -450,7 +450,6 @@ class _Post {
     required this.likes,
     required this.comments,
     required this.saves,
-    this.likedByMe = false,
     this.savedByMe = false,
   });
 
@@ -467,7 +466,7 @@ class _Post {
   int likes;
   final int comments;
   int saves;
-  bool likedByMe;
+  bool likedByMe = false;
   bool savedByMe;
 }
 
