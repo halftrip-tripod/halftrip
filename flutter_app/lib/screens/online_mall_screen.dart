@@ -6,6 +6,7 @@ import '../models/app_models.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/ui/app_card.dart';
+import 'merchant_map_screen.dart';
 
 /// 온라인몰 (S3-1) — 디자인: halftrip-design/online-mall.html
 /// 설계 결정: 온라인몰 = 사용처 "연결 허브". 환급 여부·잔액은 앱이 알 수 없으므로
@@ -212,7 +213,9 @@ class _RegionUsageCard extends StatelessWidget {
           _OutlineAction(
             icon: Icons.place_outlined,
             label: '${trip.regionName} 지역화폐 가맹점 지도',
-            onTap: () => _todo(context, '가맹점 지도는 연동 준비 중이에요.'),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => MerchantMapScreen(
+                    regionId: trip.regionId, regionName: trip.regionName))),
           ),
         ],
       ),
