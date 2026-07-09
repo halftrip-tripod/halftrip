@@ -24,26 +24,32 @@ class KoreaMap extends StatelessWidget {
   // 디자인 krmap viewBox 비율 (544.8 × 1000).
   static const _aspect = 544.8 / 1000.0;
 
-  // 지역 핀 좌표 — 디자인 home.html krmap viewBox(544.8×1000) 기준.
-  // 시드의 mapLeft/TopPercent는 옛 지도용이라 실루엣과 안 맞아 디자인 좌표를 우선한다.
-  static const _regionPos = <String, Offset>{
-    '평창': Offset(368.8, 226.1),
-    '횡성': Offset(330.0, 224.0),
-    '영월': Offset(379.1, 260.6),
-    '제천': Offset(339.4, 269.7),
-    '거창': Offset(298.1, 531.5),
-    '고창': Offset(119.9, 578.7),
-    '합천': Offset(336.4, 553.3),
-    '영광': Offset(91.9, 606.0),
-    '밀양': Offset(421.8, 566.0),
-    '영암': Offset(119.9, 693.2),
-    '하동': Offset(274.5, 644.2),
-    '강진': Offset(130.2, 722.3),
-    '남해': Offset(295.2, 686.0),
-    '해남': Offset(105.1, 735.0),
-    '고흥': Offset(205.3, 727.8),
-    '완도': Offset(146.0, 796.0),
+  // 지역 실제 위경도 (군청 소재지 기준) — _project()로 지도 좌표에 투영한다.
+  static const _regionLatLng = <String, (double, double)>{
+    '평창': (37.370, 128.390),
+    '횡성': (37.492, 127.985),
+    '영월': (37.184, 128.462),
+    '제천': (37.133, 128.191),
+    '거창': (35.687, 127.909),
+    '고창': (35.436, 126.702),
+    '합천': (35.567, 128.166),
+    '영광': (35.277, 126.512),
+    '밀양': (35.504, 128.747),
+    '영암': (34.800, 126.697),
+    '하동': (35.067, 127.751),
+    '강진': (34.642, 126.767),
+    '남해': (34.838, 127.893),
+    '해남': (34.573, 126.599),
+    '고흥': (34.611, 127.285),
+    '완도': (34.311, 126.755),
   };
+
+  /// 실제 위경도 → krmap viewBox(544.8×1000) 좌표.
+  /// 지도 SVG가 실지리 기반이라 서울·강진 앵커로 선형 보정하면 1px 내로 맞는다.
+  static Offset _project(double lat, double lng) => Offset(
+        161.1 + 146.4 * (lng - 126.978),
+        189.7 - 182.1 * (lat - 37.567),
+      );
 
   // 도·광역시 라벨 — 디자인 SVG <text> 좌표 (flutter_svg가 text 미지원이라 오버레이).
   static const _provinceLabels = <(String, Offset)>[
@@ -59,16 +65,24 @@ class KoreaMap extends StatelessWidget {
     ('제주', Offset(117.7, 947.5)),
   ];
 
-  // 주요 거주지(시/도)의 지도 좌표 % — 디자인 home.html 거주지 핀 기준.
-  static const _residencePos = <String, Offset>{
-    '서울': Offset(29.6, 19.0),
-    '경기': Offset(30.0, 21.0),
-    '인천': Offset(21.0, 20.0),
-    '강원': Offset(61.0, 16.0),
-    '대전': Offset(41.0, 36.0),
-    '부산': Offset(77.0, 57.0),
-    '대구': Offset(66.0, 47.0),
-    '광주': Offset(28.0, 63.0),
+  // 주요 거주지(시/도청 소재지) 실제 위경도.
+  static const _residenceLatLng = <String, (double, double)>{
+    '서울': (37.567, 126.978),
+    '경기': (37.263, 127.029),
+    '인천': (37.456, 126.705),
+    '강원': (37.881, 127.730),
+    '대전': (36.351, 127.385),
+    '세종': (36.480, 127.289),
+    '충북': (36.635, 127.491),
+    '충남': (36.659, 126.673),
+    '전북': (35.820, 127.109),
+    '전남': (34.816, 126.463),
+    '경북': (36.576, 128.506),
+    '경남': (35.238, 128.692),
+    '부산': (35.180, 129.075),
+    '대구': (35.871, 128.601),
+    '광주': (35.160, 126.851),
+    '울산': (35.539, 129.311),
   };
 
   @override
@@ -135,21 +149,26 @@ class KoreaMap extends StatelessWidget {
     );
   }
 
-  /// 디자인 좌표 우선, 없으면 시드 percent 폴백.
+  /// 실좌표 투영 우선, 없으면 시드 percent 폴백. (% 단위 반환)
   double _xOf(RegionSummary r) {
-    final pos = _regionPos[r.name];
-    return pos != null ? pos.dx / 544.8 * 100 : r.mapLeftPercent.toDouble();
+    final latLng = _regionLatLng[r.name];
+    if (latLng == null) return r.mapLeftPercent.toDouble();
+    return _project(latLng.$1, latLng.$2).dx / 544.8 * 100;
   }
 
   double _yOf(RegionSummary r) {
-    final pos = _regionPos[r.name];
-    return pos != null ? pos.dy / 1000 * 100 : r.mapTopPercent.toDouble();
+    final latLng = _regionLatLng[r.name];
+    if (latLng == null) return r.mapTopPercent.toDouble();
+    return _project(latLng.$1, latLng.$2).dy / 1000 * 100;
   }
 
   Offset? _residenceFor(String? label) {
     if (label == null || label.trim().isEmpty) return null;
-    for (final entry in _residencePos.entries) {
-      if (label.contains(entry.key)) return entry.value;
+    for (final entry in _residenceLatLng.entries) {
+      if (label.contains(entry.key)) {
+        final pos = _project(entry.value.$1, entry.value.$2);
+        return Offset(pos.dx / 544.8 * 100, pos.dy / 1000 * 100);
+      }
     }
     return null;
   }
