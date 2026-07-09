@@ -3,9 +3,13 @@ import 'package:flutter/material.dart';
 import '../core/app_config.dart';
 import '../core/app_scope.dart';
 import '../models/app_models.dart';
-import '../widgets/app_shell.dart';
+import '../theme/app_colors.dart';
 import '../widgets/place_map_view.dart';
+import '../widgets/ui/app_card.dart';
+import '../widgets/ui/pill.dart';
 
+/// 확정 코스 플래너 (S2-4) — 디자인: halftrip-design/course-edit.html
+/// 지도 동선 + 방문 순서 편집(드래그·삭제). 실시간 저장 유지.
 class PlannerScreen extends StatefulWidget {
   const PlannerScreen({super.key, required this.tripId});
 
@@ -100,19 +104,18 @@ class _PlannerScreenState extends State<PlannerScreen> {
     await _savePlaces(
       updated,
       trip: trip,
-      snackBarMessage: '플래너에서 장소를 제거했습니다.',
+      snackBarMessage: '플래너에서 장소를 제거했어요.',
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final controller = AppScope.of(context);
     final config = AppConfig.fromEnvironment();
 
-    return AppShell(
-      title: '플래너 보기',
-      modeName: controller.modeName,
-      child: FutureBuilder<TripDetail>(
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      appBar: AppBar(title: const Text('코스 플래너')),
+      body: FutureBuilder<TripDetail>(
         future: _future,
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
@@ -156,21 +159,18 @@ class _PlannerScreenState extends State<PlannerScreen> {
               );
 
           return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
             children: [
               _PlannerHeaderCard(trip: tripDetail.trip, count: places.length),
               const SizedBox(height: 16),
-              const _DayTabs(),
-              const SizedBox(height: 16),
-              SectionCard(
-                title: '여행 지도',
-                subtitle: '추가한 순서대로 마커가 표시되고, 점선 경로로 이동 순서가 이어집니다.',
+              AppCard(
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                radius: 20,
                 child: PlaceMapView(
                   markers: markers,
                   routeMarkers: routeMarkers,
                   connectSequentially: true,
-                  emptyMessage:
-                      '아직 추가된 장소가 없습니다. 직접 코스 만들기에서 장소를 먼저 담아 주세요.',
+                  emptyMessage: '아직 추가된 장소가 없어요. 코스 만들기에서 장소를 먼저 담아 주세요.',
                   kakaoEnabled: config.canUseKakaoMap,
                   highlightedMarkerId: highlightedMarker?.id,
                   onMarkerTap: (placeId) {
@@ -183,135 +183,178 @@ class _PlannerScreenState extends State<PlannerScreen> {
                       _highlightedPlaceId = placeId;
                     });
                   },
-                  height: 500,
+                  height: 420,
                 ),
               ),
-              const SizedBox(height: 16),
-              SectionCard(
-                title: '방문 순서',
-                subtitle: '장소를 빼거나 순서를 바꾸면 지도 마커와 점선 경로도 함께 바뀝니다.',
-                child: Column(
-                  children: [
-                    if (places.isEmpty)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(18),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        child: const Text(
-                          '아직 추가된 일정이 없습니다. 직접 코스 만들기에서 장소를 먼저 담아 주세요.',
-                        ),
-                      )
-                    else
-                      ReorderableListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: places.length,
-                        onReorder: (oldIndex, newIndex) async {
-                          if (newIndex > oldIndex) {
-                            newIndex -= 1;
-                          }
+              const SizedBox(height: 22),
+              const Padding(
+                padding: EdgeInsets.only(left: 2, bottom: 4),
+                child: Text(
+                  '방문 순서',
+                  style: TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.ink9,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(left: 2, bottom: 10),
+                child: Text(
+                  '끌어서 순서를 바꾸면 지도 동선도 함께 바뀌어요.',
+                  style: TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink5,
+                  ),
+                ),
+              ),
+              if (places.isEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: AppColors.surf,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: const Text(
+                    '아직 추가된 일정이 없어요. 코스 만들기에서 장소를 먼저 담아 주세요.',
+                    style: TextStyle(
+                      fontFamily: 'Pretendard',
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.ink5,
+                    ),
+                  ),
+                )
+              else
+                ReorderableListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  buildDefaultDragHandles: false,
+                  proxyDecorator: (child, _, __) => child,
+                  itemCount: places.length,
+                  onReorder: (oldIndex, newIndex) async {
+                    if (newIndex > oldIndex) {
+                      newIndex -= 1;
+                    }
 
-                          final reordered = [...places];
-                          final moved = reordered.removeAt(oldIndex);
-                          reordered.insert(newIndex, moved);
+                    final reordered = [...places];
+                    final moved = reordered.removeAt(oldIndex);
+                    reordered.insert(newIndex, moved);
 
-                          await _savePlaces(
-                            reordered,
-                            trip: tripDetail.trip,
-                            snackBarMessage: '방문 순서를 변경했습니다.',
-                          );
-                        },
-                        itemBuilder: (context, index) {
-                          final item = places[index];
-                          final isHighlighted =
-                              item.referencePlaceId == _highlightedPlaceId;
+                    await _savePlaces(
+                      reordered,
+                      trip: tripDetail.trip,
+                      snackBarMessage: '방문 순서를 변경했어요.',
+                    );
+                  },
+                  itemBuilder: (context, index) {
+                    final item = places[index];
+                    final isHighlighted =
+                        item.referencePlaceId == _highlightedPlaceId;
 
-                          return Container(
-                            key: ValueKey(
-                              '${item.placeType.wireName}_${item.referencePlaceId}',
-                            ),
+                    return KeyedSubtree(
+                      key: ValueKey(
+                        '${item.placeType.wireName}_${item.referencePlaceId}',
+                      ),
+                      child: ReorderableDelayedDragStartListener(
+                        index: index,
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _highlightedPlaceId = item.referencePlaceId;
+                            });
+                          },
+                          child: Container(
                             margin: const EdgeInsets.only(bottom: 10),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(18),
-                              onTap: () {
-                                setState(() {
-                                  _highlightedPlaceId = item.referencePlaceId;
-                                });
-                              },
-                              child: Ink(
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(
-                                  color: isHighlighted
-                                      ? const Color(0xFFEFF6FF)
-                                      : const Color(0xFFF8FAFC),
-                                  borderRadius: BorderRadius.circular(18),
-                                  border: Border.all(
-                                    color: isHighlighted
-                                        ? const Color(0xFF93C5FD)
-                                        : const Color(0xFFE2E8F0),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: isHighlighted ? AppColors.p50 : Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: AppShadows.soft,
+                            ),
+                            child: Row(
+                              children: [
+                                ReorderableDragStartListener(
+                                  index: index,
+                                  child: const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 4),
+                                    child: Icon(Icons.drag_indicator_rounded,
+                                        size: 20, color: AppColors.ink4),
                                   ),
                                 ),
-                                child: Row(
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 16,
-                                      backgroundColor: const Color(0xFF16A34A),
-                                      foregroundColor: Colors.white,
-                                      child: Text('${index + 1}'),
+                                const SizedBox(width: 8),
+                                Container(
+                                  width: 28,
+                                  height: 28,
+                                  alignment: Alignment.center,
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.p500,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Text(
+                                    '${index + 1}',
+                                    style: const TextStyle(
+                                      fontFamily: 'Pretendard',
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w900,
+                                      color: Colors.white,
                                     ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            item.placeName,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .titleMedium
-                                                ?.copyWith(
-                                                  fontWeight: FontWeight.w800,
-                                                  color: const Color(0xFF111827),
-                                                ),
-                                          ),
-                                          const SizedBox(height: 6),
-                                          Text(
-                                            item.address,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodySmall
-                                                ?.copyWith(
-                                                  color: const Color(0xFF64748B),
-                                                  height: 1.45,
-                                                ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    IconButton(
-                                      onPressed: () =>
-                                          _removePlace(places, item, tripDetail.trip),
-                                      icon: const Icon(Icons.close_rounded),
-                                      tooltip: '제거',
-                                    ),
-                                    const Icon(
-                                      Icons.drag_handle_rounded,
-                                      color: Color(0xFF94A3B8),
-                                    ),
-                                  ],
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(width: 11),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item.placeName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontFamily: 'Pretendard',
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w800,
+                                          color: AppColors.ink9,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        item.address,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontFamily: 'Pretendard',
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: AppColors.ink5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: () => _removePlace(
+                                      places, item, tripDetail.trip),
+                                  child: const Padding(
+                                    padding: EdgeInsets.all(4),
+                                    child: Icon(Icons.close_rounded,
+                                        size: 18, color: AppColors.ink4),
+                                  ),
+                                ),
+                              ],
                             ),
-                          );
-                        },
+                          ),
+                        ),
                       ),
-                  ],
+                    );
+                  },
                 ),
-              ),
             ],
           );
         },
@@ -320,6 +363,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
   }
 }
 
+/// 플래너 헤더 — 지역·일정·장소/인원 메타 (디자인 tripcard 톤).
 class _PlannerHeaderCard extends StatelessWidget {
   const _PlannerHeaderCard({
     required this.trip,
@@ -332,131 +376,58 @@ class _PlannerHeaderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final period =
-        '${trip.startDate.year}.${trip.startDate.month}.${trip.startDate.day} - '
-        '${trip.endDate.year}.${trip.endDate.month}.${trip.endDate.day}';
+        '${trip.startDate.month}.${trip.startDate.day} ~ ${trip.endDate.month}.${trip.endDate.day}';
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-      ),
+    return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '${trip.regionName} 여행 동선',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            period,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.78),
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
-          const SizedBox(height: 18),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
+          Row(
             children: [
-              _MetricChip(
-                icon: Icons.route_rounded,
-                label: '선택 장소 $count곳',
+              Container(
+                width: 48,
+                height: 48,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.p50,
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Text(_regionEmoji(trip.regionName),
+                    style: const TextStyle(fontSize: 24)),
               ),
-              _MetricChip(
-                icon: Icons.group_outlined,
-                label: '여행 인원 ${trip.travelerCount}명',
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${trip.regionName} 여행 동선',
+                      style: const TextStyle(
+                        fontFamily: 'Pretendard',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.ink9,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '$period · ${trip.travelerCount}명',
+                      style: const TextStyle(
+                        fontFamily: 'Pretendard',
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.ink5,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              Pill('$count곳'),
             ],
           ),
         ],
       ),
-    );
-  }
-}
-
-class _MetricChip extends StatelessWidget {
-  const _MetricChip({
-    required this.icon,
-    required this.label,
-  });
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 18, color: Colors.white),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DayTabs extends StatelessWidget {
-  const _DayTabs();
-
-  @override
-  Widget build(BuildContext context) {
-    final labels = ['DAY 1', 'DAY 2', 'DAY 3'];
-    return Row(
-      children: labels.asMap().entries.map((entry) {
-        final index = entry.key;
-        final label = entry.value;
-        final selected = index == 0;
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(right: index == labels.length - 1 ? 0 : 10),
-            child: Container(
-              height: 48,
-              decoration: BoxDecoration(
-                color: selected ? const Color(0xFF0F172A) : Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: selected
-                      ? const Color(0xFF0F172A)
-                      : const Color(0xFFE2E8F0),
-                ),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: selected ? Colors.white : const Color(0xFF475569),
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ),
-        );
-      }).toList(),
     );
   }
 }
@@ -466,4 +437,26 @@ String? _placePhotoAsset(String placeName) {
     '완도타워': 'assets/spot/wando/wandotower.jpg',
   };
   return mapping[placeName];
+}
+
+String _regionEmoji(String regionName) {
+  const map = <String, String>{
+    '평창': '🏔️',
+    '횡성': '🥩',
+    '영월': '🌊',
+    '제천': '⛰️',
+    '거창': '🌿',
+    '고창': '🏛️',
+    '합천': '🌄',
+    '영광': '🐟',
+    '밀양': '🏞️',
+    '영암': '🏎️',
+    '하동': '🍃',
+    '강진': '🍲',
+    '남해': '🌴',
+    '해남': '🌾',
+    '고흥': '🚀',
+    '완도': '🏝️',
+  };
+  return map[regionName] ?? '📍';
 }
