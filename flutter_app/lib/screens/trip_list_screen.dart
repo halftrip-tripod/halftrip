@@ -7,6 +7,7 @@ import '../models/app_models.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/ui/app_card.dart';
+import '../widgets/trip_calendar_sheet.dart';
 import '../widgets/ui/pill.dart';
 import 'favorite_regions_screen.dart';
 import 'past_trip_screen.dart';
@@ -350,14 +351,11 @@ class _TripListScreenState extends State<TripListScreen> {
           InkWell(
             borderRadius: BorderRadius.circular(AppRadius.field),
             onTap: () async {
-              final picked = await showDateRangePicker(
-                context: sheetContext,
-                firstDate: DateTime.now().subtract(const Duration(days: 30)),
+              final picked = await showTripCalendarSheet(
+                sheetContext,
+                initial: range,
+                firstDate: DateTime.now().subtract(const Duration(days: 90)),
                 lastDate: DateTime.now().add(const Duration(days: 365)),
-                initialDateRange: range,
-                locale: const Locale('ko', 'KR'),
-                helpText: '여행 일정 선택',
-                saveText: '선택',
               );
               if (picked != null) setSheetState(() => range = picked);
             },
