@@ -4,7 +4,7 @@ import '../core/app_scope.dart';
 import '../models/app_models.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
-import '../widgets/region_eligibility_map.dart';
+import '../widgets/korea_map.dart';
 import '../widgets/ui/app_card.dart';
 import '../widgets/ui/pill.dart';
 import '../widgets/ui/seg_chips.dart';
@@ -148,9 +148,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (_pane == 0)
                   AppCard(
                     padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
-                    child: RegionEligibilityMap(
+                    child: KoreaMap(
                       regions: data.regions,
-                      selectedRegionId: null,
+                      residenceLabel: data.user.residence,
                       onSelect: _openRegion,
                     ),
                   ),

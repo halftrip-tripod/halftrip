@@ -221,18 +221,12 @@ class _BrandLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Transform.translate(
-      offset: const Offset(-4, 1),
-      child: SizedBox(
-        height: 70,
-        width: 212,
-        child: Image.asset(
-          'assets/logo/logo.png',
-          fit: BoxFit.contain,
-          alignment: Alignment.centerLeft,
-          filterQuality: FilterQuality.high,
-        ),
-      ),
+    return Image.asset(
+      'assets/logo/logo.png',
+      height: 27,
+      fit: BoxFit.contain,
+      alignment: Alignment.centerLeft,
+      filterQuality: FilterQuality.high,
     );
   }
 }
