@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/app_models.dart';
+import '../repositories/mock_travel_repository.dart';
 import '../repositories/travel_repository.dart';
 import '../screens/youtube_course_analysis_screen.dart';
 
@@ -228,6 +229,43 @@ class AppController extends ChangeNotifier {
     await _persistLocalDashboardData();
     notifyListeners();
   }
+
+  List<SavedCourse> _demoSavedCourses() => [
+        SavedCourse(
+          id: 'demo_gangjin_course',
+          regionId: 2,
+          regionName: '강진',
+          title: '강진 미식 1박2일 코스',
+          preferences: const ['맛집', '자연', '문화'],
+          stops: const [
+            SavedCourseStop(
+              placeId: 2,
+              name: '강진만 생태공원',
+              address: '전라남도 강진군 강진만길 20',
+              latitude: 34.575,
+              longitude: 126.78,
+              sourceType: 'PLACE',
+            ),
+            SavedCourseStop(
+              placeId: 3,
+              name: '가우도 출렁다리',
+              address: '전라남도 강진군 대구면 저두리',
+              latitude: 34.6,
+              longitude: 126.81,
+              sourceType: 'PLACE',
+            ),
+            SavedCourseStop(
+              placeId: 4,
+              name: '다산초당',
+              address: '전라남도 강진군 도암면 만덕리',
+              latitude: 34.58,
+              longitude: 126.74,
+              sourceType: 'PLACE',
+            ),
+          ],
+          createdAt: DateTime(2026, 7, 6),
+        ),
+      ];
 
   Future<void> saveCourse(SavedCourse course) async {
     final next = [...savedCourses];
@@ -476,6 +514,11 @@ class AppController extends ChangeNotifier {
     savedCourses = rawCourses
         .map((item) => SavedCourse.fromJson(jsonDecode(item) as Map<String, dynamic>))
         .toList();
+    // mock 모드 데모: 저장 코스가 비어 있으면 시연용 코스를 채워
+    // 홈 저장 코스 카드가 목업과 동일한 상태로 시작하게 한다.
+    if (savedCourses.isEmpty && _repository is MockTravelRepository) {
+      savedCourses = _demoSavedCourses();
+    }
     final rawSelectedCourseIds = preferences.getString(_selectedCoursesKey);
     if (rawSelectedCourseIds == null || rawSelectedCourseIds.isEmpty) {
       selectedCourseIdsByTrip = const <int, String>{};
