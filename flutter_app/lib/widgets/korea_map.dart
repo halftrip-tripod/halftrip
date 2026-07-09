@@ -42,13 +42,13 @@ class KoreaMap extends StatelessWidget {
     '남해': Offset(295.2, 686.0),
     '해남': Offset(105.1, 735.0),
     '고흥': Offset(205.3, 727.8),
-    '완도': Offset(127.2, 782.3),
+    '완도': Offset(146.0, 796.0),
   };
 
   // 도·광역시 라벨 — 디자인 SVG <text> 좌표 (flutter_svg가 text 미지원이라 오버레이).
   static const _provinceLabels = <(String, Offset)>[
-    ('서울', Offset(162.2, 191.1)),
-    ('경기', Offset(163.9, 203.7)),
+    ('서울', Offset(138.0, 176.0)),
+    ('경기', Offset(196.0, 218.0)),
     ('강원', Offset(331.8, 158.2)),
     ('충북', Offset(290.9, 343.8)),
     ('충남', Offset(132.5, 377.6)),
@@ -216,20 +216,20 @@ class _RegionPin extends StatelessWidget {
                         ),
                       ),
               ),
-              if (!closed) ...[
-                const SizedBox(height: 2),
-                Text(
-                  region.name,
-                  style: TextStyle(
-                    fontFamily: 'Pretendard',
-                    fontSize: applying ? 12 : 11,
-                    fontWeight: FontWeight.w900,
-                    color: applying
-                        ? const Color(0xFF0F2A3E)
-                        : const Color(0xFF1F7BB0),
-                  ),
+              const SizedBox(height: 2),
+              Text(
+                region.name,
+                style: TextStyle(
+                  fontFamily: 'Pretendard',
+                  fontSize: applying ? 12 : (closed ? 9.5 : 11),
+                  fontWeight: closed ? FontWeight.w700 : FontWeight.w900,
+                  color: applying
+                      ? const Color(0xFF0F2A3E)
+                      : (closed
+                          ? const Color(0xFF8A99AB)
+                          : const Color(0xFF1F7BB0)),
                 ),
-              ],
+              ),
             ],
           ),
         ),
