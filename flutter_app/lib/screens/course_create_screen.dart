@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/app_models.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui/app_card.dart';
+import 'course_flow_screens.dart';
 import 'region_course_builder_screen.dart';
 import 'youtube_course_analysis_screen.dart';
 
@@ -165,7 +166,9 @@ class CourseCreateScreen extends StatelessWidget {
             iconFg: AppColors.p600,
             title: 'AI 추천 코스',
             desc: '환급 조건 · 여행 취향에 맞는 코스를 자동으로 생성해요',
-            onTap: () => _openBuilder(context, CourseBuildMode.ai),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => CourseAiScreen(tripDetail: tripDetail),
+            )),
           ),
           const SizedBox(height: 14),
           _MakeCard(
