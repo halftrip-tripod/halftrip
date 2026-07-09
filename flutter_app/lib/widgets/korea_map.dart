@@ -24,6 +24,41 @@ class KoreaMap extends StatelessWidget {
   // 디자인 krmap viewBox 비율 (544.8 × 1000).
   static const _aspect = 544.8 / 1000.0;
 
+  // 지역 핀 좌표 — 디자인 home.html krmap viewBox(544.8×1000) 기준.
+  // 시드의 mapLeft/TopPercent는 옛 지도용이라 실루엣과 안 맞아 디자인 좌표를 우선한다.
+  static const _regionPos = <String, Offset>{
+    '평창': Offset(368.8, 226.1),
+    '횡성': Offset(346.0, 205.0),
+    '영월': Offset(379.1, 260.6),
+    '제천': Offset(339.4, 269.7),
+    '거창': Offset(298.1, 531.5),
+    '고창': Offset(119.9, 578.7),
+    '합천': Offset(336.4, 553.3),
+    '영광': Offset(91.9, 606.0),
+    '밀양': Offset(421.8, 566.0),
+    '영암': Offset(119.9, 693.2),
+    '하동': Offset(274.5, 644.2),
+    '강진': Offset(130.2, 722.3),
+    '남해': Offset(295.2, 686.0),
+    '해남': Offset(105.1, 735.0),
+    '고흥': Offset(205.3, 727.8),
+    '완도': Offset(127.2, 782.3),
+  };
+
+  // 도·광역시 라벨 — 디자인 SVG <text> 좌표 (flutter_svg가 text 미지원이라 오버레이).
+  static const _provinceLabels = <(String, Offset)>[
+    ('서울', Offset(162.2, 191.1)),
+    ('경기', Offset(163.9, 203.7)),
+    ('강원', Offset(331.8, 158.2)),
+    ('충북', Offset(290.9, 343.8)),
+    ('충남', Offset(132.5, 377.6)),
+    ('전북', Offset(171.1, 526.2)),
+    ('전남', Offset(149.1, 681.5)),
+    ('경북', Offset(396.3, 432.8)),
+    ('경남', Offset(363.2, 613.9)),
+    ('제주', Offset(117.7, 947.5)),
+  ];
+
   // 주요 거주지(시/도)의 지도 좌표 % — 디자인 home.html 거주지 핀 기준.
   static const _residencePos = <String, Offset>{
     '서울': Offset(29.6, 19.0),
@@ -57,6 +92,25 @@ class KoreaMap extends StatelessWidget {
                     width: width,
                     height: height,
                   ),
+                  // 도·광역시 이름
+                  for (final (label, pos) in _provinceLabels)
+                    Positioned(
+                      left: width * pos.dx / 544.8 - 30,
+                      top: height * pos.dy / 1000 - (width * 0.022),
+                      child: SizedBox(
+                        width: 60,
+                        child: Text(
+                          label,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: 'Pretendard',
+                            fontSize: width * 24 / 544.8,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF9DB4C8),
+                          ),
+                        ),
+                      ),
+                    ),
                   if (residence != null)
                     Positioned(
                       left: width * residence.dx / 100 - 10,
@@ -66,8 +120,8 @@ class KoreaMap extends StatelessWidget {
                   for (final region in regions)
                     _RegionPin(
                       region: region,
-                      left: width * region.mapLeftPercent / 100,
-                      top: height * region.mapTopPercent / 100,
+                      left: width * _xOf(region) / 100,
+                      top: height * _yOf(region) / 100,
                       onTap: () => onSelect(region),
                     ),
                 ],
@@ -79,6 +133,17 @@ class KoreaMap extends StatelessWidget {
         const _Legend(),
       ],
     );
+  }
+
+  /// 디자인 좌표 우선, 없으면 시드 percent 폴백.
+  double _xOf(RegionSummary r) {
+    final pos = _regionPos[r.name];
+    return pos != null ? pos.dx / 544.8 * 100 : r.mapLeftPercent.toDouble();
+  }
+
+  double _yOf(RegionSummary r) {
+    final pos = _regionPos[r.name];
+    return pos != null ? pos.dy / 1000 * 100 : r.mapTopPercent.toDouble();
   }
 
   Offset? _residenceFor(String? label) {

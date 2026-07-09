@@ -30,7 +30,7 @@ class LoginScreen extends StatelessWidget {
                     child: Center(
                       child: Image.asset(
                         'assets/logo/logo.png',
-                        height: 48,
+                        height: 78,
                         fit: BoxFit.contain,
                       ),
                     ),
