@@ -28,7 +28,7 @@ class KoreaMap extends StatelessWidget {
   // 시드의 mapLeft/TopPercent는 옛 지도용이라 실루엣과 안 맞아 디자인 좌표를 우선한다.
   static const _regionPos = <String, Offset>{
     '평창': Offset(368.8, 226.1),
-    '횡성': Offset(346.0, 205.0),
+    '횡성': Offset(330.0, 224.0),
     '영월': Offset(379.1, 260.6),
     '제천': Offset(339.4, 269.7),
     '거창': Offset(298.1, 531.5),
