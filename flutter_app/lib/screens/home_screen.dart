@@ -172,6 +172,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
                 const SizedBox(height: 10),
                 _SavedCoursesCard(courses: data.savedCourses),
+                const SizedBox(height: 22),
+                _PopularCoursesCard(
+                  onMore: () => widget.onTabSelected?.call(3),
+                ),
               ],
             ),
           );
@@ -585,6 +589,115 @@ class _SavedCourseRow extends StatelessWidget {
             const Icon(Icons.chevron_right_rounded, color: AppColors.ink4),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 커뮤니티 인기 코스 카드 — 디자인 home.html .pop (탭하면 커뮤니티 탭으로).
+class _PopularCoursesCard extends StatelessWidget {
+  const _PopularCoursesCard({required this.onMore});
+
+  final VoidCallback onMore;
+
+  static const _posts = [
+    ('완도', '하루 동선 짜는 법', 18),
+    ('영월', '숙박확인서 꿀팁', 12),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.chat_bubble_outline_rounded,
+                  size: 19, color: AppColors.p600),
+              const SizedBox(width: 8),
+              const Text(
+                '인기 코스',
+                style: TextStyle(
+                  fontFamily: 'Pretendard',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.ink9,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: onMore,
+                child: const Text(
+                  '더보기',
+                  style: TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.ink5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              for (final (region, title, likes) in _posts)
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                        right: region == _posts.last.$1 ? 0 : 12),
+                    child: GestureDetector(
+                      onTap: onMore,
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppColors.surf,
+                          borderRadius: BorderRadius.circular(AppRadius.field),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Pill(region),
+                            const SizedBox(height: 8),
+                            Text(
+                              title,
+                              style: const TextStyle(
+                                fontFamily: 'Pretendard',
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.ink9,
+                                height: 1.35,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const Icon(Icons.favorite_rounded,
+                                    size: 13, color: AppColors.ink4),
+                                const SizedBox(width: 5),
+                                Text(
+                                  '$likes',
+                                  style: const TextStyle(
+                                    fontFamily: 'Pretendard',
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.ink5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }

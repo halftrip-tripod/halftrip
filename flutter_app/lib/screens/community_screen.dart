@@ -23,12 +23,18 @@ class CommunityScreen extends StatefulWidget {
 
 class _CommunityScreenState extends State<CommunityScreen> {
   int _filter = 0;
+  String _region = '전체';
   static const _filters = ['인기', '최신', '후기', '코스', '질문', '정보'];
 
   final List<_Post> _posts = _buildPosts();
 
+  List<String> get _regionLabels =>
+      ['전체', ...{for (final p in _posts) p.region}];
+
   List<_Post> get _visible {
-    final list = [..._posts];
+    final list = _posts
+        .where((p) => _region == '전체' || p.region == _region)
+        .toList();
     switch (_filter) {
       case 0:
         list.sort((a, b) => b.likes.compareTo(a.likes));
@@ -38,6 +44,47 @@ class _CommunityScreenState extends State<CommunityScreen> {
       default:
         return list.where((p) => p.tag == _filters[_filter]).toList();
     }
+  }
+
+  Future<void> _pickRegion() async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (c) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final label in _regionLabels)
+              ListTile(
+                leading: Icon(
+                  label == '전체' ? Icons.public_rounded : Icons.place_outlined,
+                  size: 20,
+                  color: AppColors.ink5,
+                ),
+                title: Text(
+                  label,
+                  style: const TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink9,
+                  ),
+                ),
+                trailing: label == _region
+                    ? const Icon(Icons.check_rounded,
+                        size: 20, color: AppColors.p600)
+                    : null,
+                onTap: () => Navigator.of(c).pop(label),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) setState(() => _region = picked);
   }
 
   void _todo(String message) {
@@ -85,6 +132,45 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 ),
               ),
               const Spacer(),
+              GestureDetector(
+                onTap: _pickRegion,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: _region == '전체' ? Colors.white : AppColors.p100,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    boxShadow: _region == '전체' ? AppShadows.soft : null,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.place_outlined,
+                          size: 14,
+                          color: _region == '전체'
+                              ? AppColors.ink5
+                              : AppColors.p700),
+                      const SizedBox(width: 4),
+                      Text(
+                        _region == '전체' ? '지역 전체' : _region,
+                        style: TextStyle(
+                          fontFamily: 'Pretendard',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: _region == '전체'
+                              ? AppColors.ink7
+                              : AppColors.p700,
+                        ),
+                      ),
+                      Icon(Icons.expand_more_rounded,
+                          size: 17,
+                          color: _region == '전체'
+                              ? AppColors.ink5
+                              : AppColors.p700),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
               GestureDetector(
                 onTap: _pickFilter,
                 child: Container(
