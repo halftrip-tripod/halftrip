@@ -124,7 +124,56 @@ class _RegionCourseBuilderScreenState extends State<RegionCourseBuilderScreen> {
     });
   }
 
-  void _generateAiCourse(RegionDetail detail) {
+  Future<void> _generateAiCourse(RegionDetail detail) async {
+    // AI 생성 연출 — 목업 코스 시뮬의 로딩 다이얼로그.
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: const Padding(
+          padding: EdgeInsets.all(26),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: CircularProgressIndicator(
+                    strokeWidth: 3.5, color: AppColors.p500),
+              ),
+              SizedBox(height: 18),
+              Text(
+                'AI가 코스를 만들고 있어요',
+                style: TextStyle(
+                  fontFamily: 'Pretendard',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.ink9,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                '취향·환급 조건 분석 → 장소 선정 → 동선 최적화',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Pretendard',
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.ink5,
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 2000));
+    if (!mounted) return;
+    Navigator.of(context).pop();
+
     final scored = detail.halfPricePlaces
         .where((place) => place.latitude != null && place.longitude != null)
         .map(

@@ -7,9 +7,9 @@ import '../widgets/ui/app_card.dart';
 import '../widgets/ui/pill.dart';
 import 'auth_photo_upload_screen.dart';
 import 'lodging_form_screen.dart';
+import 'course_create_screen.dart';
 import 'main_navigation_screen.dart';
 import 'planner_screen.dart';
-import 'region_course_builder_screen.dart';
 import 'receipt_card_screen.dart';
 import 'receipt_evidence_screen.dart';
 import 'settlement_screen.dart';
@@ -137,11 +137,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         course: course,
         regionName: detail.trip.regionName,
         onTap: () => _push(PlannerScreen(tripId: widget.tripId)),
-        onAdd: () => _push(RegionCourseBuilderScreen(
-          regionId: detail.trip.regionId,
-          regionName: detail.trip.regionName,
-          tripId: detail.trip.id,
-        )),
+        onAdd: () => _push(CourseCreateScreen(tripDetail: detail)),
         onCommunity: () => Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
               builder: (_) => const MainNavigationScreen(initialIndex: 3)),
@@ -358,11 +354,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         course: course,
         regionName: detail.trip.regionName,
         onTap: () => _push(PlannerScreen(tripId: widget.tripId)),
-        onAdd: () => _push(RegionCourseBuilderScreen(
-          regionId: detail.trip.regionId,
-          regionName: detail.trip.regionName,
-          tripId: detail.trip.id,
-        )),
+        onAdd: () => _push(CourseCreateScreen(tripDetail: detail)),
         onCommunity: () => Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
               builder: (_) => const MainNavigationScreen(initialIndex: 3)),
