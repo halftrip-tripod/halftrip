@@ -245,7 +245,7 @@ class MockTravelRepository implements TravelRepository {
         digitalTourCardApplyUrl:
             'https://www.gangjintour.com/advance/advance_req.html?',
         dataSourceNote: 'SAMPLE_SEED',
-        statusCode: 'PREPARING',
+        statusCode: 'APPLYING',
         digitalBenefitAvailable: true,
         displayOrder: 2,
         mapTopPercent: 86,
@@ -309,7 +309,7 @@ class MockTravelRepository implements TravelRepository {
         halfPriceApplyUrl: 'https://tour.pc.go.kr/Home/index',
         digitalTourCardApplyUrl: 'https://tour.pc.go.kr/Home/index',
         dataSourceNote: 'SAMPLE_SEED',
-        statusCode: 'PREPARING',
+        statusCode: 'APPLYING',
         digitalBenefitAvailable: true,
         displayOrder: 3,
         mapTopPercent: 18,

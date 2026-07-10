@@ -191,6 +191,21 @@ class AppController extends ChangeNotifier {
     await _runBusy(() async {
       trips = await _repository.getTrips(user.id);
     }, resetError: false);
+    await _pruneStaleCourseSelections();
+  }
+
+  /// 존재하지 않는 여행을 가리키는 확정 코스 매핑 제거.
+  /// mock 여행 id가 재사용될 때 이전 세션의 로컬 저장 매핑이 새 여행에 붙는 것을 막는다.
+  Future<void> _pruneStaleCourseSelections() async {
+    final validIds = trips.map((t) => t.id).toSet();
+    final pruned = {
+      for (final entry in selectedCourseIdsByTrip.entries)
+        if (validIds.contains(entry.key)) entry.key: entry.value,
+    };
+    if (pruned.length == selectedCourseIdsByTrip.length) return;
+    selectedCourseIdsByTrip = pruned;
+    await _persistLocalDashboardData();
+    notifyListeners();
   }
 
   Future<AppUser> refreshCurrentUser() async {

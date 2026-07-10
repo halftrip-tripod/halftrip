@@ -122,6 +122,23 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     );
     await controller.saveCourse(saved);
     await controller.selectCourseForTrip(tripId: trip.id, courseId: saved.id);
+    // 플래너·지도는 여행 장소(selectedPlaces)를 읽으므로 코스 스톱을 함께 반영한다.
+    try {
+      await controller.repository.replaceTripPlaces(trip.id, [
+        for (var i = 0; i < course.stops.length; i++)
+          TripPlaceItem(
+            id: 0,
+            placeType: PlaceCategory.halfPrice,
+            referencePlaceId: 0,
+            placeName: course.stops[i].name,
+            address: '',
+            visitOrder: i + 1,
+            latitude: null,
+            longitude: null,
+            checked: false,
+          ),
+      ]);
+    } catch (_) {}
     await _reload();
   }
 
