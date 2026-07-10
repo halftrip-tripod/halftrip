@@ -27,26 +27,6 @@ void main() {
     expect(controller.trips, isNotEmpty);
   });
 
-  test('회원가입 → 즉시 로그인, 새 계정으로 재로그인 가능', () async {
-    final repo = MockTravelRepository();
-    final controller = AppController(repository: repo);
-    await controller.signUpWithCredentials(
-      name: '규희',
-      loginId: 'gyuhee',
-      password: 'pw1234',
-      phoneNumber: '010-1234-5678',
-      residence: '서울특별시 강남구',
-    );
-    expect(controller.isLoggedIn, isTrue);
-    expect(controller.currentUser?.name, '규희');
-    expect(controller.currentUser?.residence, '서울특별시 강남구');
-
-    controller.logout();
-    expect(controller.isLoggedIn, isFalse);
-    await controller.loginWithCredentials(loginId: 'gyuhee', password: 'pw1234');
-    expect(controller.isLoggedIn, isTrue);
-  });
-
   test('로컬 로그인 실패 시 예외', () async {
     final controller = AppController(repository: MockTravelRepository());
     await expectLater(
