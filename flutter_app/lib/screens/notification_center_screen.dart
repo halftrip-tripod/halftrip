@@ -27,8 +27,12 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
     _future = _load();
   }
 
-  Future<List<AppNotification>> _load() =>
-      AppScope.of(context).repository.getNotifications();
+  Future<List<AppNotification>> _load() {
+    final controller = AppScope.of(context);
+    final userId = controller.currentUser?.id;
+    if (userId == null) return Future.value(const []);
+    return controller.repository.getNotifications(userId);
+  }
 
   Future<void> _reload() async {
     setState(() => _future = _load());
@@ -38,7 +42,11 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
   Future<void> _markAllRead() async {
     setState(() => _busy = true);
     try {
-      await AppScope.of(context).repository.markAllNotificationsRead();
+      final controller = AppScope.of(context);
+      final userId = controller.currentUser?.id;
+      if (userId != null) {
+        await controller.repository.markAllNotificationsRead(userId);
+      }
       await _reload();
     } finally {
       if (mounted) setState(() => _busy = false);

@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../core/app_scope.dart';
+import '../../screens/mypage_screen.dart';
+import '../../screens/notification_center_screen.dart';
 import '../state/app_state.dart';
 import '../theme/app_colors.dart';
 import 'community.dart';
 import 'home_tab.dart';
 import 'mall_tab.dart';
 import 'my_trips_tab.dart';
-import 'mypage.dart';
-import 'notifications.dart';
 
 /// 메인 셸 — 상단바(로고·알림·마이페이지) + 하단 4탭.
 class MainShell extends StatefulWidget {
@@ -105,10 +106,35 @@ class _MainShellState extends State<MainShell> {
   }
 }
 
-class _TopBar extends StatelessWidget {
+class _TopBar extends StatefulWidget {
+  @override
+  State<_TopBar> createState() => _TopBarState();
+}
+
+class _TopBarState extends State<_TopBar> {
+  int _unread = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadUnread());
+  }
+
+  Future<void> _loadUnread() async {
+    try {
+      final controller = AppScope.of(context);
+      final userId = controller.currentUser?.id;
+      if (userId == null) return;
+      final notifications = await controller.repository.getNotifications(userId);
+      if (!mounted) return;
+      setState(() => _unread = notifications.where((n) => !n.read).length);
+    } catch (_) {
+      // 배지는 부가 정보 — 실패해도 조용히 넘어간다.
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final unread = AppState.I.unreadNotifCount;
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 14, 18, 6),
       child: Row(children: [
@@ -116,9 +142,11 @@ class _TopBar extends StatelessWidget {
         const Spacer(),
         _IconButton(
           icon: Icons.notifications_none_rounded,
-          badge: unread > 0,
+          badge: _unread > 0,
           onTap: () => Navigator.of(context)
-              .push(MaterialPageRoute(builder: (_) => const NotificationsScreen())),
+              .push(MaterialPageRoute(
+                  builder: (_) => const NotificationCenterScreen()))
+              .then((_) => _loadUnread()),
         ),
         const SizedBox(width: 10),
         _IconButton(

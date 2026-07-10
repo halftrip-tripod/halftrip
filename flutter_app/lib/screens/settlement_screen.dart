@@ -62,11 +62,22 @@ class _SettlementScreenState extends State<SettlementScreen> {
   }
 
   Future<void> _applySettlement() async {
+    final detail = await _future;
+    if (!mounted) return;
+    // 개인정보 최소화(계약 B): 실명·전화번호는 정산 신청 시점에만 수집한다.
+    final applicant = await _askApplicantInfo(
+      initialName: detail?.trip.applicantName ?? '',
+    );
+    if (applicant == null || !mounted) return;
+
     setState(() => _busy = true);
     final controller = AppScope.of(context);
     try {
-      await controller.runTask(
-          () => controller.repository.applySettlement(widget.tripId));
+      await controller.runTask(() => controller.repository.applySettlement(
+            widget.tripId,
+            applicantName: applicant.$1,
+            phoneNumber: applicant.$2,
+          ));
       await _reload();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -75,6 +86,81 @@ class _SettlementScreenState extends State<SettlementScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// 신청자 실명·전화번호 입력 시트. 취소하면 null.
+  Future<(String, String)?> _askApplicantInfo({required String initialName}) {
+    final nameController = TextEditingController(text: initialName);
+    final phoneController = TextEditingController();
+    return showModalBottomSheet<(String, String)>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.fromLTRB(
+            24, 4, 24, MediaQuery.of(sheetContext).viewInsets.bottom + 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '신청자 정보 확인',
+              style: TextStyle(
+                fontFamily: 'Pretendard',
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: AppColors.ink9,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              '실명과 전화번호는 이번 정산 신청에만 사용하고 계정에는 저장하지 않아요.',
+              style: TextStyle(
+                fontFamily: 'Pretendard',
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: AppColors.ink5,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _ApplicantField(
+              controller: nameController,
+              hint: '이름 (신분증 기준)',
+              keyboardType: TextInputType.name,
+            ),
+            const SizedBox(height: 10),
+            _ApplicantField(
+              controller: phoneController,
+              hint: '전화번호 (010-0000-0000)',
+              keyboardType: TextInputType.phone,
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () {
+                  final name = nameController.text.trim();
+                  final phone = phoneController.text.trim();
+                  if (name.isEmpty || phone.isEmpty) {
+                    ScaffoldMessenger.of(sheetContext).showSnackBar(
+                        const SnackBar(content: Text('이름과 전화번호를 입력해주세요.')));
+                    return;
+                  }
+                  Navigator.of(sheetContext).pop((name, phone));
+                },
+                child: const Text('정산 신청 완료로 표시'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _openSubmission(TripDetail detail) async {
@@ -291,6 +377,46 @@ class _Note extends StatelessWidget {
                   color: AppColors.ink5)),
         ),
       ]),
+    );
+  }
+}
+
+class _ApplicantField extends StatelessWidget {
+  const _ApplicantField({
+    required this.controller,
+    required this.hint,
+    required this.keyboardType,
+  });
+
+  final TextEditingController controller;
+  final String hint;
+  final TextInputType keyboardType;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      style: const TextStyle(
+        fontFamily: 'Pretendard',
+        fontSize: 14.5,
+        fontWeight: FontWeight.w600,
+        color: AppColors.ink9,
+      ),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(
+            fontFamily: 'Pretendard',
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: AppColors.ink4),
+        filled: true,
+        fillColor: AppColors.surf,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadius.field),
+          borderSide: BorderSide.none,
+        ),
+      ),
     );
   }
 }

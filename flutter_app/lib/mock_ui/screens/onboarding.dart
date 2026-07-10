@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../core/app_scope.dart';
+import '../../models/app_models.dart';
 import '../data/mock_data.dart';
-import '../state/app_state.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui.dart';
 
@@ -9,11 +10,9 @@ import '../widgets/ui.dart';
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
 
-  void _social(BuildContext context, String provider) {
-    AppState.I.loginProvider = provider;
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ResidenceScreen()),
-    );
+  Future<void> _social(BuildContext context, LoginProvider provider) async {
+    // 로그인 후 거주지 미설정이면 루트 게이트가 ResidenceScreen을 띄운다.
+    await AppScope.of(context).login(provider);
   }
 
   @override
@@ -47,7 +46,7 @@ class LoginScreen extends StatelessWidget {
               bg: const Color(0xFFFEE500),
               fg: const Color(0xFF191919),
               icon: Icons.chat_bubble_rounded,
-              onTap: () => _social(context, '카카오'),
+              onTap: () => _social(context, LoginProvider.kakao),
             ),
             const SizedBox(height: 10),
             _SocialButton(
@@ -56,7 +55,7 @@ class LoginScreen extends StatelessWidget {
               fg: Colors.white,
               leading: const Text('N',
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Colors.white)),
-              onTap: () => _social(context, '네이버'),
+              onTap: () => _social(context, LoginProvider.naver),
             ),
             const SizedBox(height: 18),
             const Text.rich(
@@ -136,9 +135,19 @@ class _LocalLoginScreenState extends State<LocalLoginScreen> {
     return DetailScaffold(
       title: '로컬 로그인',
       cta: CtaBar(children: [
-        PrimaryButton('로그인', onTap: () {
-          Navigator.of(context).popUntil((r) => r.isFirst);
-          AppState.I.login('로컬');
+        PrimaryButton('로그인', onTap: () async {
+          final controller = AppScope.of(context);
+          final navigator = Navigator.of(context);
+          try {
+            await controller.loginWithCredentials(
+              loginId: _id.text.trim(),
+              password: _pw.text,
+            );
+            navigator.popUntil((r) => r.isFirst);
+          } catch (_) {
+            if (!context.mounted) return;
+            showMock(context, '아이디 또는 비밀번호를 확인해주세요.');
+          }
         }),
       ]),
       children: [
@@ -209,13 +218,14 @@ class _ResidenceScreenState extends State<ResidenceScreen> {
   }
 
   void _done() {
-    AppState.I.residence = '$_province $_city';
+    final controller = AppScope.of(context);
+    final residence = '$_province $_city';
     if (widget.editMode) {
+      controller.updateResidence(residence);
       Navigator.of(context).pop();
-      showMock(context, '거주지를 $_province $_city(으)로 바꿨어요.');
+      showMock(context, '거주지를 $residence(으)로 바꿨어요.');
     } else {
-      Navigator.of(context).popUntil((r) => r.isFirst);
-      AppState.I.login(AppState.I.loginProvider);
+      controller.completeResidenceSetup(residence);
     }
   }
 

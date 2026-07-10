@@ -1,168 +1,257 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-import '../data/models.dart';
-import '../state/app_state.dart';
+import '../../core/app_scope.dart';
+import '../../models/app_models.dart';
+import '../../screens/favorite_regions_screen.dart';
+import '../../screens/past_trip_screen.dart';
 import '../theme/app_colors.dart';
 import '../widgets/trip_calendar_sheet.dart';
 import '../widgets/ui.dart';
 import 'course_flow.dart';
-import 'mypage.dart';
-import 'past_trip.dart';
 import 'trip_detail.dart';
 
-/// S2-1 내 여행 목록.
-class MyTripsTab extends StatelessWidget {
+/// 내 여행 목록 (S2-1) — 목업 UI + AppController 실데이터.
+/// 진행 중(여행 전/중/정산) ↔ 지난 여행(정산 신청 완료)으로 나눠 보여준다.
+class MyTripsTab extends StatefulWidget {
   const MyTripsTab({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final s = AppState.I;
-    final active = s.trips.where((t) => t.stage != TripStage.done).toList();
-    final past = s.trips.where((t) => t.stage == TripStage.done).toList();
-    final favCount = s.regions.where((r) => r.favorite.value).length;
+  State<MyTripsTab> createState() => _MyTripsTabState();
+}
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(22, 8, 22, 28),
-      children: [
-        Row(children: [
-          const Text('내 여행',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -1)),
-          const Spacer(),
-          GestureDetector(
-            onTap: () => showTripAddSheet(context),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.p500,
-                borderRadius: BorderRadius.circular(13),
-                boxShadow: const [BoxShadow(color: Color(0x400EA5E9), blurRadius: 12, offset: Offset(0, 5))],
-              ),
-              child: const Row(children: [
-                Icon(Icons.add_rounded, size: 17, color: Colors.white),
-                SizedBox(width: 4),
-                Text('여행 추가',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
-              ]),
-            ),
-          ),
-        ]),
-        const SizedBox(height: 20),
-        const SectionTitle('진행 중인 여행'),
-        const SizedBox(height: 12),
-        for (final t in active) ...[TripCard(trip: t), const SizedBox(height: 14)],
-        const SizedBox(height: 8),
-        const SectionTitle('보관함'),
-        const SizedBox(height: 12),
-        MenuGroup(children: [
-          MenuRow(
-            icon: Icons.bookmark_outline_rounded,
-            label: '저장 코스',
-            value: '${s.courses.length}개',
-            onTap: () => Navigator.of(context)
-                .push(MaterialPageRoute(builder: (_) => const CourseSavedScreen())),
-          ),
-          MenuRow(
-            icon: Icons.star_outline_rounded,
-            label: '관심 지역',
-            value: '$favCount개',
-            onTap: () => Navigator.of(context)
-                .push(MaterialPageRoute(builder: (_) => const FavoriteRegionsScreen())),
-          ),
-        ]),
-        const SizedBox(height: 22),
-        const SectionTitle('지난 여행'),
-        const SizedBox(height: 12),
-        for (final t in past)
-          AppCard(
-            onTap: () => Navigator.of(context)
-                .push(MaterialPageRoute(builder: (_) => PastTripScreen(trip: t))),
-            child: Row(children: [
-              EmojiBox(t.emoji, size: 48, fontSize: 24, radius: 15),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(t.name,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.3)),
-                  const SizedBox(height: 3),
-                  Text(t.dateLabel,
-                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink5)),
+class _MyTripsTabState extends State<MyTripsTab> {
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
+  }
+
+  Future<void> _refresh() async {
+    if (_loading) return;
+    setState(() => _loading = true);
+    try {
+      await AppScope.of(context).refreshTrips();
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = AppScope.of(context);
+    final trips = controller.trips;
+    final active = trips.where((t) => !t.settlementApplied).toList()
+      ..sort((a, b) => a.startDate.compareTo(b.startDate));
+    final past = trips.where((t) => t.settlementApplied).toList()
+      ..sort((a, b) => b.endDate.compareTo(a.endDate));
+    final favCount = controller.currentUser?.favoriteRegions.length ?? 0;
+
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(22, 8, 22, 28),
+        children: [
+          Row(children: [
+            const Text('내 여행',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -1)),
+            const Spacer(),
+            GestureDetector(
+              onTap: () => showTripAddSheet(context).then((_) {
+                if (mounted) setState(() {});
+              }),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.p500,
+                  borderRadius: BorderRadius.circular(13),
+                  boxShadow: const [BoxShadow(color: Color(0x400EA5E9), blurRadius: 12, offset: Offset(0, 5))],
+                ),
+                child: const Row(children: [
+                  Icon(Icons.add_rounded, size: 17, color: Colors.white),
+                  SizedBox(width: 4),
+                  Text('여행 추가',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
                 ]),
               ),
-              const Pill('환급 완료', tone: PillTone.gold),
-            ]),
-          ),
-      ],
+            ),
+          ]),
+          const SizedBox(height: 20),
+          const SectionTitle('진행 중인 여행'),
+          const SizedBox(height: 12),
+          if (_loading && trips.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Center(child: CircularProgressIndicator(color: AppColors.p500)),
+            )
+          else if (active.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(color: AppColors.surf, borderRadius: BorderRadius.circular(18)),
+              child: const Text('진행 중인 여행이 없어요. 우측 상단에서 신청 완료한 여행을 추가해보세요.',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink5, height: 1.5)),
+            )
+          else
+            for (final trip in active) ...[
+              TripCard(trip: trip, onChanged: () => setState(() {})),
+              const SizedBox(height: 14),
+            ],
+          const SizedBox(height: 8),
+          const SectionTitle('보관함'),
+          const SizedBox(height: 12),
+          MenuGroup(children: [
+            MenuRow(
+              icon: Icons.bookmark_outline_rounded,
+              label: '저장 코스',
+              value: '${controller.savedCourses.length}개',
+              onTap: () => Navigator.of(context)
+                  .push(MaterialPageRoute(builder: (_) => const CourseSavedScreen())),
+            ),
+            MenuRow(
+              icon: Icons.star_outline_rounded,
+              label: '관심 지역',
+              value: '$favCount개',
+              onTap: () => Navigator.of(context)
+                  .push(MaterialPageRoute(builder: (_) => const FavoriteRegionsScreen()))
+                  .then((_) => setState(() {})),
+            ),
+          ]),
+          const SizedBox(height: 22),
+          const SectionTitle('지난 여행'),
+          const SizedBox(height: 12),
+          if (past.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(color: AppColors.surf, borderRadius: BorderRadius.circular(18)),
+              child: const Text('정산까지 마친 여행이 여기 모여요.',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink5)),
+            )
+          else
+            for (final trip in past) ...[
+              AppCard(
+                onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => PastTripScreen(tripId: trip.id))),
+                child: Row(children: [
+                  EmojiBox(regionEmojiOf(trip.regionName), size: 48, fontSize: 24, radius: 15),
+                  const SizedBox(width: 13),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('${trip.regionName} ${durationLabelOf(trip)}',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.3)),
+                      const SizedBox(height: 3),
+                      Text('${dateRangeOf(trip)} · ${trip.travelerCount}명',
+                          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink5)),
+                    ]),
+                  ),
+                  const Pill('정산 완료', tone: PillTone.gold),
+                ]),
+              ),
+              const SizedBox(height: 12),
+            ],
+        ],
+      ),
     );
   }
 }
 
-/// 진행 중 여행 카드 (상태별 구성).
+// ───────────────────────── 표시 유틸
+
+String dateRangeOf(TripSummary t) =>
+    '${t.startDate.month}.${t.startDate.day} ~ ${t.endDate.month}.${t.endDate.day}';
+
+String durationLabelOf(TripSummary t) {
+  final nights = t.endDate.difference(t.startDate).inDays;
+  return nights <= 0 ? '당일치기' : '$nights박${nights + 1}일';
+}
+
+/// 여행 단계 — 정산 신청 완료면 review, 아니면 날짜 기준.
+TripStageView stageOf(TripSummary t) {
+  if (t.settlementApplied) return TripStageView.review;
+  final today = DateUtils.dateOnly(DateTime.now());
+  final start = DateUtils.dateOnly(t.startDate);
+  final end = DateUtils.dateOnly(t.endDate);
+  if (today.isBefore(start)) return TripStageView.before;
+  if (!today.isAfter(end)) return TripStageView.during;
+  return TripStageView.settle;
+}
+
+enum TripStageView { before, during, settle, review }
+
+String regionEmojiOf(String regionName) {
+  const map = <String, String>{
+    '평창': '🏔️', '횡성': '🥩', '영월': '🌊', '제천': '⛰️',
+    '거창': '🌿', '고창': '🏛️', '합천': '🌄', '영광': '🐟',
+    '밀양': '🏞️', '영암': '🏎️', '하동': '🍃', '강진': '🍲',
+    '남해': '🌴', '해남': '🌾', '고흥': '🚀', '완도': '🏝️',
+  };
+  return map[regionName] ?? '📍';
+}
+
+/// 진행 중 여행 카드 (목업 tripcard) — 실데이터.
 class TripCard extends StatelessWidget {
-  const TripCard({super.key, required this.trip});
-  final Trip trip;
+  const TripCard({super.key, required this.trip, required this.onChanged});
+
+  final TripSummary trip;
+  final VoidCallback onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final (pill, tone) = switch (trip.stage) {
-      TripStage.before => ('여행 전', PillTone.sky),
-      TripStage.during => ('여행 중', PillTone.live),
-      TripStage.settle => ('정산 신청', PillTone.warn),
-      TripStage.review => ('정산 완료', PillTone.gray),
-      TripStage.done => ('환급 완료', PillTone.gold),
+    final stage = stageOf(trip);
+    final today = DateUtils.dateOnly(DateTime.now());
+    final start = DateUtils.dateOnly(trip.startDate);
+    final totalDays = trip.endDate.difference(trip.startDate).inDays + 1;
+
+    final (pill, tone) = switch (stage) {
+      TripStageView.before => ('여행 전', PillTone.sky),
+      TripStageView.during => ('여행 중', PillTone.live),
+      _ => ('정산 신청', PillTone.warn),
     };
-    final next = switch (trip.stage) {
-      TripStage.before => '출발 전 준비하기',
-      TripStage.during => '인증 · 영수증 기록하기',
-      TripStage.settle => '증빙 패키지 만들기',
-      _ => '여행 요약 보기',
+    final dday = switch (stage) {
+      TripStageView.before => '출발 D-${start.difference(today).inDays}',
+      TripStageView.during => 'Day ${today.difference(start).inDays + 1} / $totalDays',
+      _ => '여행 종료',
     };
-    final s = AppState.I;
+    final next = switch (stage) {
+      TripStageView.before => '출발 전 준비하기',
+      TripStageView.during => '인증 · 영수증 기록하기',
+      _ => '증빙 패키지 만들기',
+    };
 
     return AppCard(
       onTap: () => Navigator.of(context)
-          .push(MaterialPageRoute(builder: (_) => TripDetailScreen(trip: trip))),
+          .push(MaterialPageRoute(builder: (_) => TripDetailScreen(tripId: trip.id)))
+          .then((_) => onChanged()),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Pill(pill, tone: tone),
           const Spacer(),
-          Text(trip.ddayLabel,
+          Text(dday,
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink5)),
         ]),
         const SizedBox(height: 13),
         Row(children: [
-          EmojiBox(trip.emoji, size: 48, fontSize: 24, radius: 15),
+          EmojiBox(regionEmojiOf(trip.regionName), size: 48, fontSize: 24, radius: 15),
           const SizedBox(width: 13),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(trip.name,
+              Text('${trip.regionName} ${durationLabelOf(trip)}',
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.3)),
               const SizedBox(height: 3),
-              Text(trip.dateLabel,
+              Text('${dateRangeOf(trip)} · ${trip.travelerCount}명',
                   style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink5)),
             ]),
           ),
         ]),
-        if (trip.stage == TripStage.before) ...[
+        if (stage == TripStageView.during && trip.refundConditionAmount > 0) ...[
           const SizedBox(height: 14),
-          ProgressGauge(
-            label: '출발 준비 체크리스트',
-            value: '${s.checklistDone.length}/4',
-            progress: s.checklistDone.length / 4,
-          ),
-        ],
-        if (trip.stage == TripStage.during) ...[
-          const SizedBox(height: 14),
-          ProgressGauge(
-            label: '관광지 인증',
-            value: '${s.authPhotoDone} / 2곳',
-            progress: s.authPhotoDone / 2,
-            green: true,
-          ),
-          const SizedBox(height: 12),
           ProgressGauge(
             label: '누적 소비',
-            value: '${s.spentAmount ~/ 10000}만 / 20만원',
-            progress: (s.spentAmount / 200000).clamp(0, 1),
+            value: '${_man(trip.totalSpentAmount)} / ${_man(trip.refundConditionAmount)}',
+            progress: (trip.totalSpentAmount / trip.refundConditionAmount).clamp(0.0, 1.0),
           ),
         ],
         const SizedBox(height: 14),
@@ -175,25 +264,41 @@ class TripCard extends StatelessWidget {
       ]),
     );
   }
+
+  String _man(int amount) => amount >= 10000 ? '${amount ~/ 10000}만원' : '$amount원';
 }
 
-/// S2-2 여행 추가 — 앱과 동일한 2단계 플로우.
-/// ① 지역 선택(검색·신청하러 가기/신청 완료) → ② 일정(캘린더)·인원 등록.
+// ───────────────────────── S2-2 여행 추가 (2단계 시트, 실 API)
+
 Future<void> showTripAddSheet(BuildContext context) async {
   final region = await _showRegionApplicationSheet(context);
   if (region == null || !context.mounted) return;
   await _showTripInfoSheet(context, region);
 }
 
-/// ① "반값여행 신청하셨나요?" — 지역 검색·선택 시트.
-/// 오픈예정·마감 지역은 신청 자체가 불가능하므로 접수중만 노출.
-Future<Region?> _showRegionApplicationSheet(BuildContext context) {
-  final regions =
-      AppState.I.regions.where((r) => r.status == RegionStatus.open).toList();
-  Region selected = regions.first;
+/// ① "반값여행 신청하셨나요?" — 접수중 지역 검색·선택.
+Future<RegionSummary?> _showRegionApplicationSheet(BuildContext context) async {
+  final controller = AppScope.of(context);
+  final List<RegionSummary> regions;
+  try {
+    final all = await controller.repository
+        .getRegions(residence: controller.currentUser?.residence ?? '');
+    regions = all.where((r) => r.statusCode.toUpperCase() == 'APPLYING').toList()
+      ..sort((a, b) => a.displayOrder.compareTo(b.displayOrder));
+  } catch (_) {
+    if (context.mounted) showMock(context, '지역 목록을 불러오지 못했어요.');
+    return null;
+  }
+  if (!context.mounted) return null;
+  if (regions.isEmpty) {
+    showMock(context, '지금 접수 중인 지역이 없어요.');
+    return null;
+  }
+
+  RegionSummary selected = regions.first;
   String query = '';
 
-  return showModalBottomSheet<Region>(
+  return showModalBottomSheet<RegionSummary>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.white,
@@ -254,7 +359,7 @@ Future<Region?> _showRegionApplicationSheet(BuildContext context) {
                         separatorBuilder: (_, _) => const SizedBox(height: 10),
                         itemBuilder: (_, index) => _RegionPickRow(
                           region: filtered[index],
-                          selected: filtered[index] == selected,
+                          selected: filtered[index].id == selected.id,
                           onTap: () => setSheet(() => selected = filtered[index]),
                         ),
                       ),
@@ -271,8 +376,13 @@ Future<Region?> _showRegionApplicationSheet(BuildContext context) {
                   ]),
                   const SizedBox(height: 10),
                   Row(children: [
-                    SecondaryButton('신청하러 가기', onTap: () {
-                      showMock(ctx, '${selected.name} 신청 페이지로 이동했어요. 신청 완료 후 다시 추가해 주세요. (외부 링크 · 목업)');
+                    SecondaryButton('신청하러 가기', onTap: () async {
+                      final url = selected.halfPriceApplyUrl.trim();
+                      if (url.isNotEmpty) {
+                        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                      }
+                      if (!ctx.mounted) return;
+                      showMock(ctx, '${selected.name} 신청 페이지로 이동했어요. 신청 완료 후 다시 추가해 주세요.');
                       Navigator.of(ctx).pop(null);
                     }),
                     const SizedBox(width: 12),
@@ -288,13 +398,14 @@ Future<Region?> _showRegionApplicationSheet(BuildContext context) {
   );
 }
 
-/// ② "{지역} 여행 추가" — 일정(캘린더)·인원 등록 시트.
-Future<void> _showTripInfoSheet(BuildContext context, Region region) {
+/// ② "{지역} 여행 추가" — 일정(캘린더)·인원 → createTrip.
+Future<void> _showTripInfoSheet(BuildContext context, RegionSummary region) {
   var people = 2;
   var range = DateTimeRange(
     start: DateTime.now().add(const Duration(days: 7)),
     end: DateTime.now().add(const Duration(days: 8)),
   );
+  var saving = false;
 
   return showModalBottomSheet<void>(
     context: context,
@@ -308,6 +419,39 @@ Future<void> _showTripInfoSheet(BuildContext context, Region region) {
       builder: (ctx, setSheet) {
         final nights = range.end.difference(range.start).inDays;
         final durLabel = nights == 0 ? '당일' : '$nights박${nights + 1}일';
+
+        Future<void> submit() async {
+          if (saving) return;
+          setSheet(() => saving = true);
+          final controller = AppScope.of(ctx);
+          final user = controller.currentUser;
+          if (user == null) return;
+          try {
+            await controller.runTask(
+              () => controller.repository.createTrip(
+                userId: user.id,
+                regionId: region.id,
+                draft: TripDraft(
+                  applicantName: user.name,
+                  phoneNumber: user.phoneNumber,
+                  residence: user.residence,
+                  startDate: range.start,
+                  endDate: range.end,
+                  travelerCount: people,
+                ),
+              ),
+            );
+            await controller.refreshTrips();
+            if (!ctx.mounted) return;
+            Navigator.of(ctx).pop();
+            showMock(ctx, '${region.name} $durLabel 여행을 추가했어요.');
+          } catch (_) {
+            if (!ctx.mounted) return;
+            setSheet(() => saving = false);
+            showMock(ctx, '여행 추가에 실패했어요. 잠시 후 다시 시도해주세요.');
+          }
+        }
+
         return Padding(
           padding: EdgeInsets.fromLTRB(22, 0, 22, MediaQuery.of(ctx).viewInsets.bottom + 24),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -362,24 +506,7 @@ Future<void> _showTripInfoSheet(BuildContext context, Region region) {
             ),
             const SizedBox(height: 22),
             Row(children: [
-              PrimaryButton('내 여행에 추가', onTap: () {
-                final start = DateUtils.dateOnly(range.start);
-                final dday = start.difference(DateUtils.dateOnly(DateTime.now())).inDays;
-                final t = Trip(
-                  emoji: region.emoji,
-                  name: '${region.name} $durLabel',
-                  region: region.name,
-                  dateLabel: '${kdate(range.start)} ~ ${kdate(range.end)} · $people명',
-                  people: people,
-                  stage: TripStage.before,
-                  ddayLabel: dday <= 0 ? '출발 D-DAY' : '출발 D-$dday',
-                  nights: nights,
-                );
-                AppState.I.addTrip(t);
-                Navigator.of(ctx).pop();
-                AppState.I.tabRequest.value = 1; // 내 여행 탭으로
-                showMock(context, '${t.name} 여행을 추가했어요.');
-              }),
+              PrimaryButton(saving ? '추가 중…' : '내 여행에 추가', disabled: saving, onTap: submit),
             ]),
           ]),
         );
@@ -388,10 +515,10 @@ Future<void> _showTripInfoSheet(BuildContext context, Region region) {
   );
 }
 
-/// 지역 선택 카드 — 선택 시 스카이 테두리·배경으로 강조 (앱 _RegionPickRow 이식).
+/// 지역 선택 카드 — 선택 시 스카이 테두리·배경으로 강조.
 class _RegionPickRow extends StatelessWidget {
   const _RegionPickRow({required this.region, required this.selected, required this.onTap});
-  final Region region;
+  final RegionSummary region;
   final bool selected;
   final VoidCallback onTap;
 
@@ -421,7 +548,7 @@ class _RegionPickRow extends StatelessWidget {
                 color: selected ? AppColors.p100 : AppColors.surf,
                 shape: BoxShape.circle,
               ),
-              child: Text(region.emoji, style: const TextStyle(fontSize: 19)),
+              child: Text(regionEmojiOf(region.name), style: const TextStyle(fontSize: 19)),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -434,16 +561,17 @@ class _RegionPickRow extends StatelessWidget {
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink9)),
                   ),
                   const SizedBox(width: 8),
-                  Pill(
-                    region.status == RegionStatus.open ? '접수중' : '오픈예정',
-                    tone: region.status == RegionStatus.open ? PillTone.success : PillTone.gold,
-                  ),
+                  const Pill('접수중', tone: PillTone.success),
                 ]),
                 const SizedBox(height: 3),
-                Text(region.condition,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink5)),
+                Text(
+                  region.refundConditionAmount > 0
+                      ? '최소 소비 ${region.refundConditionAmount ~/ 10000}만원'
+                      : '반값여행 대상 지역',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink5),
+                ),
               ]),
             ),
             const SizedBox(width: 8),
