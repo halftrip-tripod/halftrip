@@ -3,14 +3,15 @@ import 'package:flutter/material.dart';
 import '../../core/app_scope.dart';
 import '../../models/app_models.dart';
 import '../../screens/auth_photo_upload_screen.dart';
-import '../../screens/course_create_screen.dart';
 import '../../screens/lodging_form_screen.dart';
 import '../../screens/planner_screen.dart';
 import '../../screens/receipt_evidence_screen.dart';
 import '../../screens/settlement_screen.dart';
 import '../../screens/submission_package_screen.dart';
+import '../data/models.dart' as mock;
 import '../state/app_state.dart' as mock;
 import '../theme/app_colors.dart';
+import 'course_flow.dart';
 import '../widgets/ui.dart';
 import 'my_trips_tab.dart' show TripStageView, dateRangeOf, durationLabelOf, regionEmojiOf, stageOf;
 
@@ -81,6 +82,49 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         .then((_) => _reload());
   }
 
+  /// 코스 만들기 — 목업 1:1 코스 플로우(course_flow)를 실여행 프록시로 태우고,
+  /// 확정 코스가 생기면 saveCourse + selectCourseForTrip으로 실여행에 연결한다.
+  Future<void> _openCourseCreate(TripDetail detail) async {
+    final trip = detail.trip;
+    final proxy = mock.Trip(
+      emoji: regionEmojiOf(trip.regionName),
+      name: '${trip.regionName} ${durationLabelOf(trip)}',
+      region: trip.regionName,
+      dateLabel: dateRangeOf(trip),
+      people: trip.travelerCount,
+      stage: mock.TripStage.before,
+      nights: trip.endDate.difference(trip.startDate).inDays,
+    );
+    await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => CourseCreateScreen(forTrip: proxy)));
+    final course = proxy.course;
+    if (course == null || !mounted) return;
+
+    final controller = AppScope.of(context);
+    final saved = SavedCourse(
+      id: 'trip${trip.id}-${DateTime.now().millisecondsSinceEpoch}',
+      regionId: trip.regionId,
+      regionName: trip.regionName,
+      title: course.title,
+      preferences: const [],
+      stops: [
+        for (final stop in course.stops)
+          SavedCourseStop(
+            placeId: 0,
+            name: stop.name,
+            address: '',
+            latitude: 0,
+            longitude: 0,
+            sourceType: 'MANUAL',
+          ),
+      ],
+      createdAt: DateTime.now(),
+    );
+    await controller.saveCourse(saved);
+    await controller.selectCourseForTrip(tripId: trip.id, courseId: saved.id);
+    await _reload();
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<TripDetail>(
@@ -141,7 +185,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         else ...[
           OutlineButton('코스 추가하기',
               icon: Icons.add_rounded,
-              onTap: () => _push(CourseCreateScreen(tripDetail: detail))),
+              onTap: () => _openCourseCreate(detail)),
           OutlineButton('${detail.trip.regionName} 인기 코스 보러 가기',
               icon: Icons.chat_bubble_outline_rounded,
               trailingIcon: Icons.chevron_right_rounded,
@@ -286,7 +330,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         _DCard(title: '여행 코스', children: [
           OutlineButton('코스 추가하기',
               icon: Icons.add_rounded,
-              onTap: () => _push(CourseCreateScreen(tripDetail: detail))),
+              onTap: () => _openCourseCreate(detail)),
         ]),
     ];
   }
