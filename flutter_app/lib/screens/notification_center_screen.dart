@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../core/app_scope.dart';
 import '../models/app_models.dart';
+import '../mock_ui/screens/course_flow.dart';
+import '../mock_ui/screens/region_detail.dart';
+import '../mock_ui/screens/trip_detail.dart';
+import '../mock_ui/state/app_state.dart' as mock;
 import '../theme/app_colors.dart';
 
 /// 알림 센터 — 리포지토리(mock/api)에서 알림을 불러와 오늘/지난 알림으로 그룹.
@@ -53,6 +57,54 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
     }
   }
 
+  /// 알림 탭 → refType/refId 딥링크 (계약: 핸드오프 G).
+  /// 백엔드가 참조를 안 주면(딥링크 미배포) 탭해도 아무 동작 안 함.
+  Future<void> _open(AppNotification noti) async {
+    final refId = noti.refId;
+    if (refId == null) return;
+    final nav = Navigator.of(context);
+    switch (noti.refType) {
+      case 'TRIP':
+        await nav.push(
+          MaterialPageRoute(builder: (_) => TripDetailScreen(tripId: refId)),
+        );
+      case 'COURSE':
+        await nav.push(
+          MaterialPageRoute(builder: (_) => const CourseSavedScreen()),
+        );
+      case 'REGION':
+        await _openRegion(refId);
+      case 'POST':
+        // 커뮤니티 백엔드(핸드오프 J) 전까지는 커뮤니티 탭으로.
+        mock.AppState.I.tabRequest.value = 3;
+        nav.pop();
+      case 'MERCHANT':
+        mock.AppState.I.tabRequest.value = 2;
+        nav.pop();
+    }
+    if (mounted) await _reload();
+  }
+
+  /// 실서버 regionId → 지역명 → 지역 상세(목업 데이터 기반) 진입.
+  Future<void> _openRegion(int regionId) async {
+    try {
+      final controller = AppScope.of(context);
+      final regions = await controller.repository.getRegions(
+        residence: controller.currentUser?.residence,
+      );
+      final match = regions.where((r) => r.id == regionId).firstOrNull;
+      if (match == null || !mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder:
+              (_) => RegionDetailScreen(
+                region: mock.AppState.I.regionByName(match.name),
+              ),
+        ),
+      );
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -63,8 +115,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
           FutureBuilder<List<AppNotification>>(
             future: _future,
             builder: (context, snapshot) {
-              final hasUnread =
-                  snapshot.data?.any((n) => !n.read) ?? false;
+              final hasUnread = snapshot.data?.any((n) => !n.read) ?? false;
               if (!hasUnread) return const SizedBox.shrink();
               return TextButton(
                 onPressed: _busy ? null : _markAllRead,
@@ -86,12 +137,14 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
             if (items.isEmpty) return const _EmptyNotifications();
 
             final now = DateTime.now();
-            final today = items
-                .where((n) => DateUtils.isSameDay(n.createdAt, now))
-                .toList();
-            final earlier = items
-                .where((n) => !DateUtils.isSameDay(n.createdAt, now))
-                .toList();
+            final today =
+                items
+                    .where((n) => DateUtils.isSameDay(n.createdAt, now))
+                    .toList();
+            final earlier =
+                items
+                    .where((n) => !DateUtils.isSameDay(n.createdAt, now))
+                    .toList();
 
             return RefreshIndicator(
               onRefresh: _reload,
@@ -100,12 +153,12 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
                 children: [
                   if (today.isNotEmpty) ...[
                     const _GroupLabel('오늘'),
-                    ...today.map((n) => _NotiRow(n)),
+                    ...today.map((n) => _NotiRow(n, onTap: () => _open(n))),
                   ],
                   if (earlier.isNotEmpty) ...[
                     const SizedBox(height: 18),
                     const _GroupLabel('지난 알림'),
-                    ...earlier.map((n) => _NotiRow(n)),
+                    ...earlier.map((n) => _NotiRow(n, onTap: () => _open(n))),
                   ],
                 ],
               ),
@@ -118,44 +171,43 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
 }
 
 /// 알림 유형 → 아이콘·색 팔레트 매핑 (프레젠테이션 전용).
-(IconData, Color, Color) _presentation(NotificationType type) =>
-    switch (type) {
-      NotificationType.regionOpen => (
-          Icons.flag_outlined,
-          AppColors.p100,
-          AppColors.p600,
-        ),
-      NotificationType.courseDone => (
-          Icons.route_outlined,
-          AppColors.p100,
-          AppColors.p600,
-        ),
-      NotificationType.communityLike => (
-          Icons.favorite,
-          AppColors.coralTint,
-          AppColors.coralDeep,
-        ),
-      NotificationType.communityComment => (
-          Icons.chat_bubble_outline,
-          AppColors.p100,
-          AppColors.p600,
-        ),
-      NotificationType.settleDeadline => (
-          Icons.schedule_outlined,
-          const Color(0xFFFFF3E2),
-          const Color(0xFFB8731B),
-        ),
-      NotificationType.benefit => (
-          Icons.card_giftcard_outlined,
-          AppColors.track,
-          AppColors.ink5,
-        ),
-      NotificationType.unknown => (
-          Icons.notifications_none_rounded,
-          AppColors.track,
-          AppColors.ink5,
-        ),
-    };
+(IconData, Color, Color) _presentation(NotificationType type) => switch (type) {
+  NotificationType.regionOpen => (
+    Icons.flag_outlined,
+    AppColors.p100,
+    AppColors.p600,
+  ),
+  NotificationType.courseDone => (
+    Icons.route_outlined,
+    AppColors.p100,
+    AppColors.p600,
+  ),
+  NotificationType.communityLike => (
+    Icons.favorite,
+    AppColors.coralTint,
+    AppColors.coralDeep,
+  ),
+  NotificationType.communityComment => (
+    Icons.chat_bubble_outline,
+    AppColors.p100,
+    AppColors.p600,
+  ),
+  NotificationType.settleDeadline => (
+    Icons.schedule_outlined,
+    const Color(0xFFFFF3E2),
+    const Color(0xFFB8731B),
+  ),
+  NotificationType.benefit => (
+    Icons.card_giftcard_outlined,
+    AppColors.track,
+    AppColors.ink5,
+  ),
+  NotificationType.unknown => (
+    Icons.notifications_none_rounded,
+    AppColors.track,
+    AppColors.ink5,
+  ),
+};
 
 String _relativeTime(DateTime t) {
   final diff = DateTime.now().difference(t);
@@ -189,72 +241,82 @@ class _GroupLabel extends StatelessWidget {
 }
 
 class _NotiRow extends StatelessWidget {
-  const _NotiRow(this.noti);
+  const _NotiRow(this.noti, {required this.onTap});
   final AppNotification noti;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final (icon, bg, fg) = _presentation(noti.type);
     final unread = !noti.read;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: unread ? AppColors.p50 : AppColors.white,
-        borderRadius: BorderRadius.circular(AppRadius.field),
-        boxShadow: unread ? null : AppShadows.soft,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-            child: Icon(icon, size: 19, color: fg),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(noti.title,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: unread ? AppColors.p50 : AppColors.white,
+          borderRadius: BorderRadius.circular(AppRadius.field),
+          boxShadow: unread ? null : AppShadows.soft,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+              child: Icon(icon, size: 19, color: fg),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    noti.title,
                     style: const TextStyle(
                       fontFamily: 'Pretendard',
                       fontSize: 14.5,
                       fontWeight: FontWeight.w800,
                       color: AppColors.ink9,
-                    )),
-                const SizedBox(height: 3),
-                Text(noti.body,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    noti.body,
                     style: const TextStyle(
                       fontFamily: 'Pretendard',
                       fontSize: 13,
                       height: 1.45,
                       color: AppColors.ink5,
-                    )),
-                const SizedBox(height: 6),
-                Text(_relativeTime(noti.createdAt),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _relativeTime(noti.createdAt),
                     style: const TextStyle(
                       fontFamily: 'Pretendard',
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: AppColors.ink4,
-                    )),
-              ],
-            ),
-          ),
-          if (unread)
-            Container(
-              margin: const EdgeInsets.only(left: 8, top: 4),
-              width: 8,
-              height: 8,
-              decoration: const BoxDecoration(
-                color: AppColors.p500,
-                shape: BoxShape.circle,
+                    ),
+                  ),
+                ],
               ),
             ),
-        ],
+            if (unread)
+              Container(
+                margin: const EdgeInsets.only(left: 8, top: 4),
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: AppColors.p500,
+                  shape: BoxShape.circle,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -276,21 +338,25 @@ class _EmptyNotifications extends StatelessWidget {
               color: AppColors.surf,
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.notifications_none_rounded,
-                size: 30, color: AppColors.ink4),
+            child: const Icon(
+              Icons.notifications_none_rounded,
+              size: 30,
+              color: AppColors.ink4,
+            ),
           ),
           const SizedBox(height: 16),
-          Text('새로운 알림이 없어요',
-              style: Theme.of(context).textTheme.titleMedium),
+          Text('새로운 알림이 없어요', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 6),
-          const Text('접수 시작·정산 마감·좋아요 소식이 오면 여기에 모아둘게요.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Pretendard',
-                fontSize: 13,
-                height: 1.5,
-                color: AppColors.ink5,
-              )),
+          const Text(
+            '접수 시작·정산 마감·좋아요 소식이 오면 여기에 모아둘게요.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Pretendard',
+              fontSize: 13,
+              height: 1.5,
+              color: AppColors.ink5,
+            ),
+          ),
         ],
       ),
     );

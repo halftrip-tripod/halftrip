@@ -3,14 +3,15 @@ import 'package:flutter/material.dart';
 import '../../core/app_scope.dart';
 import '../../models/app_models.dart';
 import '../../screens/auth_photo_upload_screen.dart';
-import '../../screens/course_create_screen.dart';
 import '../../screens/lodging_form_screen.dart';
 import '../../screens/planner_screen.dart';
 import '../../screens/receipt_evidence_screen.dart';
 import '../../screens/settlement_screen.dart';
 import '../../screens/submission_package_screen.dart';
+import '../data/models.dart' as mock;
 import '../state/app_state.dart' as mock;
 import '../theme/app_colors.dart';
+import 'course_flow.dart';
 import '../widgets/ui.dart';
 import 'my_trips_tab.dart' show TripStageView, dateRangeOf, durationLabelOf, regionEmojiOf, stageOf;
 
@@ -28,14 +29,9 @@ class TripDetailScreen extends StatefulWidget {
 class _TripDetailScreenState extends State<TripDetailScreen> {
   Future<TripDetail>? _future;
   bool _initialized = false;
-  final Set<int> _checklistDone = {};
 
-  static const _checklist = [
-    '지역화폐 앱 설치',
-    '결제수단(인정 카드) 확인',
-    '인증사진 가이드 확인',
-    '숙소 예약 확인',
-  ];
+  // 출발 준비 체크리스트 — 서버 저장(핸드오프 E). 백엔드 배포 전엔 기본 4항목 폴백.
+  List<ChecklistItem> _checklist = ChecklistItem.defaults();
 
   @override
   void didChangeDependencies() {
@@ -43,6 +39,34 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     if (_initialized) return;
     _future = AppScope.of(context).repository.getTripDetail(widget.tripId);
     _initialized = true;
+    _loadChecklist();
+  }
+
+  Future<void> _loadChecklist() async {
+    try {
+      final items =
+          await AppScope.of(context).repository.getTripChecklist(widget.tripId);
+      if (!mounted || items.isEmpty) return;
+      setState(() => _checklist = items);
+    } catch (_) {
+      // 체크리스트 API 미배포 — 기본 항목으로 표시.
+    }
+  }
+
+  void _toggleChecklist(int index) {
+    setState(() {
+      _checklist = [
+        for (var i = 0; i < _checklist.length; i++)
+          i == index
+              ? _checklist[i].copyWith(checked: !_checklist[i].checked)
+              : _checklist[i],
+      ];
+    });
+    // 낙관 갱신 후 서버 저장 — 실패해도 화면 상태 유지.
+    AppScope.of(context)
+        .repository
+        .updateTripChecklist(widget.tripId, _checklist)
+        .catchError((_) => _checklist);
   }
 
   Future<void> _reload() async {
@@ -56,6 +80,66 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     Navigator.of(context)
         .push(MaterialPageRoute(builder: (_) => screen))
         .then((_) => _reload());
+  }
+
+  /// 코스 만들기 — 목업 1:1 코스 플로우(course_flow)를 실여행 프록시로 태우고,
+  /// 확정 코스가 생기면 saveCourse + selectCourseForTrip으로 실여행에 연결한다.
+  Future<void> _openCourseCreate(TripDetail detail) async {
+    final trip = detail.trip;
+    final proxy = mock.Trip(
+      emoji: regionEmojiOf(trip.regionName),
+      name: '${trip.regionName} ${durationLabelOf(trip)}',
+      region: trip.regionName,
+      dateLabel: dateRangeOf(trip),
+      people: trip.travelerCount,
+      stage: mock.TripStage.before,
+      nights: trip.endDate.difference(trip.startDate).inDays,
+    );
+    await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => CourseCreateScreen(forTrip: proxy)));
+    final course = proxy.course;
+    if (course == null || !mounted) return;
+
+    final controller = AppScope.of(context);
+    final saved = SavedCourse(
+      id: 'trip${trip.id}-${DateTime.now().millisecondsSinceEpoch}',
+      regionId: trip.regionId,
+      regionName: trip.regionName,
+      title: course.title,
+      preferences: const [],
+      stops: [
+        for (final stop in course.stops)
+          SavedCourseStop(
+            placeId: 0,
+            name: stop.name,
+            address: '',
+            latitude: 0,
+            longitude: 0,
+            sourceType: 'MANUAL',
+          ),
+      ],
+      createdAt: DateTime.now(),
+    );
+    await controller.saveCourse(saved);
+    await controller.selectCourseForTrip(tripId: trip.id, courseId: saved.id);
+    // 플래너·지도는 여행 장소(selectedPlaces)를 읽으므로 코스 스톱을 함께 반영한다.
+    try {
+      await controller.repository.replaceTripPlaces(trip.id, [
+        for (var i = 0; i < course.stops.length; i++)
+          TripPlaceItem(
+            id: 0,
+            placeType: PlaceCategory.halfPrice,
+            referencePlaceId: 0,
+            placeName: course.stops[i].name,
+            address: '',
+            visitOrder: i + 1,
+            latitude: null,
+            longitude: null,
+            checked: false,
+          ),
+      ]);
+    } catch (_) {}
+    await _reload();
   }
 
   @override
@@ -118,7 +202,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         else ...[
           OutlineButton('코스 추가하기',
               icon: Icons.add_rounded,
-              onTap: () => _push(CourseCreateScreen(tripDetail: detail))),
+              onTap: () => _openCourseCreate(detail)),
           OutlineButton('${detail.trip.regionName} 인기 코스 보러 가기',
               icon: Icons.chat_bubble_outline_rounded,
               trailingIcon: Icons.chevron_right_rounded,
@@ -135,17 +219,13 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             const Text('출발 준비 체크리스트',
                 style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.3)),
             const Spacer(),
-            Text('${_checklistDone.length}/${_checklist.length}',
+            Text('${_checklist.where((c) => c.checked).length}/${_checklist.length}',
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.p600)),
           ]),
           const SizedBox(height: 10),
           for (var i = 0; i < _checklist.length; i++)
             InkWell(
-              onTap: () => setState(() {
-                _checklistDone.contains(i)
-                    ? _checklistDone.remove(i)
-                    : _checklistDone.add(i);
-              }),
+              onTap: () => _toggleChecklist(i),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Row(children: [
@@ -153,24 +233,24 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                     width: 22,
                     height: 22,
                     decoration: BoxDecoration(
-                      color: _checklistDone.contains(i) ? AppColors.p500 : Colors.white,
+                      color: _checklist[i].checked ? AppColors.p500 : Colors.white,
                       borderRadius: BorderRadius.circular(7),
-                      border: _checklistDone.contains(i)
+                      border: _checklist[i].checked
                           ? null
                           : Border.all(color: AppColors.line, width: 2),
                     ),
-                    child: _checklistDone.contains(i)
+                    child: _checklist[i].checked
                         ? const Icon(Icons.check_rounded, size: 15, color: Colors.white)
                         : null,
                   ),
                   const SizedBox(width: 11),
                   Expanded(
-                    child: Text(_checklist[i],
+                    child: Text(_checklist[i].label,
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: _checklistDone.contains(i) ? AppColors.ink5 : AppColors.ink9,
-                          decoration: _checklistDone.contains(i)
+                          color: _checklist[i].checked ? AppColors.ink5 : AppColors.ink9,
+                          decoration: _checklist[i].checked
                               ? TextDecoration.lineThrough
                               : null,
                         )),
@@ -200,9 +280,11 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   List<Widget> _during(TripDetail detail) {
     final controller = AppScope.of(context);
     final course = controller.selectedCourseForTrip(detail.trip.id);
-    final authCount = detail.uploadedFiles
-        .where((f) => f.fileCategory == FileCategory.authPhoto)
-        .length;
+    final authCertified = detail.trip.authCertifiedCount ??
+        detail.uploadedFiles
+            .where((f) => f.fileCategory == FileCategory.authPhoto)
+            .length;
+    final authRequired = detail.trip.authRequiredCount ?? 2;
     final spent = detail.trip.totalSpentAmount;
     final goal = detail.trip.refundConditionAmount;
     final lodgingDone = detail.uploadedFiles
@@ -215,8 +297,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       _DCard(title: '관광지 인증', children: [
         ProgressGauge(
           label: '관광지 인증샷',
-          value: '${authCount.clamp(0, 2)} / 2곳',
-          progress: (authCount / 2).clamp(0.0, 1.0),
+          value: '${authCertified.clamp(0, authRequired)} / $authRequired곳',
+          progress: (authCertified / authRequired).clamp(0.0, 1.0),
           green: true,
         ),
         _NextLink('인증샷 추가하기',
@@ -265,16 +347,18 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         _DCard(title: '여행 코스', children: [
           OutlineButton('코스 추가하기',
               icon: Icons.add_rounded,
-              onTap: () => _push(CourseCreateScreen(tripDetail: detail))),
+              onTap: () => _openCourseCreate(detail)),
         ]),
     ];
   }
 
   // ───────────────────── 정산
   List<Widget> _settle(TripDetail detail) {
-    final authCount = detail.uploadedFiles
-        .where((f) => f.fileCategory == FileCategory.authPhoto)
-        .length;
+    final authCount = detail.trip.authCertifiedCount ??
+        detail.uploadedFiles
+            .where((f) => f.fileCategory == FileCategory.authPhoto)
+            .length;
+    final authRequired = detail.trip.authRequiredCount ?? 2;
     final lodgingDone = detail.uploadedFiles
             .any((f) => f.fileCategory == FileCategory.lodgingConfirmation) ||
         detail.lodgingInfo?.uploadedFileId != null;
@@ -285,7 +369,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       _TripHeader(detail: detail, stage: TripStageView.settle),
       const _StageBar(current: 2),
       _DCard(title: '증빙 자료 준비', children: [
-        _CheckLine('관광지 인증샷 ${authCount.clamp(0, 2)}/2', done: authCount >= 2),
+        _CheckLine('관광지 인증샷 ${authCount.clamp(0, authRequired)}/$authRequired',
+            done: authCount >= authRequired),
         _CheckLine(
           '영수증 · 소비 ${_man(detail.trip.totalSpentAmount)}${spentOk ? ' (조건 충족)' : ''}',
           done: detail.receipts.isNotEmpty && spentOk,

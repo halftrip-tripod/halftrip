@@ -210,10 +210,13 @@ class TripCard extends StatelessWidget {
       TripStageView.during => ('여행 중', PillTone.live),
       _ => ('정산 신청', PillTone.warn),
     };
+    final deadline = trip.settlementDeadline;
     final dday = switch (stage) {
       TripStageView.before => '출발 D-${start.difference(today).inDays}',
       TripStageView.during => 'Day ${today.difference(start).inDays + 1} / $totalDays',
-      _ => '여행 종료',
+      _ => deadline == null
+          ? '여행 종료'
+          : '정산 마감 D-${DateUtils.dateOnly(deadline).difference(today).inDays}',
     };
     final next = switch (stage) {
       TripStageView.before => '출발 전 준비하기',
@@ -246,6 +249,28 @@ class TripCard extends StatelessWidget {
             ]),
           ),
         ]),
+        if (stage == TripStageView.before &&
+            trip.checklistDoneCount != null &&
+            (trip.checklistTotal ?? 0) > 0) ...[
+          const SizedBox(height: 14),
+          ProgressGauge(
+            label: '출발 체크리스트',
+            value: '${trip.checklistDoneCount} / ${trip.checklistTotal}',
+            progress:
+                (trip.checklistDoneCount! / trip.checklistTotal!).clamp(0.0, 1.0),
+          ),
+        ],
+        if (stage == TripStageView.during &&
+            trip.authCertifiedCount != null &&
+            (trip.authRequiredCount ?? 0) > 0) ...[
+          const SizedBox(height: 14),
+          ProgressGauge(
+            label: '관광지 인증',
+            value: '${trip.authCertifiedCount} / ${trip.authRequiredCount}곳',
+            progress: (trip.authCertifiedCount! / trip.authRequiredCount!)
+                .clamp(0.0, 1.0),
+          ),
+        ],
         if (stage == TripStageView.during && trip.refundConditionAmount > 0) ...[
           const SizedBox(height: 14),
           ProgressGauge(

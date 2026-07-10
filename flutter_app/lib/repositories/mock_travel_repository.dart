@@ -245,7 +245,7 @@ class MockTravelRepository implements TravelRepository {
         digitalTourCardApplyUrl:
             'https://www.gangjintour.com/advance/advance_req.html?',
         dataSourceNote: 'SAMPLE_SEED',
-        statusCode: 'PREPARING',
+        statusCode: 'APPLYING',
         digitalBenefitAvailable: true,
         displayOrder: 2,
         mapTopPercent: 86,
@@ -309,7 +309,7 @@ class MockTravelRepository implements TravelRepository {
         halfPriceApplyUrl: 'https://tour.pc.go.kr/Home/index',
         digitalTourCardApplyUrl: 'https://tour.pc.go.kr/Home/index',
         dataSourceNote: 'SAMPLE_SEED',
-        statusCode: 'PREPARING',
+        statusCode: 'APPLYING',
         digitalBenefitAvailable: true,
         displayOrder: 3,
         mapTopPercent: 18,
@@ -475,6 +475,25 @@ class MockTravelRepository implements TravelRepository {
 
   @override
   Future<AppUser> getUser(int userId) async => _user;
+
+  @override
+  Future<AppUser> updateResidence(int userId, String residence) async {
+    _user = _user.copyWith(residence: residence);
+    return _user;
+  }
+
+  @override
+  Future<AppUser> updateProfile(
+    int userId, {
+    String? nickname,
+    String? avatarPreset,
+  }) async {
+    _user = _user.copyWith(
+      nickname: nickname,
+      avatarPreset: avatarPreset,
+    );
+    return _user;
+  }
 
   @override
   Future<List<TripSummary>> getTrips(int userId) async {
@@ -1265,6 +1284,22 @@ class MockTravelRepository implements TravelRepository {
   ) async {
     _user = _user.copyWith(notificationSettings: settings);
     return settings;
+  }
+
+  final Map<int, List<ChecklistItem>> _checklists = {};
+
+  @override
+  Future<List<ChecklistItem>> getTripChecklist(int tripId) async {
+    return _checklists.putIfAbsent(tripId, ChecklistItem.defaults);
+  }
+
+  @override
+  Future<List<ChecklistItem>> updateTripChecklist(
+    int tripId,
+    List<ChecklistItem> items,
+  ) async {
+    _checklists[tripId] = List.of(items);
+    return items;
   }
 
   @override

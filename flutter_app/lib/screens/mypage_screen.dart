@@ -140,17 +140,58 @@ class _MyPageScreenState extends State<MyPageScreen> {
   Future<void> _confirmLogout() async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('로그아웃'),
-        content: const Text('로그아웃하시겠어요?'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(c, false),
-              child: const Text('취소')),
-          FilledButton(
-              onPressed: () => Navigator.pop(c, true),
-              child: const Text('로그아웃')),
-        ],
+      builder: (c) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 26, 22, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('로그아웃 하시겠어요?',
+                  style: TextStyle(
+                      fontFamily: 'Pretendard',
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.ink9,
+                      letterSpacing: -0.3)),
+              const SizedBox(height: 18),
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(c, false),
+                    style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 48),
+                        side: const BorderSide(color: AppColors.line, width: 1.5),
+                        foregroundColor: AppColors.ink7,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14))),
+                    child: const Text('취소',
+                        style: TextStyle(
+                            fontFamily: 'Pretendard',
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w800)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(c, true),
+                    style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 48),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14))),
+                    child: const Text('로그아웃',
+                        style: TextStyle(
+                            fontFamily: 'Pretendard',
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w800)),
+                  ),
+                ),
+              ]),
+            ],
+          ),
+        ),
       ),
     );
     if (ok != true || !mounted) return;

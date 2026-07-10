@@ -103,21 +103,38 @@ class AppController extends ChangeNotifier {
 
   /// 거주지 변경 — 마이페이지에서 온보딩 완료 후 거주지만 갱신한다.
   /// (온보딩 진입 플래그를 건드리지 않아 completeResidenceSetup과 구분된다.)
-  void updateResidence(String residence) {
-    currentUser = currentUser?.copyWith(residence: residence);
+  Future<void> updateResidence(String residence) async {
+    final user = currentUser;
+    if (user == null) return;
+    // 낙관 갱신 후 서버 동기화 — 거주지 API(핸드오프 K) 배포 전에는 실패해도 로컬 유지.
+    currentUser = user.copyWith(residence: residence);
     notifyListeners();
+    try {
+      final updated = await repository.updateResidence(user.id, residence);
+      currentUser = currentUser?.copyWith(residence: updated.residence);
+      notifyListeners();
+    } catch (_) {}
   }
 
-  /// 프로필 편집 — 닉네임·아바타 프리셋 변경. (백엔드 연동 전 로컬 갱신)
-  void updateProfile({String? nickname, String? avatarPreset}) {
+  /// 프로필 편집 — 닉네임·아바타 프리셋 변경. 낙관 갱신 + 서버 동기화(핸드오프 K).
+  Future<void> updateProfile({String? nickname, String? avatarPreset}) async {
     final user = currentUser;
     if (user == null) return;
     final trimmed = nickname?.trim();
+    final effectiveNickname =
+        (trimmed != null && trimmed.isNotEmpty) ? trimmed : null;
     currentUser = user.copyWith(
-      nickname: (trimmed != null && trimmed.isNotEmpty) ? trimmed : null,
+      nickname: effectiveNickname,
       avatarPreset: avatarPreset,
     );
     notifyListeners();
+    try {
+      await repository.updateProfile(
+        user.id,
+        nickname: effectiveNickname,
+        avatarPreset: avatarPreset,
+      );
+    } catch (_) {}
   }
 
   /// 로그아웃 — 세션 상태를 비우고 로그인 화면으로 되돌린다.
@@ -174,6 +191,21 @@ class AppController extends ChangeNotifier {
     await _runBusy(() async {
       trips = await _repository.getTrips(user.id);
     }, resetError: false);
+    await _pruneStaleCourseSelections();
+  }
+
+  /// 존재하지 않는 여행을 가리키는 확정 코스 매핑 제거.
+  /// mock 여행 id가 재사용될 때 이전 세션의 로컬 저장 매핑이 새 여행에 붙는 것을 막는다.
+  Future<void> _pruneStaleCourseSelections() async {
+    final validIds = trips.map((t) => t.id).toSet();
+    final pruned = {
+      for (final entry in selectedCourseIdsByTrip.entries)
+        if (validIds.contains(entry.key)) entry.key: entry.value,
+    };
+    if (pruned.length == selectedCourseIdsByTrip.length) return;
+    selectedCourseIdsByTrip = pruned;
+    await _persistLocalDashboardData();
+    notifyListeners();
   }
 
   Future<AppUser> refreshCurrentUser() async {

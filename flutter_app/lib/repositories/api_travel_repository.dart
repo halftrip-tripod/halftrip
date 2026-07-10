@@ -58,6 +58,13 @@ class ApiTravelRepository implements TravelRepository {
           body: jsonEncode(body ?? const {}),
         );
         break;
+      case 'PATCH':
+        response = await http.patch(
+          uri,
+          headers: headers,
+          body: jsonEncode(body ?? const {}),
+        );
+        break;
       case 'DELETE':
         response = await http.delete(
           uri,
@@ -181,6 +188,33 @@ class ApiTravelRepository implements TravelRepository {
   @override
   Future<AppUser> getUser(int userId) async {
     final response = await _jsonRequest('GET', '/users/$userId');
+    return AppUser.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<AppUser> updateResidence(int userId, String residence) async {
+    final response = await _jsonRequest(
+      'PATCH',
+      '/users/$userId/residence',
+      body: {'residence': residence},
+    );
+    return AppUser.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<AppUser> updateProfile(
+    int userId, {
+    String? nickname,
+    String? avatarPreset,
+  }) async {
+    final response = await _jsonRequest(
+      'PUT',
+      '/users/$userId/profile',
+      body: {
+        if (nickname != null) 'nickname': nickname,
+        if (avatarPreset != null) 'avatarPreset': avatarPreset,
+      },
+    );
     return AppUser.fromJson(response['data'] as Map<String, dynamic>);
   }
 
@@ -629,6 +663,31 @@ class ApiTravelRepository implements TravelRepository {
     final uri = _uri('/integrations/pdf/merge/$tripId')
         .replace(query: uploadedFileIds.map((id) => 'uploadedFileIds=$id').join('&'));
     return _downloadFromUri(uri, 'trip-$tripId-documents.pdf');
+  }
+
+  @override
+  Future<List<ChecklistItem>> getTripChecklist(int tripId) async {
+    final response = await _jsonRequest('GET', '/trips/$tripId/checklist');
+    final items = response['data'] as List<dynamic>? ?? [];
+    return items
+        .map((item) => ChecklistItem.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<List<ChecklistItem>> updateTripChecklist(
+    int tripId,
+    List<ChecklistItem> items,
+  ) async {
+    final response = await _jsonRequest(
+      'PUT',
+      '/trips/$tripId/checklist',
+      body: {'items': items.map((item) => item.toJson()).toList()},
+    );
+    final updated = response['data'] as List<dynamic>? ?? [];
+    return updated
+        .map((item) => ChecklistItem.fromJson(item as Map<String, dynamic>))
+        .toList();
   }
 
   @override
