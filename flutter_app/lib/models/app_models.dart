@@ -188,6 +188,40 @@ class NotificationSettings {
       };
 }
 
+/// 출발 준비 체크리스트 항목 — 계약: GET/PUT /api/trips/{tripId}/checklist (핸드오프 E, 사용자 직접 체크안).
+class ChecklistItem {
+  const ChecklistItem({
+    required this.key,
+    required this.label,
+    required this.checked,
+  });
+
+  final String key;
+  final String label;
+  final bool checked;
+
+  ChecklistItem copyWith({bool? checked}) =>
+      ChecklistItem(key: key, label: label, checked: checked ?? this.checked);
+
+  factory ChecklistItem.fromJson(Map<String, dynamic> json) => ChecklistItem(
+        key: json['key'] as String? ?? '',
+        label: json['label'] as String? ?? '',
+        checked: json['checked'] as bool? ?? false,
+      );
+
+  Map<String, dynamic> toJson() => {'key': key, 'checked': checked};
+
+  /// 서버 시드와 동일한 기본 4항목 — 백엔드 배포 전 폴백.
+  static List<ChecklistItem> defaults() => const [
+        ChecklistItem(key: 'currency_app', label: '지역화폐 앱 설치', checked: false),
+        ChecklistItem(
+            key: 'payment_method', label: '결제수단(인정 카드) 확인', checked: false),
+        ChecklistItem(
+            key: 'auth_guide', label: '인증사진 가이드 확인', checked: false),
+        ChecklistItem(key: 'lodging', label: '숙소 예약 확인', checked: false),
+      ];
+}
+
 /// 알림 유형 — 백엔드 wire enum(REGION_OPEN 등)과 매핑.
 /// 계약: GET /api/notifications → [{type,title,body,createdAt,read}]
 enum NotificationType {

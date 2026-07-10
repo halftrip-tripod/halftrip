@@ -18,6 +18,16 @@ abstract class TravelRepository {
     required String residence,
   });
   Future<AppUser> getUser(int userId);
+
+  /// 거주지 수정 — PATCH /api/users/{userId}/residence (핸드오프 K).
+  Future<AppUser> updateResidence(int userId, String residence);
+
+  /// 프로필(닉네임·아바타) 수정 — PUT /api/users/{userId}/profile (핸드오프 K).
+  Future<AppUser> updateProfile(
+    int userId, {
+    String? nickname,
+    String? avatarPreset,
+  });
   Future<List<TripSummary>> getTrips(int userId);
   Future<TripDetail> getTripDetail(int tripId);
   Future<List<RegionSummary>> getRegions({String? residence});
@@ -116,6 +126,15 @@ abstract class TravelRepository {
   Future<List<RegionSummary>> addFavoriteRegion(int userId, int regionId);
   Future<List<RegionSummary>> removeFavoriteRegion(int userId, int regionId);
   Future<String> downloadMergedPdf(int tripId, List<int> uploadedFileIds);
+
+  /// 출발 준비 체크리스트 조회 — GET /api/trips/{tripId}/checklist (핸드오프 E).
+  Future<List<ChecklistItem>> getTripChecklist(int tripId);
+
+  /// 체크 상태 저장(전체 교체) — PUT /api/trips/{tripId}/checklist.
+  Future<List<ChecklistItem>> updateTripChecklist(
+    int tripId,
+    List<ChecklistItem> items,
+  );
 
   /// 알림 센터 — GET /api/notifications?userId= (최신순).
   Future<List<AppNotification>> getNotifications(int userId);

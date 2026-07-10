@@ -477,6 +477,25 @@ class MockTravelRepository implements TravelRepository {
   Future<AppUser> getUser(int userId) async => _user;
 
   @override
+  Future<AppUser> updateResidence(int userId, String residence) async {
+    _user = _user.copyWith(residence: residence);
+    return _user;
+  }
+
+  @override
+  Future<AppUser> updateProfile(
+    int userId, {
+    String? nickname,
+    String? avatarPreset,
+  }) async {
+    _user = _user.copyWith(
+      nickname: nickname,
+      avatarPreset: avatarPreset,
+    );
+    return _user;
+  }
+
+  @override
   Future<List<TripSummary>> getTrips(int userId) async {
     final trips = _trips.values.toList()
       ..sort((a, b) => b.startDate.compareTo(a.startDate));
@@ -1265,6 +1284,22 @@ class MockTravelRepository implements TravelRepository {
   ) async {
     _user = _user.copyWith(notificationSettings: settings);
     return settings;
+  }
+
+  final Map<int, List<ChecklistItem>> _checklists = {};
+
+  @override
+  Future<List<ChecklistItem>> getTripChecklist(int tripId) async {
+    return _checklists.putIfAbsent(tripId, ChecklistItem.defaults);
+  }
+
+  @override
+  Future<List<ChecklistItem>> updateTripChecklist(
+    int tripId,
+    List<ChecklistItem> items,
+  ) async {
+    _checklists[tripId] = List.of(items);
+    return items;
   }
 
   @override
