@@ -151,20 +151,24 @@ class NotificationSettings {
   const NotificationSettings({
     required this.favoriteRegionPreopenAlert,
     required this.tripEndSettlementAlert,
+    this.marketingAlert = false,
   });
 
   final bool favoriteRegionPreopenAlert;
   final bool tripEndSettlementAlert;
+  final bool marketingAlert;
 
   NotificationSettings copyWith({
     bool? favoriteRegionPreopenAlert,
     bool? tripEndSettlementAlert,
+    bool? marketingAlert,
   }) {
     return NotificationSettings(
       favoriteRegionPreopenAlert:
           favoriteRegionPreopenAlert ?? this.favoriteRegionPreopenAlert,
       tripEndSettlementAlert:
           tripEndSettlementAlert ?? this.tripEndSettlementAlert,
+      marketingAlert: marketingAlert ?? this.marketingAlert,
     );
   }
 
@@ -173,12 +177,14 @@ class NotificationSettings {
       favoriteRegionPreopenAlert:
           json['favoriteRegionPreopenAlert'] as bool? ?? false,
       tripEndSettlementAlert: json['tripEndSettlementAlert'] as bool? ?? false,
+      marketingAlert: json['marketingAlert'] as bool? ?? false,
     );
   }
 
   Map<String, dynamic> toJson() => {
         'favoriteRegionPreopenAlert': favoriteRegionPreopenAlert,
         'tripEndSettlementAlert': tripEndSettlementAlert,
+        'marketingAlert': marketingAlert,
       };
 }
 
@@ -691,6 +697,11 @@ class TripSummary {
     required this.totalSpentAmount,
     required this.refundConditionAmount,
     required this.settlementApplied,
+    this.authCertifiedCount,
+    this.authRequiredCount,
+    this.checklistDoneCount,
+    this.checklistTotal,
+    this.settlementDeadline,
   });
 
   final int id;
@@ -704,6 +715,13 @@ class TripSummary {
   final int totalSpentAmount;
   final int refundConditionAmount;
   final bool settlementApplied;
+
+  /// 여행 진행 카운트(백엔드 E) — 서버 미지원 시 null.
+  final int? authCertifiedCount;
+  final int? authRequiredCount;
+  final int? checklistDoneCount;
+  final int? checklistTotal;
+  final DateTime? settlementDeadline;
 
   TripSummary copyWith({
     int? travelerCount,
@@ -723,6 +741,11 @@ class TripSummary {
       totalSpentAmount: totalSpentAmount ?? this.totalSpentAmount,
       refundConditionAmount: refundConditionAmount,
       settlementApplied: settlementApplied ?? this.settlementApplied,
+      authCertifiedCount: authCertifiedCount,
+      authRequiredCount: authRequiredCount,
+      checklistDoneCount: checklistDoneCount,
+      checklistTotal: checklistTotal,
+      settlementDeadline: settlementDeadline,
     );
   }
 
@@ -739,6 +762,13 @@ class TripSummary {
       totalSpentAmount: json['totalSpentAmount'] as int? ?? 0,
       refundConditionAmount: json['refundConditionAmount'] as int? ?? 0,
       settlementApplied: json['settlementApplied'] as bool? ?? false,
+      authCertifiedCount: json['authCertifiedCount'] as int?,
+      authRequiredCount: json['authRequiredCount'] as int?,
+      checklistDoneCount: json['checklistDoneCount'] as int?,
+      checklistTotal: json['checklistTotal'] as int?,
+      settlementDeadline: json['settlementDeadline'] == null
+          ? null
+          : DateTime.tryParse(json['settlementDeadline'] as String),
     );
   }
 }
@@ -839,6 +869,10 @@ class AuthPhotoReviewResult {
     required this.facesClear,
     required this.backgroundVisible,
     required this.reason,
+    this.gpsPresent,
+    this.capturedAt,
+    this.locationVerified,
+    this.withinTripPeriod,
   });
 
   final bool approved;
@@ -848,6 +882,12 @@ class AuthPhotoReviewResult {
   final bool backgroundVisible;
   final String reason;
 
+  /// EXIF 위치·시각 검증(백엔드 F) — 검증 미수행이면 null.
+  final bool? gpsPresent;
+  final DateTime? capturedAt;
+  final bool? locationVerified;
+  final bool? withinTripPeriod;
+
   factory AuthPhotoReviewResult.fromJson(Map<String, dynamic> json) {
     return AuthPhotoReviewResult(
       approved: json['approved'] as bool? ?? false,
@@ -856,6 +896,12 @@ class AuthPhotoReviewResult {
       facesClear: json['facesClear'] as bool? ?? false,
       backgroundVisible: json['backgroundVisible'] as bool? ?? false,
       reason: json['reason'] as String? ?? '',
+      gpsPresent: json['gpsPresent'] as bool?,
+      capturedAt: json['capturedAt'] == null
+          ? null
+          : DateTime.tryParse(json['capturedAt'] as String),
+      locationVerified: json['locationVerified'] as bool?,
+      withinTripPeriod: json['withinTripPeriod'] as bool?,
     );
   }
 }

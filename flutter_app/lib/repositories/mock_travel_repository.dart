@@ -1246,7 +1246,11 @@ class MockTravelRepository implements TravelRepository {
   }
 
   @override
-  Future<void> applySettlement(int tripId) async {
+  Future<void> applySettlement(
+    int tripId, {
+    String? applicantName,
+    String? phoneNumber,
+  }) async {
     final trip = _requireTrip(tripId);
     _trips[tripId] = trip.copyWith(
       status: '정산 신청 완료',
@@ -1264,13 +1268,13 @@ class MockTravelRepository implements TravelRepository {
   }
 
   @override
-  Future<List<AppNotification>> getNotifications() async {
+  Future<List<AppNotification>> getNotifications(int userId) async {
     return [..._notifications]
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
   @override
-  Future<void> markAllNotificationsRead() async {
+  Future<void> markAllNotificationsRead(int userId) async {
     _notifications =
         _notifications.map((n) => n.copyWith(read: true)).toList();
   }

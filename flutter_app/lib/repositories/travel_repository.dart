@@ -103,7 +103,12 @@ abstract class TravelRepository {
   String? getLodgingFormTemplatePreviewUrl(int tripId);
   Future<String> downloadLodgingFormPdf(int tripId);
   Future<SettlementSummary> getSettlementSummary(int tripId);
-  Future<void> applySettlement(int tripId);
+  /// 정산 신청 — 실명·전화번호는 정산 시점에만 수집(개인정보 최소화 계약 B).
+  Future<void> applySettlement(
+    int tripId, {
+    String? applicantName,
+    String? phoneNumber,
+  });
   Future<NotificationSettings> updateNotificationSettings(
     int userId,
     NotificationSettings settings,
@@ -112,9 +117,9 @@ abstract class TravelRepository {
   Future<List<RegionSummary>> removeFavoriteRegion(int userId, int regionId);
   Future<String> downloadMergedPdf(int tripId, List<int> uploadedFileIds);
 
-  /// 알림 센터 — GET /api/notifications (최신순).
-  Future<List<AppNotification>> getNotifications();
+  /// 알림 센터 — GET /api/notifications?userId= (최신순).
+  Future<List<AppNotification>> getNotifications(int userId);
 
-  /// 알림 모두 읽음 — POST /api/notifications/read-all.
-  Future<void> markAllNotificationsRead();
+  /// 알림 모두 읽음 — POST /api/notifications/read-all?userId=.
+  Future<void> markAllNotificationsRead(int userId);
 }

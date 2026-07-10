@@ -86,6 +86,12 @@ class _MyPageScreenState extends State<MyPageScreen> {
                 onChanged: (v) =>
                     _save(_settings.copyWith(tripEndSettlementAlert: v)),
               ),
+              _ToggleRow(
+                icon: Icons.local_offer_outlined,
+                label: '혜택 · 마케팅 알림',
+                value: _settings.marketingAlert,
+                onChanged: (v) => _save(_settings.copyWith(marketingAlert: v)),
+              ),
             ]),
             const _GroupLabel('이용 안내'),
             _MenuGroup(rows: [

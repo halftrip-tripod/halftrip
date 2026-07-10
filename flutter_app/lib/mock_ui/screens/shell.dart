@@ -122,8 +122,10 @@ class _TopBarState extends State<_TopBar> {
 
   Future<void> _loadUnread() async {
     try {
-      final notifications =
-          await AppScope.of(context).repository.getNotifications();
+      final controller = AppScope.of(context);
+      final userId = controller.currentUser?.id;
+      if (userId == null) return;
+      final notifications = await controller.repository.getNotifications(userId);
       if (!mounted) return;
       setState(() => _unread = notifications.where((n) => !n.read).length);
     } catch (_) {
