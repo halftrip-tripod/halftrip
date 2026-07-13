@@ -148,7 +148,7 @@ class Post {
   bool likedByMe;
   bool savedByMe;
   final bool mine;
-  final bool private;
+  bool private; // 나만보기 → 공개 전환 가능
   final String? title; // 작성한 글 목록용 제목
 }
 

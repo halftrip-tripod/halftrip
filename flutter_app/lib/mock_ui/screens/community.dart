@@ -310,6 +310,7 @@ class PostCard extends StatelessWidget {
             onTap: () {
               post.likedByMe = !post.likedByMe;
               post.likes += post.likedByMe ? 1 : -1;
+              AppState.I.persistCommunity();
               onChanged();
             },
           ),
@@ -323,6 +324,7 @@ class PostCard extends StatelessWidget {
             onTap: () {
               post.savedByMe = !post.savedByMe;
               post.saves += post.savedByMe ? 1 : -1;
+              AppState.I.persistCommunity();
               onChanged();
             },
           ),
@@ -530,6 +532,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
                 onTap: () => setState(() {
                   p.likedByMe = !p.likedByMe;
                   p.likes += p.likedByMe ? 1 : -1;
+                  AppState.I.persistCommunity();
                 }),
               ),
               const SizedBox(width: 16),
@@ -542,6 +545,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
                 onTap: () => setState(() {
                   p.savedByMe = !p.savedByMe;
                   p.saves += p.savedByMe ? 1 : -1;
+                  AppState.I.persistCommunity();
                 }),
               ),
             ]),

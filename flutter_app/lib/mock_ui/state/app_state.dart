@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/mock_data.dart';
 import '../data/models.dart';
@@ -95,9 +98,100 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 나만보기 글을 커뮤니티에 공개 전환.
+  void publishPost(Post p) {
+    p.private = false;
+    notifyListeners();
+    persistCommunity();
+  }
+
   void addPost(Post p) {
     posts.insert(0, p);
     notifyListeners();
+    persistCommunity();
+  }
+
+  // ── 커뮤니티 로컬 영속화 — 서버(핸드오프 J) 전까지 내 글·좋아요·저장을 기기에 유지.
+  static const _myPostsKey = 'mock_community_my_posts';
+  static const _reactionsKey = 'mock_community_reactions';
+  bool _communityRestored = false;
+
+  Future<void> restoreCommunity() async {
+    if (_communityRestored) return;
+    _communityRestored = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      for (final raw in (prefs.getStringList(_myPostsKey) ?? const []).reversed) {
+        final j = jsonDecode(raw) as Map<String, dynamic>;
+        final text = j['text'] as String? ?? '';
+        if (text.isEmpty || posts.any((p) => p.mine && p.text == text)) continue;
+        posts.insert(
+          0,
+          Post(
+            avatarEmoji: j['avatarEmoji'] as String? ?? '🐳',
+            avatarBg: Color(j['avatarBg'] as int? ?? 0xFFE0F2FE),
+            nick: j['nick'] as String? ?? nickname,
+            region: j['region'] as String? ?? '',
+            timeAgo: j['timeAgo'] as String? ?? '저장됨',
+            tag: PostTag.values[(j['tag'] as int? ?? 0).clamp(0, PostTag.values.length - 1)],
+            text: text,
+            photos: ((j['photos'] as List<dynamic>?) ?? const []).cast<String>(),
+            title: j['title'] as String?,
+            likes: j['likes'] as int? ?? 0,
+            comments: j['comments'] as int? ?? 0,
+            saves: j['saves'] as int? ?? 0,
+            mine: true,
+            private: j['private'] as bool? ?? false,
+          ),
+        );
+      }
+      final reactions =
+          jsonDecode(prefs.getString(_reactionsKey) ?? '{}') as Map<String, dynamic>;
+      for (final p in posts) {
+        final r = reactions[p.text] as Map<String, dynamic>?;
+        if (r == null) continue;
+        if (r['liked'] == true && !p.likedByMe) {
+          p.likedByMe = true;
+          p.likes += 1;
+        }
+        if (r['saved'] == true && !p.savedByMe) {
+          p.savedByMe = true;
+          p.saves += 1;
+        }
+      }
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> persistCommunity() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_myPostsKey, [
+        for (final p in posts.where((p) => p.mine))
+          jsonEncode({
+            'avatarEmoji': p.avatarEmoji,
+            'avatarBg': p.avatarBg.toARGB32(),
+            'nick': p.nick,
+            'region': p.region,
+            'timeAgo': p.timeAgo,
+            'tag': p.tag.index,
+            'text': p.text,
+            'photos': p.photos,
+            'title': p.title,
+            'likes': p.likes,
+            'comments': p.comments,
+            'saves': p.saves,
+            'private': p.private,
+          }),
+      ]);
+      await prefs.setString(
+        _reactionsKey,
+        jsonEncode({
+          for (final p in posts.where((p) => p.likedByMe || p.savedByMe))
+            p.text: {'liked': p.likedByMe, 'saved': p.savedByMe},
+        }),
+      );
+    } catch (_) {}
   }
 
   void readAllNotifications() {

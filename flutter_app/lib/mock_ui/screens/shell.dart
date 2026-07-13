@@ -32,6 +32,8 @@ class _MainShellState extends State<MainShell> {
   void initState() {
     super.initState();
     AppState.I.tabRequest.addListener(_onTabRequest);
+    // 커뮤니티 내 글·반응 로컬 복원 (서버 J 전까지 기기 유지).
+    AppState.I.restoreCommunity();
   }
 
   @override
