@@ -105,8 +105,9 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
         child: Center(child: Text(widget.emptyMessage)),
       );
     }
-    return SizedBox(
-      height: widget.height,
+    // 지도 비율 4:3 고정 (호출부 height 대신 가로 기준).
+    return AspectRatio(
+      aspectRatio: 4 / 3,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
         child: FutureBuilder<bool>(
