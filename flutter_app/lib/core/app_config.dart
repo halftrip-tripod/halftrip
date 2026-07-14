@@ -6,6 +6,7 @@ class AppConfig {
     required this.useMockApi,
     required this.mapProvider,
     required this.kakaoMapAppKey,
+    required this.googleMapApiKey,
   });
 
   factory AppConfig.fromEnvironment() {
@@ -22,6 +23,8 @@ class AppConfig {
       useMockApi: bool.fromEnvironment('USE_MOCK_API', defaultValue: false),
       mapProvider: String.fromEnvironment('MAP_PROVIDER', defaultValue: 'mock'),
       kakaoMapAppKey: String.fromEnvironment('KAKAO_MAP_APP_KEY', defaultValue: ''),
+      googleMapApiKey:
+          String.fromEnvironment('GOOGLE_MAP_API_KEY', defaultValue: ''),
     );
   }
 
@@ -31,7 +34,11 @@ class AppConfig {
   final bool useMockApi;
   final String mapProvider;
   final String kakaoMapAppKey;
+  final String googleMapApiKey;
 
   bool get canUseKakaoMap =>
       mapProvider.toLowerCase() == 'kakao' && kakaoMapAppKey.isNotEmpty;
+
+  bool get canUseGoogleMap =>
+      mapProvider.toLowerCase() == 'google' && googleMapApiKey.isNotEmpty;
 }
