@@ -25,6 +25,9 @@
 | 11 | 저장 코스함 | `saved_courses` 테이블 + CRUD | 코스함·홈 저장코스 | 협의 |
 | 12 | 커뮤니티 전체 | 피드·상세·작성·댓글·좋아요·북마크·프로필 (Phase 3) | 커뮤니티 전체 | 협의 |
 | 13 | 회원 탈퇴 | `DELETE /api/users/{userId}` (soft delete, 정책 확정 후) | 설정 | 정훈 |
+| 14 | 🐛 직접 장소 추가 불가 | `POST /trips/{id}/places`에 `referencePlaceId` 없이 보내면 DB 에러(컬럼 NOT NULL) — 코스 "직접 만들기"로 검색해 넣는 장소가 저장 안 됨. **nullable로 변경 필요** (2026-07-14 실서버 테스트로 발견) | 코스 직접 만들기 | 정훈 |
+| 15 | 🐛 정산 응답 enum 위반 | `settlement-apply` 응답 `status`가 `"정산 신청 완료"` 한글 문자열 — 계약은 `SETTLEMENT_REQUESTED` enum | 정산 | 정훈 |
+| 16 | 여행 삭제 | `DELETE /api/trips/{tripId}` 없음 — 잘못 만든 여행을 지울 방법이 없음 | 내 여행 | 정훈 |
 
 ## 우선순위
 
