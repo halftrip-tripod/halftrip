@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
@@ -38,7 +40,59 @@ class GooglePlaceMapView extends StatefulWidget {
 }
 
 class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
-  late final Future<bool> _ready = ensureGoogleMapsJs(widget.apiKey);
+  late final Future<bool> _ready = _prepare();
+
+  BitmapDescriptor? _pin;
+  BitmapDescriptor? _pinHighlight;
+
+  Future<bool> _prepare() async {
+    final loaded = await ensureGoogleMapsJs(widget.apiKey);
+    _pin = await _drawPin(const Color(0xFF0EA5E9));
+    _pinHighlight = await _drawPin(const Color(0xFF0369A1));
+    return loaded;
+  }
+
+  /// 디자인 시스템 하늘색 원형 핀 (흰 테두리 + 중앙 점) — 기본 빨간 핀 대체.
+  static Future<BitmapDescriptor> _drawPin(Color color) async {
+    const size = 48.0;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final center = const Offset(size / 2, size / 2);
+    canvas.drawCircle(center, 22,
+        Paint()..color = Colors.black.withValues(alpha: .12));
+    canvas.drawCircle(center, 20, Paint()..color = Colors.white);
+    canvas.drawCircle(center, 16, Paint()..color = color);
+    canvas.drawCircle(center, 5.5, Paint()..color = Colors.white);
+    final image = await recorder
+        .endRecording()
+        .toImage(size.toInt(), size.toInt());
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.bytes(bytes!.buffer.asUint8List(),
+        width: 34, height: 34);
+  }
+
+  /// 하프트립 톤 지도 스타일 — 파스텔 배경·하늘색 물·POI 아이콘 최소화.
+  static const _halftripStyle = '''
+[
+  {"elementType":"geometry","stylers":[{"color":"#f8fafc"}]},
+  {"elementType":"labels.text.fill","stylers":[{"color":"#64748b"}]},
+  {"elementType":"labels.text.stroke","stylers":[{"color":"#ffffff"}]},
+  {"featureType":"water","elementType":"geometry","stylers":[{"color":"#bae6fd"}]},
+  {"featureType":"water","elementType":"labels.text.fill","stylers":[{"color":"#0284c7"}]},
+  {"featureType":"landscape.natural","elementType":"geometry","stylers":[{"color":"#eef4ee"}]},
+  {"featureType":"poi","elementType":"labels.icon","stylers":[{"visibility":"off"}]},
+  {"featureType":"poi","elementType":"labels.text","stylers":[{"visibility":"off"}]},
+  {"featureType":"poi.park","elementType":"geometry","stylers":[{"color":"#dcefdc"}]},
+  {"featureType":"poi.park","elementType":"labels.text","stylers":[{"visibility":"on"},{"color":"#4d7c5f"}]},
+  {"featureType":"road","elementType":"geometry","stylers":[{"color":"#ffffff"}]},
+  {"featureType":"road","elementType":"geometry.stroke","stylers":[{"color":"#e2e8f0"}]},
+  {"featureType":"road","elementType":"labels.text.fill","stylers":[{"color":"#94a3b8"}]},
+  {"featureType":"road.highway","elementType":"geometry","stylers":[{"color":"#dbeafe"}]},
+  {"featureType":"road.highway","elementType":"geometry.stroke","stylers":[{"color":"#bfdbfe"}]},
+  {"featureType":"transit","stylers":[{"visibility":"off"}]},
+  {"featureType":"administrative","elementType":"geometry.stroke","stylers":[{"color":"#cbd5e1"}]}
+]
+''';
   GoogleMapController? _controller;
 
   LatLng get _center {
@@ -64,10 +118,11 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
             markerId: MarkerId('place-${m.id}'),
             position: LatLng(m.latitude, m.longitude),
             infoWindow: InfoWindow(title: m.name, snippet: m.address),
-            icon: m.id == widget.highlightedMarkerId
-                ? BitmapDescriptor.defaultMarkerWithHue(
-                    BitmapDescriptor.hueAzure)
-                : BitmapDescriptor.defaultMarker,
+            icon: (m.id == widget.highlightedMarkerId
+                    ? _pinHighlight
+                    : _pin) ??
+                BitmapDescriptor.defaultMarker,
+            anchor: const Offset(0.5, 0.5),
             onTap: () => widget.onMarkerTap?.call(m.id),
           ),
         for (var i = 0; i < widget.routeMarkers.length; i++)
@@ -76,8 +131,8 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
             position: LatLng(widget.routeMarkers[i].latitude,
                 widget.routeMarkers[i].longitude),
             infoWindow: InfoWindow(title: '경유지 ${i + 1}'),
-            icon: BitmapDescriptor.defaultMarkerWithHue(
-                BitmapDescriptor.hueOrange),
+            icon: _pin ?? BitmapDescriptor.defaultMarker,
+            anchor: const Offset(0.5, 0.5),
           ),
       };
 
@@ -117,11 +172,13 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
               return const Center(child: CircularProgressIndicator());
             }
             return GoogleMap(
+              style: _halftripStyle,
               initialCameraPosition: CameraPosition(target: _center, zoom: 12),
               markers: _gMarkers,
               polylines: _polylines,
               myLocationButtonEnabled: false,
               mapToolbarEnabled: false,
+              zoomControlsEnabled: false,
               onMapCreated: (c) => _controller = c,
             );
           },
