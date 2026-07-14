@@ -12,8 +12,11 @@ import '../widgets/ui.dart';
 /// [forTrip]이 있으면 여행 지역·일정이 고정된 상태로 시작 (지역 선택 단계 생략),
 /// 만든 코스는 그 여행의 확정 코스로 연결된다.
 class CourseCreateScreen extends StatelessWidget {
-  const CourseCreateScreen({super.key, this.forTrip});
+  const CourseCreateScreen({super.key, this.forTrip, this.onYoutubeForTrip});
   final Trip? forTrip;
+
+  /// 실여행 컨텍스트에서 유튜브 분석을 실서버 플로우로 태울 때 주입 (없으면 목업 연출).
+  final VoidCallback? onYoutubeForTrip;
 
   void _go(BuildContext context, Widget Function(Region) builder) {
     if (forTrip != null) {
@@ -78,7 +81,8 @@ class CourseCreateScreen extends StatelessWidget {
           iconFg: const Color(0xFFE0322B),
           title: '유튜브 영상으로 만들기',
           desc: '여행 브이로그 링크를 붙여넣으면 영상 속 장소로 코스를 완성해요',
-          onTap: () => _go(context, (r) => CourseYoutubeScreen(region: r, forTrip: forTrip)),
+          onTap: onYoutubeForTrip ??
+              () => _go(context, (r) => CourseYoutubeScreen(region: r, forTrip: forTrip)),
         ),
         _MakeCard(
           icon: Icons.edit_rounded,
