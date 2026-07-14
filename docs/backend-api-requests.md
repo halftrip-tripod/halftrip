@@ -34,4 +34,4 @@
 
 - `getNotifications`에 `userId` 쿼리 추가 (백엔드 시그니처가 필수 쿼리 — 현재 클라 호출은 400)
 - 정산 신청 시 실명·전화 입력 UI → `SettlementApplyRequest`로 전송
-- 알림설정 `marketingAlert` 토글, E 신필드·`locationVerified` 파싱 추가
+- E 신필드·`locationVerified` 파싱 추가 (완료) · 마케팅 알림 토글은 기획에서 제외 확정

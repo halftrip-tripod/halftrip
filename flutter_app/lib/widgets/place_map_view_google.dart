@@ -44,16 +44,22 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
 
   BitmapDescriptor? _pin;
   BitmapDescriptor? _pinHighlight;
+  List<BitmapDescriptor> _numberedPins = const [];
 
   Future<bool> _prepare() async {
     final loaded = await ensureGoogleMapsJs(widget.apiKey);
     _pin = await _drawPin(const Color(0xFF0EA5E9));
     _pinHighlight = await _drawPin(const Color(0xFF0369A1));
+    // 코스 모드: 방문 순서 리스트와 동일한 번호 핀.
+    _numberedPins = [
+      for (var i = 0; i < widget.routeMarkers.length; i++)
+        await _drawPin(const Color(0xFF0EA5E9), label: '${i + 1}'),
+    ];
     return loaded;
   }
 
-  /// 디자인 시스템 하늘색 원형 핀 (흰 테두리 + 중앙 점) — 기본 빨간 핀 대체.
-  static Future<BitmapDescriptor> _drawPin(Color color) async {
+  /// 디자인 시스템 하늘색 원형 핀 — 기본 빨간 핀 대체. [label]이 있으면 번호 핀.
+  static Future<BitmapDescriptor> _drawPin(Color color, {String? label}) async {
     const size = 48.0;
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
@@ -62,7 +68,25 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
         Paint()..color = Colors.black.withValues(alpha: .12));
     canvas.drawCircle(center, 20, Paint()..color = Colors.white);
     canvas.drawCircle(center, 16, Paint()..color = color);
-    canvas.drawCircle(center, 5.5, Paint()..color = Colors.white);
+    if (label == null) {
+      canvas.drawCircle(center, 5.5, Paint()..color = Colors.white);
+    } else {
+      final painter = TextPainter(
+        text: TextSpan(
+          text: label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 19,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      painter.paint(
+          canvas,
+          Offset(center.dx - painter.width / 2,
+              center.dy - painter.height / 2));
+    }
     final image = await recorder
         .endRecording()
         .toImage(size.toInt(), size.toInt());
@@ -112,8 +136,12 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
     return const LatLng(36.35, 127.8); // 한반도 남부 기본
   }
 
+  bool get _courseMode =>
+      widget.connectSequentially && widget.routeMarkers.isNotEmpty;
+
   Set<Marker> get _gMarkers => {
-        for (final m in widget.markers)
+        if (!_courseMode)
+          for (final m in widget.markers)
           Marker(
             markerId: MarkerId('place-${m.id}'),
             position: LatLng(m.latitude, m.longitude),
@@ -131,7 +159,8 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
             position: LatLng(widget.routeMarkers[i].latitude,
                 widget.routeMarkers[i].longitude),
             infoWindow: InfoWindow(title: '경유지 ${i + 1}'),
-            icon: _pin ?? BitmapDescriptor.defaultMarker,
+            icon: (i < _numberedPins.length ? _numberedPins[i] : _pin) ??
+                BitmapDescriptor.defaultMarker,
             anchor: const Offset(0.5, 0.5),
           ),
       };

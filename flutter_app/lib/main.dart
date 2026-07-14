@@ -21,12 +21,20 @@ import 'theme/app_colors.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-    await Firebase.initializeApp();
+    try {
+      await Firebase.initializeApp();
+    } catch (_) {
+      // Firebase 설정(google-services.json)이 없거나 잘못돼도 앱은 뜨게 한다.
+    }
   }
   final config = AppConfig.fromEnvironment();
   final repository = _buildRepository(config);
   final controller = AppController(repository: repository);
-  await controller.initializePushNotifications();
+  try {
+    await controller.initializePushNotifications();
+  } catch (_) {
+    // FCM 초기화 실패는 무시(푸시만 비활성, UI는 정상).
+  }
   runApp(HalftripApp(controller: controller));
 }
 

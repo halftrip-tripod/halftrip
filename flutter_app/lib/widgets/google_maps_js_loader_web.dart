@@ -17,6 +17,12 @@ Future<bool> ensureGoogleMapsJs(String apiKey) {
     completer.complete(true);
     return completer.future;
   }
+  final style = html.StyleElement()
+    ..innerText = '''
+      .gm-style button[aria-label="지도 카메라 컨트롤"],
+      .gm-style .gm-fullscreen-control { display: none !important; }
+    ''';
+  html.document.head!.append(style);
   final script = html.ScriptElement()
     ..src = 'https://maps.googleapis.com/maps/api/js?key=$apiKey'
     ..async = true;
