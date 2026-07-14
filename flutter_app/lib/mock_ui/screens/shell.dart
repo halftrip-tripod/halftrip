@@ -32,6 +32,8 @@ class _MainShellState extends State<MainShell> {
   void initState() {
     super.initState();
     AppState.I.tabRequest.addListener(_onTabRequest);
+    // 커뮤니티 내 글·반응 로컬 복원 (서버 J 전까지 기기 유지).
+    AppState.I.restoreCommunity();
   }
 
   @override
@@ -138,7 +140,7 @@ class _TopBarState extends State<_TopBar> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 14, 18, 6),
       child: Row(children: [
-        Image.asset('assets/brand/logo.png', height: 27),
+        Image.asset('assets/logo/logo-3d-header.png', height: 40),
         const Spacer(),
         _IconButton(
           icon: Icons.notifications_none_rounded,

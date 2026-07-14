@@ -130,7 +130,7 @@
 - **인증 배지**: 글에 `trip_id`(다녀온 여행)·코스 첨부 시 ✓배지. 좋아요·댓글은 알림(G)+FCM 연계.
 
 ### ➕ K. 마이페이지 자잘한 것
-- ~~`user_notification_settings`에 **`marketing_alert`(BIT) 컬럼 추가**~~ ✅ 완료 (V38)
+- ~~`user_notification_settings`에 **`marketing_alert`(BIT) 컬럼 추가**~~ ✅ 완료 (V38) → **클라 미사용 확정(2026-07-14)**: 알림 토글은 2개(관심지역·정산 D-day)로 확정, marketingAlert 필드는 서버에 있어도 앱이 안 보냄.
 - 작성/저장 글 수 = 커뮤니티(J)에서 `myPostCount`·`savedPostCount` 집계
 - (여행 취향은 온보딩 제거 결정 → 마이페이지에서도 빼거나 "최근 코스 취향")
 - **거주지 수정 API 없음** — 마이페이지 거주지 변경이 지금 클라 로컬 갱신뿐(재로그인하면 원복). 거주지는 지역 노출 필터 기준이라 서버 저장 필수.

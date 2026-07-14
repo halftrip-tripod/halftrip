@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../core/app_scope.dart';
+import '../mock_ui/screens/community.dart' show CommunityWriteScreen;
 import '../mock_ui/screens/my_trips_tab.dart' show regionEmojiOf;
 import '../mock_ui/state/app_state.dart' as mock;
 import '../mock_ui/theme/app_colors.dart';
 import '../mock_ui/widgets/ui.dart';
 import '../models/app_models.dart';
 import 'planner_screen.dart';
-import 'receipt_card_screen.dart';
 import 'submission_package_screen.dart';
 
 /// 지난 여행 상세 — 목업 past_trip 1:1, 데이터는 TripDetail(실 repository).
@@ -97,24 +97,16 @@ class _PastTripScreenState extends State<PastTripScreen> {
                 subtitle: course == null
                     ? '저장된 코스가 없어요'
                     : '${course.title} · ${course.stops.length}곳',
-                onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => PlannerScreen(tripId: trip.id))),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => PlannerScreen(
+                        tripId: trip.id,
+                        title: course?.title ?? '다녀온 코스'))),
               ),
             ),
-            // 내 후기 — 커뮤니티 연동 전까지 항상 미작성 상태.
-            AppCard(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('내 후기',
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.3)),
-                const SizedBox(height: 12),
-                const Text('아직 작성한 후기가 없어요.\n영수증 카드로 이번 여행을 기록해보세요.',
-                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: AppColors.ink7, height: 1.5)),
-                const SizedBox(height: 14),
-                OutlineButton('후기 쓰기',
-                    icon: Icons.edit_outlined,
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => ReceiptCardScreen(tripId: trip.id)))),
-              ]),
+            // 내 후기 — 커뮤 로컬 글(서버 J 전까지 기기 저장)과 연동.
+            _MyReviewCard(
+              regionName: trip.regionName,
+              onChanged: () => setState(() {}),
             ),
             // 여행 기록
             AppCard(
@@ -175,6 +167,68 @@ class _PastTripScreenState extends State<PastTripScreen> {
           ],
         );
       },
+    );
+  }
+}
+
+/// 내 후기 카드 — 이 지역의 내 글이 있으면 목업 '작성됨' 상태(나만보기 필·공개 전환),
+/// 없으면 후기 쓰기 유도. 글은 커뮤 로컬 저장(AppState)과 공유.
+class _MyReviewCard extends StatelessWidget {
+  const _MyReviewCard({required this.regionName, required this.onChanged});
+  final String regionName;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final review = mock.AppState.I.posts
+        .where((p) => p.mine && p.region == regionName)
+        .firstOrNull;
+
+    return AppCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Text('내 후기',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.3)),
+          if (review != null && review.private) ...[
+            const SizedBox(width: 8),
+            const Pill('나만보기', tone: PillTone.gray, icon: Icons.lock_outline_rounded),
+          ],
+        ]),
+        const SizedBox(height: 12),
+        if (review == null) ...[
+          const Text('아직 작성한 후기가 없어요.\n이번 여행을 기록으로 남겨보세요.',
+              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: AppColors.ink7, height: 1.5)),
+          const SizedBox(height: 14),
+          OutlineButton('후기 쓰기',
+              icon: Icons.edit_outlined,
+              onTap: () async {
+                await Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => CommunityWriteScreen(regionName: regionName)));
+                onChanged();
+              }),
+        ] else ...[
+          Text(review.text,
+              style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: AppColors.ink7, height: 1.5)),
+          if (review.photos.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Row(children: [
+              for (var i = 0; i < review.photos.length && i < 3; i++) ...[
+                if (i > 0) const SizedBox(width: 8),
+                EmojiBox(review.photos[i], size: 88, fontSize: 38, color: AppColors.surf),
+              ],
+            ]),
+          ],
+          if (review.private) ...[
+            const SizedBox(height: 14),
+            OutlineButton('공개로 전환하고 커뮤니티에 공유', onTap: () {
+              mock.AppState.I.publishPost(review);
+              onChanged();
+              ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('후기를 커뮤니티에 공개했어요.')));
+            }),
+          ],
+        ],
+      ]),
     );
   }
 }

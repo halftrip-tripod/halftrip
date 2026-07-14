@@ -9,7 +9,9 @@ import 'dart:ui_web' as ui_web;
 import 'package:flutter/material.dart';
 import 'package:js/js.dart' as package_js;
 
+import '../core/app_config.dart';
 import 'place_map_models.dart';
+import 'place_map_view_google.dart';
 
 class PlaceMapView extends StatefulWidget {
   const PlaceMapView({
@@ -861,6 +863,22 @@ class _PlaceMapViewState extends State<PlaceMapView> {
 
   @override
   Widget build(BuildContext context) {
+    // MAP_PROVIDER=google이면 구글맵으로 위임 (웹은 JS 런타임 주입, 네이티브는 SDK).
+    final config = AppConfig.fromEnvironment();
+    if (config.canUseGoogleMap) {
+      return GooglePlaceMapView(
+        apiKey: config.googleMapApiKey,
+        markers: widget.markers,
+        emptyMessage: widget.emptyMessage,
+        routeMarkers: widget.routeMarkers,
+        connectSequentially: widget.connectSequentially,
+        highlightedMarkerId: widget.highlightedMarkerId,
+        onMarkerTap: widget.onMarkerTap,
+        initialCenterLatitude: widget.initialCenterLatitude,
+        initialCenterLongitude: widget.initialCenterLongitude,
+        height: widget.height,
+      );
+    }
     return Stack(
       children: [
         Container(

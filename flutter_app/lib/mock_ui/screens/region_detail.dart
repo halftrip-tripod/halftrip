@@ -234,7 +234,11 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
               ]),
             ]),
           ),
-          for (var i = 0; i < _accordions.length; i++) _accordion(i),
+          // 아코디언들을 한 그룹으로 묶어 _DCard 간격이 한 번만 적용되게 →
+          // 항목 사이 구분선 위/아래 여백이 14로 대칭이 된다.
+          Column(children: [
+            for (var i = 0; i < _accordions.length; i++) _accordion(i),
+          ]),
         ]),
         // 디민증
         _DCard(title: '디지털 관광주민증 혜택', children: [

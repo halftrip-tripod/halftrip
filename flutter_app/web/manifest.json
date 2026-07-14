@@ -1,6 +1,6 @@
 {
-    "name": "travel_support_mvp",
-    "short_name": "travel_support_mvp",
+    "name": "하프트립",
+    "short_name": "하프트립",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

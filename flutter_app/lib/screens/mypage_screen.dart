@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/app_scope.dart';
+import '../mock_ui/screens/community.dart' show MyReviewsScreen, SavedPostsScreen;
 import '../data/residence_options.dart';
 import '../models/app_models.dart';
 import '../theme/app_colors.dart';
@@ -53,12 +54,12 @@ class _MyPageScreenState extends State<MyPageScreen> {
               _MenuRow(
                 icon: Icons.edit_outlined,
                 label: '작성한 글',
-                onTap: () => _todo('커뮤니티 연동 준비 중이에요.'),
+                onTap: () => _push(const MyReviewsScreen()),
               ),
               _MenuRow(
                 icon: Icons.bookmark_outline_rounded,
                 label: '저장한 글',
-                onTap: () => _todo('커뮤니티 연동 준비 중이에요.'),
+                onTap: () => _push(const SavedPostsScreen()),
               ),
             ]),
             const _GroupLabel('내 정보'),
@@ -85,12 +86,6 @@ class _MyPageScreenState extends State<MyPageScreen> {
                 value: _settings.tripEndSettlementAlert,
                 onChanged: (v) =>
                     _save(_settings.copyWith(tripEndSettlementAlert: v)),
-              ),
-              _ToggleRow(
-                icon: Icons.local_offer_outlined,
-                label: '혜택 · 마케팅 알림',
-                value: _settings.marketingAlert,
-                onChanged: (v) => _save(_settings.copyWith(marketingAlert: v)),
               ),
             ]),
             const _GroupLabel('이용 안내'),
@@ -195,9 +190,12 @@ class _MyPageScreenState extends State<MyPageScreen> {
       ),
     );
     if (ok != true || !mounted) return;
-    // 로그아웃 시 루트가 로그인 화면으로 전환되므로 마이페이지 스택을 닫는다.
+    // 팝 이후 context는 비활성화되므로 컨트롤러를 미리 캡처한다.
+    final controller = AppScope.of(context);
+    // 마이페이지 라우트를 먼저 닫고, 팝 전환이 끝난 뒤 로그아웃한다.
+    // (팝 전환 도중 홈을 교체하면 전환/딤 배리어가 멈춰 화면이 밀린 채 남는 버그가 생김)
     Navigator.of(context).pop();
-    AppScope.of(context).logout();
+    Future.delayed(const Duration(milliseconds: 320), controller.logout);
   }
 
   void _push(Widget screen) {

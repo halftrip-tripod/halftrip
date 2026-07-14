@@ -11,7 +11,10 @@ import '../widgets/ui/pill.dart';
 /// 확정 코스 플래너 (S2-4) — 디자인: halftrip-design/course-edit.html
 /// 지도 동선 + 방문 순서 편집(드래그·삭제). 실시간 저장 유지.
 class PlannerScreen extends StatefulWidget {
-  const PlannerScreen({super.key, required this.tripId});
+  const PlannerScreen({super.key, required this.tripId, this.title});
+
+  /// 헤더 제목 — 지난여행 진입 등에서 '다녀온 코스'나 저장 코스명으로 덮어쓸 수 있다.
+  final String? title;
 
   final int tripId;
 
@@ -114,7 +117,13 @@ class _PlannerScreenState extends State<PlannerScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.bg,
-      appBar: AppBar(title: const Text('코스 플래너')),
+      appBar: AppBar(
+        title: Text(widget.title ??
+            AppScope.of(context)
+                .selectedCourseForTrip(widget.tripId)
+                ?.title ??
+            '코스 플래너'),
+      ),
       body: FutureBuilder<TripDetail>(
         future: _future,
         builder: (context, snapshot) {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/app_scope.dart';
 import '../../models/app_models.dart';
 import '../../screens/auth_photo_upload_screen.dart';
+import '../../screens/youtube_course_analysis_screen.dart';
 import '../../screens/lodging_form_screen.dart';
 import '../../screens/planner_screen.dart';
 import '../../screens/receipt_evidence_screen.dart';
@@ -82,6 +83,65 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         .then((_) => _reload());
   }
 
+  /// 유튜브 실분석 — 링크 입력 시트 → 실서버 잡 생성·진행 화면(여행 연결 유지).
+  Future<void> _openYoutubeAnalysis(TripDetail detail) async {
+    final controller = TextEditingController();
+    final url = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.fromLTRB(
+            24, 4, 24, MediaQuery.of(sheetContext).viewInsets.bottom + 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('유튜브 영상 링크',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.5)),
+            const SizedBox(height: 8),
+            const Text('여행 브이로그 링크를 붙여넣으면 영상 속 장소로 코스를 완성해요. 분석은 백그라운드에서 진행돼요.',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.ink5, height: 1.5)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: TextInputType.url,
+              decoration: InputDecoration(
+                hintText: 'https://youtu.be/...',
+                prefixIcon: const Icon(Icons.link_rounded, color: AppColors.ink4),
+                filled: true,
+                fillColor: AppColors.surf,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () =>
+                    Navigator.of(sheetContext).pop(controller.text.trim()),
+                child: const Text('코스 만들기'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (url == null || url.isEmpty || !mounted) return;
+    await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => YoutubeCourseAnalysisScreen(
+            tripDetail: detail, youtubeUrl: url)));
+    await _reload();
+  }
+
   /// 코스 만들기 — 목업 1:1 코스 플로우(course_flow)를 실여행 프록시로 태우고,
   /// 확정 코스가 생기면 saveCourse + selectCourseForTrip으로 실여행에 연결한다.
   Future<void> _openCourseCreate(TripDetail detail) async {
@@ -95,8 +155,11 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       stage: mock.TripStage.before,
       nights: trip.endDate.difference(trip.startDate).inDays,
     );
-    await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => CourseCreateScreen(forTrip: proxy)));
+    await Navigator.of(context).push(MaterialPageRoute(
+        builder: (builderContext) => CourseCreateScreen(
+              forTrip: proxy,
+              onYoutubeForTrip: () => _openYoutubeAnalysis(detail),
+            )));
     final course = proxy.course;
     if (course == null || !mounted) return;
 
