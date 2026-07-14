@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/app_scope.dart';
 import '../../models/app_models.dart';
+import '../../screens/info_screens.dart';
 import '../data/mock_data.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui.dart';
@@ -23,8 +24,8 @@ class LoginScreen extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
           child: Column(children: [
             const Spacer(flex: 3),
-            Image.asset('assets/brand/logo.png', height: 44),
-            const SizedBox(height: 28),
+            Image.asset('assets/logo/logo-3d.png', height: 285),
+            const Spacer(flex: 4),
             const Text(
               '여행경비의 절반,',
               textAlign: TextAlign.center,
@@ -40,31 +41,25 @@ class LoginScreen extends StatelessWidget {
             const SizedBox(height: 10),
             const Text('반값여행 + 디지털 관광주민증을 한 번에',
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink5)),
-            const Spacer(flex: 4),
-            _SocialButton(
-              label: '카카오로 시작하기',
-              bg: const Color(0xFFFEE500),
-              fg: const Color(0xFF191919),
-              icon: Icons.chat_bubble_rounded,
+            const SizedBox(height: 22),
+            _OfficialLoginButton(
+              asset: 'assets/brand/kakao_login.png',
               onTap: () => _social(context, LoginProvider.kakao),
             ),
             const SizedBox(height: 10),
-            _SocialButton(
-              label: '네이버로 시작하기',
-              bg: const Color(0xFF03C75A),
-              fg: Colors.white,
-              leading: const Text('N',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Colors.white)),
+            _OfficialLoginButton(
+              asset: 'assets/brand/naver_login.png',
               onTap: () => _social(context, LoginProvider.naver),
             ),
             const SizedBox(height: 18),
-            const Text.rich(
-              TextSpan(children: [
-                TextSpan(text: '이용약관', style: TextStyle(decoration: TextDecoration.underline)),
-                TextSpan(text: ' · '),
-                TextSpan(text: '개인정보처리방침', style: TextStyle(decoration: TextDecoration.underline)),
-              ]),
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.ink4),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _DocLink('이용약관', () => PolicyScreen.terms()),
+                const Text(' · ',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.ink4)),
+                _DocLink('개인정보처리방침', () => PolicyScreen.privacy()),
+              ],
             ),
             const SizedBox(height: 14),
             GestureDetector(
@@ -75,7 +70,9 @@ class LoginScreen extends StatelessWidget {
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: AppColors.ink5,
-                      decoration: TextDecoration.underline)),
+                      decoration: TextDecoration.underline,
+                      decorationColor: AppColors.ink5,
+                      decorationThickness: 1)),
             ),
           ]),
         ),
@@ -84,36 +81,18 @@ class LoginScreen extends StatelessWidget {
   }
 }
 
-class _SocialButton extends StatelessWidget {
-  const _SocialButton({
-    required this.label,
-    required this.bg,
-    required this.fg,
-    this.icon,
-    this.leading,
-    required this.onTap,
-  });
-
-  final String label;
-  final Color bg;
-  final Color fg;
-  final IconData? icon;
-  final Widget? leading;
+/// 카카오·네이버 공식 로그인 버튼 (브랜드 가이드 완성 이미지를 그대로 사용).
+/// 이미지에 로고·문구·색·라운딩이 규격대로 포함돼 있어 수정 없이 그대로 노출한다.
+class _OfficialLoginButton extends StatelessWidget {
+  const _OfficialLoginButton({required this.asset, required this.onTap});
+  final String asset;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        height: 54,
-        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(18)),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          if (leading != null) leading! else Icon(icon, size: 20, color: fg),
-          const SizedBox(width: 8),
-          Text(label, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: fg)),
-        ]),
-      ),
+      child: Image.asset(asset, width: double.infinity, fit: BoxFit.fitWidth),
     );
   }
 }
@@ -282,5 +261,28 @@ class _PickField extends StatelessWidget {
         ),
       ),
     ]);
+  }
+}
+
+/// 약관·개인정보처리방침 등 탭하면 문서 화면을 여는 밑줄 링크.
+class _DocLink extends StatelessWidget {
+  const _DocLink(this.label, this.pageBuilder);
+  final String label;
+  final Widget Function() pageBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.of(context)
+          .push(MaterialPageRoute(builder: (_) => pageBuilder())),
+      child: Text(label,
+          style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: AppColors.ink4,
+              decoration: TextDecoration.underline,
+              decorationColor: AppColors.ink4,
+              decorationThickness: 1)),
+    );
   }
 }
