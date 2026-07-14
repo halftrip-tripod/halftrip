@@ -97,8 +97,10 @@ class _PastTripScreenState extends State<PastTripScreen> {
                 subtitle: course == null
                     ? '저장된 코스가 없어요'
                     : '${course.title} · ${course.stops.length}곳',
-                onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => PlannerScreen(tripId: trip.id))),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => PlannerScreen(
+                        tripId: trip.id,
+                        title: course?.title ?? '다녀온 코스'))),
               ),
             ),
             // 내 후기 — 커뮤 로컬 글(서버 J 전까지 기기 저장)과 연동.
