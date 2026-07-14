@@ -890,7 +890,7 @@ class DetailScaffold extends StatelessWidget {
     this.cta,
     this.actions,
     this.closeIcon = false,
-    this.padding = const EdgeInsets.fromLTRB(20, 4, 20, 120),
+    this.padding = const EdgeInsets.fromLTRB(14, 4, 14, 120),
   });
 
   final String title;
