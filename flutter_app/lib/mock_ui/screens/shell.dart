@@ -140,7 +140,7 @@ class _TopBarState extends State<_TopBar> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 14, 18, 6),
       child: Row(children: [
-        Image.asset('assets/brand/logo.png', height: 27),
+        Image.asset('assets/logo/logo-3d-header.png', height: 40),
         const Spacer(),
         _IconButton(
           icon: Icons.notifications_none_rounded,
