@@ -39,7 +39,11 @@ class _YoutubeCourseAnalysisScreenState
   @override
   void initState() {
     super.initState();
-    _boot();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _boot();
+      }
+    });
   }
 
   @override
@@ -70,12 +74,21 @@ class _YoutubeCourseAnalysisScreenState
       return;
     }
 
+    final tripDetail = widget.tripDetail;
+    if (tripDetail == null) {
+      setState(() {
+        _creating = false;
+        _errorMessage = '여행 정보가 없어 유튜브 코스 작업을 시작하지 못했습니다.';
+      });
+      return;
+    }
+
     try {
       final response = await controller.runTask(
         () => controller.repository.createYoutubeCourseJob(
           userId: userId,
-          tripId: widget.tripDetail!.trip.id,
-          regionId: widget.tripDetail!.trip.regionId,
+          tripId: tripDetail.trip.id,
+          regionId: tripDetail.trip.regionId,
           youtubeUrl: widget.youtubeUrl,
         ),
       );
@@ -87,9 +100,9 @@ class _YoutubeCourseAnalysisScreenState
       await controller.trackPendingYoutubeCourseJob(
         PendingYoutubeCourseJob(
           jobId: response.jobId,
-          tripId: widget.tripDetail!.trip.id,
-          regionId: widget.tripDetail!.trip.regionId,
-          regionName: widget.tripDetail!.trip.regionName,
+          tripId: tripDetail.trip.id,
+          regionId: tripDetail.trip.regionId,
+          regionName: tripDetail.trip.regionName,
           youtubeUrl: widget.youtubeUrl,
           createdAt: DateTime.now(),
         ),
