@@ -63,7 +63,7 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
     const size = 48.0;
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-    final center = const Offset(size / 2, size / 2);
+    const center = Offset(size / 2, size / 2);
     canvas.drawCircle(center, 22,
         Paint()..color = Colors.black.withValues(alpha: .12));
     canvas.drawCircle(center, 20, Paint()..color = Colors.white);
@@ -117,8 +117,6 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
   {"featureType":"administrative","elementType":"geometry.stroke","stylers":[{"color":"#cbd5e1"}]}
 ]
 ''';
-  GoogleMapController? _controller;
-
   LatLng get _center {
     if (widget.initialCenterLatitude != null &&
         widget.initialCenterLongitude != null) {
@@ -137,7 +135,9 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
   }
 
   bool get _courseMode =>
-      widget.connectSequentially && widget.routeMarkers.isNotEmpty;
+      widget.connectSequentially &&
+      widget.routeMarkers.isNotEmpty &&
+      widget.markers.isEmpty;
 
   Set<Marker> get _gMarkers => {
         if (!_courseMode)
@@ -208,7 +208,7 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
               myLocationButtonEnabled: false,
               mapToolbarEnabled: false,
               zoomControlsEnabled: false,
-              onMapCreated: (c) => _controller = c,
+              onMapCreated: (_) {},
             );
           },
         ),
