@@ -135,34 +135,54 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
   }
 
   bool get _courseMode =>
-      widget.connectSequentially &&
-      widget.routeMarkers.isNotEmpty &&
-      widget.markers.isEmpty;
+      widget.connectSequentially && widget.routeMarkers.isNotEmpty;
 
+  /// 경유지 좌표와 일치하는 일반 마커(장소 정보·탭 동작 보유)를 찾는다.
+  PlaceMapMarkerData? _markerAt(double lat, double lng) {
+    for (final m in widget.markers) {
+      if ((m.latitude - lat).abs() < 1e-6 && (m.longitude - lng).abs() < 1e-6) {
+        return m;
+      }
+    }
+    return null;
+  }
+
+  /// 코스 모드: 번호 핀 하나에 장소 정보·탭을 병합해 중복 핀 없이 표시.
+  /// 일반 모드: 장소 핀 그대로.
   Set<Marker> get _gMarkers => {
         if (!_courseMode)
           for (final m in widget.markers)
-          Marker(
-            markerId: MarkerId('place-${m.id}'),
-            position: LatLng(m.latitude, m.longitude),
-            infoWindow: InfoWindow(title: m.name, snippet: m.address),
-            icon: (m.id == widget.highlightedMarkerId
-                    ? _pinHighlight
-                    : _pin) ??
-                BitmapDescriptor.defaultMarker,
-            anchor: const Offset(0.5, 0.5),
-            onTap: () => widget.onMarkerTap?.call(m.id),
-          ),
-        for (var i = 0; i < widget.routeMarkers.length; i++)
-          Marker(
-            markerId: MarkerId('route-${widget.routeMarkers[i].id}'),
-            position: LatLng(widget.routeMarkers[i].latitude,
-                widget.routeMarkers[i].longitude),
-            infoWindow: InfoWindow(title: '경유지 ${i + 1}'),
-            icon: (i < _numberedPins.length ? _numberedPins[i] : _pin) ??
-                BitmapDescriptor.defaultMarker,
-            anchor: const Offset(0.5, 0.5),
-          ),
+            Marker(
+              markerId: MarkerId('place-${m.id}'),
+              position: LatLng(m.latitude, m.longitude),
+              infoWindow: InfoWindow(title: m.name, snippet: m.address),
+              icon: (m.id == widget.highlightedMarkerId
+                      ? _pinHighlight
+                      : _pin) ??
+                  BitmapDescriptor.defaultMarker,
+              anchor: const Offset(0.5, 0.5),
+              onTap: () => widget.onMarkerTap?.call(m.id),
+            ),
+        if (_courseMode)
+          for (var i = 0; i < widget.routeMarkers.length; i++)
+            () {
+              final route = widget.routeMarkers[i];
+              final place = _markerAt(route.latitude, route.longitude);
+              return Marker(
+                markerId: MarkerId('route-${route.id}'),
+                position: LatLng(route.latitude, route.longitude),
+                infoWindow: InfoWindow(
+                  title: place?.name ?? '경유지 ${i + 1}',
+                  snippet: place?.address,
+                ),
+                icon: (i < _numberedPins.length ? _numberedPins[i] : _pin) ??
+                    BitmapDescriptor.defaultMarker,
+                anchor: const Offset(0.5, 0.5),
+                onTap: place == null
+                    ? null
+                    : () => widget.onMarkerTap?.call(place.id),
+              );
+            }(),
       };
 
   Set<Polyline> get _polylines {
