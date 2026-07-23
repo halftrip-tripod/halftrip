@@ -169,7 +169,20 @@ String durationLabelOf(TripSummary t) {
 }
 
 /// 여행 단계 — 정산 신청 완료면 review, 아니면 날짜 기준.
+/// 여행 단계 판정 — 계약 0-2: 백엔드가 KST로 계산한 status를 신뢰한다.
+/// (기기 시계·타임존 오차 방지) 서버 값이 없거나 모르는 값이면 날짜 계산 폴백.
 TripStageView stageOf(TripSummary t) {
+  switch (t.status.toUpperCase()) {
+    case 'BEFORE':
+      return TripStageView.before;
+    case 'ONGOING':
+      return TripStageView.during;
+    case 'ENDED':
+      return TripStageView.settle;
+    case 'SETTLEMENT_REQUESTED':
+      return TripStageView.review;
+  }
+  // mock·구버전 응답 폴백
   if (t.settlementApplied) return TripStageView.review;
   final today = DateUtils.dateOnly(DateTime.now());
   final start = DateUtils.dateOnly(t.startDate);
