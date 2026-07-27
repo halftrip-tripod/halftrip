@@ -206,7 +206,8 @@ class ChecklistItem {
   factory ChecklistItem.fromJson(Map<String, dynamic> json) => ChecklistItem(
         key: json['key'] as String? ?? '',
         label: json['label'] as String? ?? '',
-        checked: json['checked'] as bool? ?? false,
+        // 서버는 done(자동판정+수동체크 합산)과 checked(수동)를 함께 준다 — 표시 기준은 done.
+        checked: (json['done'] ?? json['checked']) as bool? ?? false,
       );
 
   Map<String, dynamic> toJson() => {'key': key, 'checked': checked};

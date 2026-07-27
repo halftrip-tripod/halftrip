@@ -192,6 +192,11 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<void> deleteAccount(int userId) async {
+    await _jsonRequest('DELETE', '/users/$userId');
+  }
+
+  @override
   Future<AppUser> updateResidence(int userId, String residence) async {
     final response = await _jsonRequest(
       'PATCH',
@@ -208,7 +213,7 @@ class ApiTravelRepository implements TravelRepository {
     String? avatarPreset,
   }) async {
     final response = await _jsonRequest(
-      'PUT',
+      'PATCH',
       '/users/$userId/profile',
       body: {
         if (nickname != null) 'nickname': nickname,
@@ -460,10 +465,12 @@ class ApiTravelRepository implements TravelRepository {
   Future<AuthPhotoReviewResult> analyzeAuthPhoto({
     required int tripId,
     required int uploadedFileId,
+    int? placeId,
   }) async {
     final response = await _jsonRequest(
       'POST',
       '/trips/$tripId/auth-photos/analyze/$uploadedFileId',
+      query: placeId == null ? null : {'placeId': placeId},
       body: const {},
     );
     return AuthPhotoReviewResult.fromJson(
@@ -668,7 +675,14 @@ class ApiTravelRepository implements TravelRepository {
   @override
   Future<List<ChecklistItem>> getTripChecklist(int tripId) async {
     final response = await _jsonRequest('GET', '/trips/$tripId/checklist');
-    final items = response['data'] as List<dynamic>? ?? [];
+    return _parseChecklist(response['data']);
+  }
+
+  /// 서버 응답은 `{tripId, doneCount, total, items:[...]}` 래핑 — items만 꺼낸다.
+  List<ChecklistItem> _parseChecklist(dynamic data) {
+    final items = data is Map<String, dynamic>
+        ? (data['items'] as List<dynamic>? ?? const [])
+        : (data as List<dynamic>? ?? const []);
     return items
         .map((item) => ChecklistItem.fromJson(item as Map<String, dynamic>))
         .toList();
@@ -684,10 +698,7 @@ class ApiTravelRepository implements TravelRepository {
       '/trips/$tripId/checklist',
       body: {'items': items.map((item) => item.toJson()).toList()},
     );
-    final updated = response['data'] as List<dynamic>? ?? [];
-    return updated
-        .map((item) => ChecklistItem.fromJson(item as Map<String, dynamic>))
-        .toList();
+    return _parseChecklist(response['data']);
   }
 
   @override

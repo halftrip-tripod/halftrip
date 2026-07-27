@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../core/app_scope.dart';
 import '../mock_ui/screens/community.dart' show CommunityWriteScreen;
 import '../mock_ui/screens/my_trips_tab.dart' show regionEmojiOf;
+import '../mock_ui/widgets/region_art.dart';
 import '../mock_ui/state/app_state.dart' as mock;
 import '../mock_ui/theme/app_colors.dart';
 import '../mock_ui/widgets/ui.dart';
@@ -70,7 +71,7 @@ class _PastTripScreenState extends State<PastTripScreen> {
             AppCard(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
-                  EmojiBox(regionEmojiOf(trip.regionName), size: 64, fontSize: 34, radius: 20),
+                  RegionArt(trip.regionName, size: 64, fontSize: 34, radius: 20),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

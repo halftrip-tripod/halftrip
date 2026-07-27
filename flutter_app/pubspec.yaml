@@ -40,6 +40,7 @@ flutter:
     - assets/card/
     - assets/localmoney/
     - assets/spot/
+    - assets/illust/region/
     - assets/region_hero/
   fonts:
     - family: Pretendard

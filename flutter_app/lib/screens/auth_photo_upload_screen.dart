@@ -29,6 +29,10 @@ class _AuthPhotoUploadScreenState extends State<AuthPhotoUploadScreen> {
   Uint8List? _lastPreview;
   AuthPhotoReviewResult? _lastReview;
 
+  // 지정관광지 선택 — 위치검증(백엔드 F)에 placeId를 넘기기 위함.
+  List<PlaceItem> _places = const [];
+  int? _selectedPlaceId;
+
   static const _required = 2;
 
   @override
@@ -40,9 +44,21 @@ class _AuthPhotoUploadScreenState extends State<AuthPhotoUploadScreen> {
   }
 
   Future<TripDetail> _loadDetail() async {
-    final repository = AppScope.of(context).repository;
-    final detail = await repository.getTripDetail(widget.tripId);
+    final controller = AppScope.of(context);
+    final detail = await controller.repository.getTripDetail(widget.tripId);
     await _hydratePreviews(detail);
+    if (_places.isEmpty) {
+      try {
+        final region = await controller.repository.getRegionDetail(
+          detail.trip.regionId,
+          residence: controller.currentUser?.residence,
+        );
+        _places = region.halfPricePlaces;
+        _selectedPlaceId ??= _places.isNotEmpty ? _places.first.id : null;
+      } catch (_) {
+        // 관광지 목록 실패 시 placeId 없이(위치검증 생략) 진행.
+      }
+    }
     return detail;
   }
 
@@ -108,6 +124,7 @@ class _AuthPhotoUploadScreenState extends State<AuthPhotoUploadScreen> {
       final review = await repository.analyzeAuthPhoto(
         tripId: widget.tripId,
         uploadedFileId: uploaded.id,
+        placeId: _selectedPlaceId,
       );
 
       // 판정 결과는 항상 화면에 표시. 승인이면 보관, 반려면 파일은 지우되 결과는 남김.
@@ -169,6 +186,56 @@ class _AuthPhotoUploadScreenState extends State<AuthPhotoUploadScreen> {
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
             children: [
+              // 인증할 지정관광지 선택 — 위치검증 기준 좌표.
+              if (_places.isNotEmpty) ...[
+                const Padding(
+                  padding: EdgeInsets.only(left: 2, bottom: 8),
+                  child: Text('인증할 관광지',
+                      style: TextStyle(
+                          fontFamily: 'Pretendard',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.ink5)),
+                ),
+                SizedBox(
+                  height: 38,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _places.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    itemBuilder: (_, i) {
+                      final place = _places[i];
+                      final selected = place.id == _selectedPlaceId;
+                      return GestureDetector(
+                        onTap: () =>
+                            setState(() => _selectedPlaceId = place.id),
+                        child: Container(
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 15),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: selected ? AppColors.p500 : Colors.white,
+                            borderRadius:
+                                BorderRadius.circular(AppRadius.pill),
+                            boxShadow: AppShadows.soft,
+                          ),
+                          child: Text(
+                            place.name,
+                            style: TextStyle(
+                              fontFamily: 'Pretendard',
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color:
+                                  selected ? Colors.white : AppColors.ink5,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 14),
+              ],
               // 진행 헤더
               Row(children: [
                 const Icon(Icons.photo_camera_outlined,
