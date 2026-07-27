@@ -852,6 +852,7 @@ class MockTravelRepository implements TravelRepository {
   Future<AuthPhotoReviewResult> analyzeAuthPhoto({
     required int tripId,
     required int uploadedFileId,
+    int? placeId,
   }) async {
     final trip = _requireTrip(tripId);
     return AuthPhotoReviewResult(

@@ -78,9 +78,11 @@ abstract class TravelRepository {
     required FileCategory category,
     required UploadBinary file,
   });
+  /// [placeId]를 넘기면 해당 지정관광지 좌표 반경 기준 위치검증까지 수행(백엔드 F).
   Future<AuthPhotoReviewResult> analyzeAuthPhoto({
     required int tripId,
     required int uploadedFileId,
+    int? placeId,
   });
   Future<void> deleteUploadedFile({
     required int tripId,
