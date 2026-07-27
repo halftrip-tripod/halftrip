@@ -192,6 +192,11 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<void> deleteAccount(int userId) async {
+    await _jsonRequest('DELETE', '/users/$userId');
+  }
+
+  @override
   Future<AppUser> updateResidence(int userId, String residence) async {
     final response = await _jsonRequest(
       'PATCH',

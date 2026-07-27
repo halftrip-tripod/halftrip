@@ -19,6 +19,9 @@ abstract class TravelRepository {
   });
   Future<AppUser> getUser(int userId);
 
+  /// 회원 탈퇴 — DELETE /api/users/{userId} (핸드오프 13, soft delete).
+  Future<void> deleteAccount(int userId);
+
   /// 거주지 수정 — PATCH /api/users/{userId}/residence (핸드오프 K).
   Future<AppUser> updateResidence(int userId, String residence);
 

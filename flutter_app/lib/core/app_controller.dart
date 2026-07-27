@@ -138,6 +138,20 @@ class AppController extends ChangeNotifier {
   }
 
   /// 로그아웃 — 세션 상태를 비우고 로그인 화면으로 되돌린다.
+  /// 회원 탈퇴 — 서버 계정 삭제 후 기기 저장 데이터(코스·커뮤 글 등)까지 파기.
+  /// 백엔드 DELETE 미배포 상태면 실패를 그대로 던진다(화면에서 안내).
+  Future<void> deleteAccount() async {
+    final user = currentUser;
+    if (user == null) return;
+    await repository.deleteAccount(user.id);
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.clear();
+    savedCourses = const [];
+    selectedCourseIdsByTrip = const <int, String>{};
+    pendingYoutubeCourseJobs = const [];
+    logout();
+  }
+
   void logout() {
     currentUser = null;
     trips = const [];

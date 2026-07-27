@@ -477,6 +477,9 @@ class MockTravelRepository implements TravelRepository {
   Future<AppUser> getUser(int userId) async => _user;
 
   @override
+  Future<void> deleteAccount(int userId) async {}
+
+  @override
   Future<AppUser> updateResidence(int userId, String residence) async {
     _user = _user.copyWith(residence: residence);
     return _user;
