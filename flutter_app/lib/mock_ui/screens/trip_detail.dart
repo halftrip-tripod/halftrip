@@ -13,6 +13,7 @@ import '../data/models.dart' as mock;
 import '../state/app_state.dart' as mock;
 import '../theme/app_colors.dart';
 import 'course_flow.dart';
+import '../widgets/region_art.dart';
 import '../widgets/ui.dart';
 import 'my_trips_tab.dart' show TripStageView, dateRangeOf, durationLabelOf, regionEmojiOf, stageOf;
 
@@ -646,7 +647,7 @@ class _TripHeader extends StatelessWidget {
         ]),
         const SizedBox(height: 13),
         Row(children: [
-          EmojiBox(regionEmojiOf(trip.regionName), size: 48, fontSize: 24, radius: 15),
+          RegionArt(trip.regionName, size: 48, fontSize: 24, radius: 15),
           const SizedBox(width: 13),
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('${trip.regionName} ${durationLabelOf(trip)}',

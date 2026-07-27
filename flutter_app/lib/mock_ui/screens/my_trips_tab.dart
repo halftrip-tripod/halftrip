@@ -7,6 +7,7 @@ import '../../screens/favorite_regions_screen.dart';
 import '../../screens/past_trip_screen.dart';
 import '../theme/app_colors.dart';
 import '../widgets/trip_calendar_sheet.dart';
+import '../widgets/region_art.dart';
 import '../widgets/ui.dart';
 import 'course_flow.dart';
 import 'trip_detail.dart';
@@ -136,7 +137,7 @@ class _MyTripsTabState extends State<MyTripsTab> {
                 onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => PastTripScreen(tripId: trip.id))),
                 child: Row(children: [
-                  EmojiBox(regionEmojiOf(trip.regionName), size: 48, fontSize: 24, radius: 15),
+                  RegionArt(trip.regionName, size: 48, fontSize: 24, radius: 15),
                   const SizedBox(width: 13),
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -250,7 +251,7 @@ class TripCard extends StatelessWidget {
         ]),
         const SizedBox(height: 13),
         Row(children: [
-          EmojiBox(regionEmojiOf(trip.regionName), size: 48, fontSize: 24, radius: 15),
+          RegionArt(trip.regionName, size: 48, fontSize: 24, radius: 15),
           const SizedBox(width: 13),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
