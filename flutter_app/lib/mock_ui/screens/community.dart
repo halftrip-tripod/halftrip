@@ -340,9 +340,6 @@ class PostCard extends StatelessWidget {
               onChanged();
             },
           ),
-          const Spacer(),
-          Text(post.region,
-              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.ink4)),
         ]),
       ]),
     );
@@ -1168,7 +1165,14 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
               onTap: () async {
                 final r = await pickOption(context,
                     title: '지역 선택', options: AppState.I.regions.map((r) => r.name).toList());
-                if (r != null) setState(() => _region = r);
+                if (r != null && r != _region) {
+                  setState(() {
+                    _region = r;
+                    // 지역이 바뀌면 이전 지역 코스 첨부는 무효 — 새 지역에서 다시 선택.
+                    _courseName = null;
+                    _courseMeta = null;
+                  });
+                }
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
