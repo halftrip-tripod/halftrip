@@ -141,6 +141,49 @@ abstract class TravelRepository {
     List<ChecklistItem> items,
   );
 
+  // ── 커뮤니티 (/api/community — 2026-07-28 구현) ──
+  Future<List<CommunityPostData>> getCommunityFeed({int? userId});
+  Future<CommunityPostData> createCommunityPost({
+    required int userId,
+    required String type,
+    String? regionName,
+    String? title,
+    required String body,
+    List<String> photos,
+    String? courseName,
+    String? courseMeta,
+    int? tripId,
+    required String visibility,
+  });
+  Future<void> toggleCommunityLike(int postId, int userId);
+  Future<void> toggleCommunityBookmark(int postId, int userId);
+  Future<void> updateCommunityVisibility(int postId, int userId, String visibility);
+  Future<void> deleteCommunityPost(int postId, int userId);
+  Future<CommunityPostData> updateCommunityPost({
+    required int postId,
+    required int userId,
+    String? type,
+    String? regionName,
+    String? title,
+    String? body,
+    List<String>? photos,
+    String? courseName,
+    String? courseMeta,
+  });
+  Future<List<CommunityCommentData>> getCommunityComments(int postId, {int? userId});
+  Future<CommunityCommentData> addCommunityComment(int postId, int userId, String body,
+      {int? parentId, int? mentionUserId});
+  Future<void> toggleCommunityCommentLike(int commentId, int userId);
+  Future<void> deleteCommunityComment(int commentId, int userId);
+  Future<void> reportCommunity({
+    required int userId,
+    required String targetType,
+    required int targetId,
+    String? reason,
+  });
+  Future<CommunityMyPosts> getMyCommunityPosts(int userId);
+  Future<List<CommunityPostData>> getMyCommunityBookmarks(int userId);
+
   /// 알림 센터 — GET /api/notifications?userId= (최신순).
   Future<List<AppNotification>> getNotifications(int userId);
 

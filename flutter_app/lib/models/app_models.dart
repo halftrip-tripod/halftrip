@@ -188,6 +188,152 @@ class NotificationSettings {
       };
 }
 
+/// 커뮤니티 게시글 (서버 계약: /api/community/posts — 2026-07-28).
+class CommunityPostData {
+  const CommunityPostData({
+    required this.id,
+    required this.type,
+    required this.title,
+    required this.body,
+    required this.regionName,
+    required this.photos,
+    required this.courseName,
+    required this.courseMeta,
+    required this.verified,
+    required this.edited,
+    required this.visibility,
+    required this.likeCount,
+    required this.commentCount,
+    required this.saveCount,
+    required this.likedByMe,
+    required this.savedByMe,
+    required this.mine,
+    required this.authorNickname,
+    required this.authorAvatarPreset,
+    required this.createdAt,
+  });
+
+  final int id;
+  final String type;
+  final String? title;
+  final String body;
+  final String? regionName;
+  final List<String> photos;
+  final String? courseName;
+  final String? courseMeta;
+  final bool verified;
+  final bool edited;
+  final String visibility;
+  final int likeCount;
+  final int commentCount;
+  final int saveCount;
+  final bool likedByMe;
+  final bool savedByMe;
+  final bool mine;
+  final String authorNickname;
+  final String authorAvatarPreset;
+  final DateTime createdAt;
+
+  factory CommunityPostData.fromJson(Map<String, dynamic> json) =>
+      CommunityPostData(
+        id: json['id'] as int,
+        type: json['type'] as String? ?? 'REVIEW',
+        title: json['title'] as String?,
+        body: json['body'] as String? ?? '',
+        regionName: json['regionName'] as String?,
+        photos: ((json['photos'] as List<dynamic>?) ?? const [])
+            .map((e) => e.toString())
+            .toList(),
+        courseName: json['courseName'] as String?,
+        courseMeta: json['courseMeta'] as String?,
+        verified: json['verified'] as bool? ?? false,
+        edited: json['edited'] as bool? ?? false,
+        visibility: json['visibility'] as String? ?? 'PUBLIC',
+        likeCount: json['likeCount'] as int? ?? 0,
+        commentCount: json['commentCount'] as int? ?? 0,
+        saveCount: json['saveCount'] as int? ?? 0,
+        likedByMe: json['likedByMe'] as bool? ?? false,
+        savedByMe: json['savedByMe'] as bool? ?? false,
+        mine: json['mine'] as bool? ?? false,
+        authorNickname: json['authorNickname'] as String? ?? '여행자',
+        authorAvatarPreset: json['authorAvatarPreset'] as String? ?? '0:0',
+        createdAt:
+            DateTime.tryParse(json['createdAt'] as String? ?? '')?.toLocal() ??
+                DateTime.now(),
+      );
+}
+
+class CommunityCommentData {
+  const CommunityCommentData({
+    required this.id,
+    required this.authorId,
+    required this.parentId,
+    required this.body,
+    required this.authorNickname,
+    required this.authorAvatarPreset,
+    required this.isPostAuthor,
+    required this.mine,
+    required this.likeCount,
+    required this.likedByMe,
+    required this.createdAt,
+  });
+
+  final int id;
+  final int authorId;
+
+  /// 인스타식 1단계 답글 — 루트 댓글 id (답글의 답글도 서버가 루트로 정규화).
+  final int? parentId;
+  final String body;
+  final String authorNickname;
+  final String authorAvatarPreset;
+  final bool isPostAuthor;
+  final bool mine;
+  final int likeCount;
+  final bool likedByMe;
+  final DateTime createdAt;
+
+  factory CommunityCommentData.fromJson(Map<String, dynamic> json) =>
+      CommunityCommentData(
+        id: json['id'] as int,
+        authorId: json['authorId'] as int? ?? 0,
+        parentId: json['parentId'] as int?,
+        body: json['body'] as String? ?? '',
+        authorNickname: json['authorNickname'] as String? ?? '여행자',
+        authorAvatarPreset: json['authorAvatarPreset'] as String? ?? '0:0',
+        isPostAuthor: json['isPostAuthor'] as bool? ?? false,
+        mine: json['mine'] as bool? ?? false,
+        likeCount: json['likeCount'] as int? ?? 0,
+        likedByMe: json['likedByMe'] as bool? ?? false,
+        createdAt:
+            DateTime.tryParse(json['createdAt'] as String? ?? '')?.toLocal() ??
+                DateTime.now(),
+      );
+}
+
+class CommunityMyPosts {
+  const CommunityMyPosts({
+    required this.postCount,
+    required this.receivedLikeCount,
+    required this.receivedSaveCount,
+    required this.posts,
+  });
+
+  final int postCount;
+  final int receivedLikeCount;
+  final int receivedSaveCount;
+  final List<CommunityPostData> posts;
+
+  factory CommunityMyPosts.fromJson(Map<String, dynamic> json) =>
+      CommunityMyPosts(
+        postCount: json['postCount'] as int? ?? 0,
+        receivedLikeCount: json['receivedLikeCount'] as int? ?? 0,
+        receivedSaveCount: json['receivedSaveCount'] as int? ?? 0,
+        posts: ((json['posts'] as List<dynamic>?) ?? const [])
+            .map((e) => CommunityPostData.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
 /// 출발 준비 체크리스트 항목 — 계약: GET/PUT /api/trips/{tripId}/checklist (핸드오프 E, 사용자 직접 체크안).
 class ChecklistItem {
   const ChecklistItem({

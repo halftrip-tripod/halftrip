@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../models/app_models.dart' as api;
+import '../../repositories/travel_repository.dart';
+import '../../utils/profile_presets.dart';
 import '../data/mock_data.dart';
 import '../data/models.dart';
 
@@ -98,17 +101,168 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── 커뮤니티 서버 브리지 (실서버 모드) ─────────────────────
+  // 화면은 계속 AppState.posts만 본다. 브리지가 붙으면 로컬퍼스트 대신
+  // 서버가 데이터 소스가 되고, 액션(작성·토글·공개전환·댓글)은 서버로 나간다.
+
+  TravelRepository? _repository;
+  int? _serverUserId;
+
+  bool get serverMode => _repository != null && _serverUserId != null;
+  TravelRepository? get communityRepository => _repository;
+  int? get communityUserId => _serverUserId;
+
+  /// 로그인 직후(실서버 모드) 컨트롤러가 호출 — 서버 피드·내 글로 posts를 채운다.
+  Future<void> attachCommunityServer(TravelRepository repository, int userId) async {
+    _repository = repository;
+    _serverUserId = userId;
+    await refreshCommunityFromServer();
+  }
+
+  void detachCommunityServer() {
+    _repository = null;
+    _serverUserId = null;
+  }
+
+  Future<void> refreshCommunityFromServer() async {
+    final repository = _repository;
+    final userId = _serverUserId;
+    if (repository == null || userId == null) return;
+    try {
+      final feed = await repository.getCommunityFeed(userId: userId);
+      final mine = await repository.getMyCommunityPosts(userId);
+      final merged = <int, Post>{};
+      for (final data in [...feed, ...mine.posts]) {
+        merged[data.id] = _toPost(data);
+      }
+      final list = merged.values.toList()
+        ..sort((a, b) => (b.serverId ?? 0).compareTo(a.serverId ?? 0));
+      posts
+        ..clear()
+        ..addAll(list);
+      notifyListeners();
+    } catch (_) {
+      // 서버 실패 시 기존 목록 유지.
+    }
+  }
+
+  Post _toPost(api.CommunityPostData data) {
+    final avatar = decodeAvatar(data.authorAvatarPreset);
+    return Post(
+      avatarEmoji: avatar.emoji,
+      avatarBg: avatar.color,
+      nick: data.authorNickname,
+      region: data.regionName ?? '전국',
+      timeAgo: relativeTime(data.createdAt),
+      tag: switch (data.type) {
+        'COURSE' => PostTag.course,
+        'QUESTION' => PostTag.ask,
+        'INFO' => PostTag.info,
+        _ => PostTag.review,
+      },
+      text: data.body,
+      verified: data.verified,
+      photos: data.photos,
+      courseName: data.courseName,
+      courseMeta: data.courseMeta,
+      likes: data.likeCount,
+      comments: data.commentCount,
+      saves: data.saveCount,
+      likedByMe: data.likedByMe,
+      savedByMe: data.savedByMe,
+      mine: data.mine,
+      private: data.visibility == 'PRIVATE',
+      title: data.title,
+      serverId: data.id,
+      edited: data.edited,
+    );
+  }
+
+  static String relativeTime(DateTime time) {
+    final diff = DateTime.now().difference(time);
+    if (diff.inMinutes < 1) return '방금';
+    if (diff.inHours < 1) return '${diff.inMinutes}분 전';
+    if (diff.inDays < 1) return '${diff.inHours}시간 전';
+    if (diff.inDays < 30) return '${diff.inDays}일 전';
+    return '${time.month}.${time.day}';
+  }
+
+  /// 좋아요·저장 토글 훅 — 화면이 Post 필드를 낙관 변경한 뒤 호출한다.
+  void onPostReaction(Post p, {bool like = false, bool save = false}) {
+    final repository = _repository;
+    final userId = _serverUserId;
+    final serverId = p.serverId;
+    if (repository != null && userId != null && serverId != null) {
+      if (like) repository.toggleCommunityLike(serverId, userId).catchError((_) {});
+      if (save) {
+        repository.toggleCommunityBookmark(serverId, userId).catchError((_) {});
+      }
+    } else {
+      persistCommunity();
+    }
+  }
+
   /// 나만보기 글을 커뮤니티에 공개 전환.
   void publishPost(Post p) {
     p.private = false;
     notifyListeners();
-    persistCommunity();
+    final repository = _repository;
+    final userId = _serverUserId;
+    if (repository != null && userId != null && p.serverId != null) {
+      repository
+          .updateCommunityVisibility(p.serverId!, userId, 'PUBLIC')
+          .catchError((_) {});
+    } else {
+      persistCommunity();
+    }
   }
 
   void addPost(Post p) {
     posts.insert(0, p);
     notifyListeners();
-    persistCommunity();
+    final repository = _repository;
+    final userId = _serverUserId;
+    if (repository != null && userId != null) {
+      // 서버 저장 후 serverId 회수 (실패해도 화면 낙관 유지).
+      // 인증 요청(verified 토글)이면 같은 지역의 내 여행을 찾아 근거로 전달 — 최종 배지는 서버 검증.
+      _resolveTripIdFor(p, repository, userId).then((tripId) => repository
+          .createCommunityPost(
+            userId: userId,
+            type: switch (p.tag) {
+              PostTag.course => 'COURSE',
+              PostTag.ask => 'QUESTION',
+              PostTag.info => 'INFO',
+              _ => 'REVIEW',
+            },
+            regionName: p.region,
+            title: p.title,
+            body: p.text,
+            photos: p.photos,
+            courseName: p.courseName,
+            courseMeta: p.courseMeta,
+            visibility: p.private ? 'PRIVATE' : 'PUBLIC',
+            tripId: tripId,
+          )
+          .then((created) {
+        p.serverId = created.id;
+        p.verified = created.verified;
+        notifyListeners();
+      })).catchError((_) {});
+    } else {
+      persistCommunity();
+    }
+  }
+
+  Future<int?> _resolveTripIdFor(
+      Post p, TravelRepository repository, int userId) async {
+    if (!p.verified) return null;
+    try {
+      final trips = await repository.getTrips(userId);
+      for (final trip in trips) {
+        if (trip.regionName == p.region) return trip.id;
+      }
+    } catch (_) {}
+    return null;
   }
 
   // ── 커뮤니티 로컬 영속화 — 서버(핸드오프 J) 전까지 내 글·좋아요·저장을 기기에 유지.
@@ -117,7 +271,7 @@ class AppState extends ChangeNotifier {
   bool _communityRestored = false;
 
   Future<void> restoreCommunity() async {
-    if (_communityRestored) return;
+    if (_communityRestored || serverMode) return;
     _communityRestored = true;
     try {
       final prefs = await SharedPreferences.getInstance();

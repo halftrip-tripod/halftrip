@@ -66,7 +66,7 @@ class Course {
   });
 
   final String emoji;
-  final String region;
+  String region; // 수정 가능
   final String province;
   String title;
   final CourseSource source;
@@ -95,7 +95,7 @@ class Trip {
 
   final String emoji;
   final String name;
-  final String region;
+  String region; // 수정 가능
   final String dateLabel;
   final int people;
   TripStage stage;
@@ -129,27 +129,35 @@ class Post {
     this.mine = false,
     this.private = false,
     this.title,
+    this.serverId,
+    this.edited = false,
   });
+
+  /// 실서버 게시글 id — 서버 연동 모드에서만 채워짐 (mock 시드는 null).
+  int? serverId;
+
+  /// 내용 수정 여부 — "수정됨" 표시.
+  bool edited;
 
   final String avatarEmoji;
   final Color avatarBg;
   final String nick;
-  final String region;
+  String region; // 수정 가능
   final String timeAgo;
-  final PostTag tag;
-  final String text;
-  final bool verified;
+  PostTag tag; // 수정 가능
+  String text; // 수정 가능
+  bool verified; // 서버 검증(다녀온 여행) 결과로 갱신될 수 있음
   final List<String> photos; // 이모지 플레이스홀더
-  final String? courseName;
-  final String? courseMeta;
+  String? courseName; // 수정 가능
+  String? courseMeta; // 수정 가능
   int likes;
-  final int comments;
+  int comments; // 댓글 작성 시 갱신
   int saves;
   bool likedByMe;
   bool savedByMe;
   final bool mine;
   bool private; // 나만보기 → 공개 전환 가능
-  final String? title; // 작성한 글 목록용 제목
+  String? title; // 수정 가능 // 작성한 글 목록용 제목
 }
 
 enum NotifTone { sky, coral, amber, gray }
