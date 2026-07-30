@@ -1290,6 +1290,89 @@ class MockTravelRepository implements TravelRepository {
     return settings;
   }
 
+  // 커뮤니티 — mock 모드는 화면이 AppState 로컬퍼스트를 직접 쓰므로 서버 경로는 비활성.
+  @override
+  Future<List<CommunityPostData>> getCommunityFeed({int? userId}) async => const [];
+
+  @override
+  Future<CommunityPostData> createCommunityPost({
+    required int userId,
+    required String type,
+    String? regionName,
+    String? title,
+    required String body,
+    List<String> photos = const [],
+    String? courseName,
+    String? courseMeta,
+    int? tripId,
+    required String visibility,
+  }) async {
+    throw UnsupportedError('mock 모드는 로컬퍼스트 커뮤니티를 사용합니다');
+  }
+
+  @override
+  Future<void> toggleCommunityLike(int postId, int userId) async {}
+
+  @override
+  Future<void> toggleCommunityBookmark(int postId, int userId) async {}
+
+  @override
+  Future<void> updateCommunityVisibility(
+      int postId, int userId, String visibility) async {}
+
+  @override
+  Future<List<CommunityCommentData>> getCommunityComments(int postId,
+          {int? userId}) async =>
+      const [];
+
+  @override
+  Future<CommunityCommentData> addCommunityComment(
+      int postId, int userId, String body,
+      {int? parentId, int? mentionUserId}) async {
+    throw UnsupportedError('mock 모드는 로컬퍼스트 커뮤니티를 사용합니다');
+  }
+
+  @override
+  Future<CommunityPostData> updateCommunityPost({
+    required int postId,
+    required int userId,
+    String? type,
+    String? regionName,
+    String? title,
+    String? body,
+    List<String>? photos,
+    String? courseName,
+    String? courseMeta,
+  }) async {
+    throw UnsupportedError('mock 모드는 로컬퍼스트 커뮤니티를 사용합니다');
+  }
+
+  @override
+  Future<void> deleteCommunityPost(int postId, int userId) async {}
+
+  @override
+  Future<void> toggleCommunityCommentLike(int commentId, int userId) async {}
+
+  @override
+  Future<void> deleteCommunityComment(int commentId, int userId) async {}
+
+  @override
+  Future<void> reportCommunity({
+    required int userId,
+    required String targetType,
+    required int targetId,
+    String? reason,
+  }) async {}
+
+  @override
+  Future<CommunityMyPosts> getMyCommunityPosts(int userId) async =>
+      const CommunityMyPosts(
+          postCount: 0, receivedLikeCount: 0, receivedSaveCount: 0, posts: []);
+
+  @override
+  Future<List<CommunityPostData>> getMyCommunityBookmarks(int userId) async =>
+      const [];
+
   final Map<int, List<ChecklistItem>> _checklists = {};
 
   @override

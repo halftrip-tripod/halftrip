@@ -9,7 +9,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/app_models.dart';
 import '../repositories/mock_travel_repository.dart';
+import '../repositories/api_travel_repository.dart';
 import '../repositories/travel_repository.dart';
+import '../mock_ui/state/app_state.dart' as mock;
 import '../screens/youtube_course_analysis_screen.dart';
 
 class AppController extends ChangeNotifier {
@@ -89,9 +91,19 @@ class AppController extends ChangeNotifier {
       trips = await _repository.getTrips(authUser.id);
       await _loadLocalDashboardData();
       await _syncFcmToken();
+      await _attachCommunityIfServer();
       // 소셜 가입은 거주지 입력 온보딩을 거치도록 한다.
       needsResidenceSetup = true;
     });
+  }
+
+  /// 실서버 모드면 커뮤니티 화면(AppState)의 데이터 소스를 서버로 전환한다.
+  Future<void> _attachCommunityIfServer() async {
+    final user = currentUser;
+    if (user == null || _repository is! ApiTravelRepository) {
+      return;
+    }
+    await mock.AppState.I.attachCommunityServer(_repository, user.id);
   }
 
   /// 거주지 온보딩 완료 — 현재 사용자 거주지를 갱신하고 메인으로 진입한다.
@@ -153,6 +165,7 @@ class AppController extends ChangeNotifier {
   }
 
   void logout() {
+    mock.AppState.I.detachCommunityServer();
     currentUser = null;
     trips = const [];
     needsResidenceSetup = false;
@@ -172,6 +185,7 @@ class AppController extends ChangeNotifier {
       trips = await _repository.getTrips(authUser.id);
       await _loadLocalDashboardData();
       await _syncFcmToken();
+      await _attachCommunityIfServer();
     });
   }
 
