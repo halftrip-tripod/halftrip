@@ -380,6 +380,30 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<GooglePlaceDetailItem?> searchGooglePlaceDetail({
+    required String placeName,
+    required String address,
+    required double latitude,
+    required double longitude,
+  }) async {
+    final response = await _jsonRequest(
+      'POST',
+      '/google-places/search',
+      body: {
+        'placeName': placeName,
+        'address': address,
+        'latitude': latitude,
+        'longitude': longitude,
+      },
+    );
+    final data = response['data'];
+    if (data is! Map<String, dynamic>) {
+      return null;
+    }
+    return GooglePlaceDetailItem.fromJson(data);
+  }
+
+  @override
   Future<YoutubeCourseJobItem?> getActiveYoutubeCourseJob({
     required int userId,
     required int tripId,

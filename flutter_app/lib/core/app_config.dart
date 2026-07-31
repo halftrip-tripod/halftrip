@@ -7,6 +7,7 @@ class AppConfig {
     required this.mapProvider,
     required this.kakaoMapAppKey,
     required this.googleMapApiKey,
+    required this.googleOAuthClientId,
   });
 
   factory AppConfig.fromEnvironment() {
@@ -22,9 +23,18 @@ class AppConfig {
       useMockLogin: bool.fromEnvironment('USE_MOCK_LOGIN', defaultValue: true),
       useMockApi: bool.fromEnvironment('USE_MOCK_API', defaultValue: false),
       mapProvider: String.fromEnvironment('MAP_PROVIDER', defaultValue: 'mock'),
-      kakaoMapAppKey: String.fromEnvironment('KAKAO_MAP_APP_KEY', defaultValue: ''),
-      googleMapApiKey:
-          String.fromEnvironment('GOOGLE_MAP_API_KEY', defaultValue: ''),
+      kakaoMapAppKey: String.fromEnvironment(
+        'KAKAO_MAP_APP_KEY',
+        defaultValue: '',
+      ),
+      googleMapApiKey: String.fromEnvironment(
+        'GOOGLE_MAP_API_KEY',
+        defaultValue: '',
+      ),
+      googleOAuthClientId: String.fromEnvironment(
+        'GOOGLE_OAUTH_CLIENT_ID',
+        defaultValue: '',
+      ),
     );
   }
 
@@ -35,6 +45,7 @@ class AppConfig {
   final String mapProvider;
   final String kakaoMapAppKey;
   final String googleMapApiKey;
+  final String googleOAuthClientId;
 
   bool get canUseKakaoMap =>
       mapProvider.toLowerCase() == 'kakao' && kakaoMapAppKey.isNotEmpty;

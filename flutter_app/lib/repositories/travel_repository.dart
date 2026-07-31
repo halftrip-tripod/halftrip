@@ -67,6 +67,12 @@ abstract class TravelRepository {
     required int tripId,
   });
   Future<YoutubeCourseJobItem> getYoutubeCourseJob(String jobId);
+  Future<GooglePlaceDetailItem?> searchGooglePlaceDetail({
+    required String placeName,
+    required String address,
+    required double latitude,
+    required double longitude,
+  });
   Future<void> registerFcmToken({
     required int userId,
     required String fcmToken,

@@ -25,6 +25,7 @@ dependencies:
   firebase_messaging: ^15.2.7
   flutter_svg: ^2.3.0
   google_maps_flutter: ^2.17.1
+  google_sign_in: ^6.2.2
 
 dev_dependencies:
   flutter_test:

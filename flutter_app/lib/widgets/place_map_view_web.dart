@@ -3,11 +3,9 @@
 import 'dart:async';
 import 'dart:html' as html;
 import 'dart:js' as js;
-import 'dart:js_util' as js_util;
 import 'dart:ui_web' as ui_web;
 
 import 'package:flutter/material.dart';
-import 'package:js/js.dart' as package_js;
 
 import '../core/app_config.dart';
 import 'place_map_models.dart';
@@ -25,6 +23,7 @@ class PlaceMapView extends StatefulWidget {
     this.onMarkerTap,
     this.onMarkerDoubleTap,
     this.onMarkerAction,
+    this.onMarkerDetailsRequested,
     this.onViewportChanged,
     this.initialCenterLatitude,
     this.initialCenterLongitude,
@@ -40,6 +39,8 @@ class PlaceMapView extends StatefulWidget {
   final ValueChanged<int>? onMarkerTap;
   final ValueChanged<int>? onMarkerDoubleTap;
   final ValueChanged<int>? onMarkerAction;
+  final Future<PlaceMapMarkerData?> Function(PlaceMapMarkerData marker)?
+      onMarkerDetailsRequested;
   final ValueChanged<PlaceMapViewport>? onViewportChanged;
   final double? initialCenterLatitude;
   final double? initialCenterLongitude;
@@ -234,7 +235,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
         '[halftrip:kakao] mapsFound=true loadFn=${loadFn != null}',
       );
       if (loadFn != null) {
-        final loadCallback = package_js.allowInterop(() {
+        final loadCallback = js.JsFunction.withThis((_) {
           if (!mounted || renderVersion != _renderVersion) {
             return;
           }
@@ -247,7 +248,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
           }
         });
         _mapJsCallbacks.add(loadCallback);
-        js_util.callMethod(maps, 'load', [loadCallback]);
+        _callJsMethod(maps, 'load', [loadCallback]);
       } else {
         _buildMap(kakao);
         if (mounted) {
@@ -323,7 +324,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     _markerOverlayObjects.clear();
     _mapJsCallbacks.clear();
 
-    final center = js_util.callConstructor(
+    final center = _callJsConstructor(
       latLngCtor,
       [
         markers.isNotEmpty
@@ -335,27 +336,27 @@ class _PlaceMapViewState extends State<PlaceMapView> {
       ],
     );
 
-    final map = js_util.callConstructor(
+    final map = _callJsConstructor(
       mapCtor,
       [
         _container,
-        js_util.jsify({
+        js.JsObject.jsify({
           'center': center,
           'level': markers.isNotEmpty ? 9 : 2,
         }),
       ],
     );
 
-    final bounds = js_util.callConstructor(boundsCtor, const []);
+    final bounds = _callJsConstructor(boundsCtor, const []);
     void openOverlay(
       PlaceMapMarkerData markerData,
       Object position,
     ) {
       _callMethod(_activeOverlay, 'setMap', [null]);
-      final overlay = js_util.callConstructor(
+      final overlay = _callJsConstructor(
         overlayCtor,
         [
-          js_util.jsify({
+          js.JsObject.jsify({
             'position': position,
             'yAnchor': 1.12,
             'xAnchor': 0.5,
@@ -377,10 +378,13 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     for (var index = 0; index < markers.length; index++) {
       final markerData = markers[index];
 
-      final position = js_util.callConstructor(
+      final position = _callJsConstructor(
         latLngCtor,
         [markerData.latitude, markerData.longitude],
       );
+      if (position == null) {
+        continue;
+      }
       _callMethod(bounds, 'extend', [position]);
       final markerContent = _buildMarkerContent(
         label: '${index + 1}',
@@ -402,10 +406,10 @@ class _PlaceMapViewState extends State<PlaceMapView> {
         handleMarkerTap();
       });
 
-      final markerOverlay = js_util.callConstructor(
+      final markerOverlay = _callJsConstructor(
         overlayCtor,
         [
-          js_util.jsify({
+          js.JsObject.jsify({
             'position': position,
             'yAnchor': 1,
             'xAnchor': 0.5,
@@ -414,6 +418,9 @@ class _PlaceMapViewState extends State<PlaceMapView> {
           }),
         ],
       );
+      if (markerOverlay == null) {
+        continue;
+      }
       _callMethod(markerOverlay, 'setMap', [map]);
       _markerOverlayObjects.add(markerOverlay);
 
@@ -427,7 +434,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     _bounds = bounds;
 
     if (widget.onViewportChanged != null) {
-      final idleCallback = package_js.allowInterop((_) {
+      final idleCallback = js.JsFunction.withThis((_) {
         _emitViewportChanged();
       });
       _mapJsCallbacks.add(idleCallback);
@@ -441,17 +448,17 @@ class _PlaceMapViewState extends State<PlaceMapView> {
       try {
         final path = widget.routeMarkers
             .map(
-              (point) => js_util.callConstructor(
+              (point) => _callJsConstructor(
                 latLngCtor,
                 [point.latitude, point.longitude],
               ),
             )
             .toList(growable: false);
 
-        _polyline = js_util.callConstructor(
+        _polyline = _callJsConstructor(
           polylineCtor,
           [
-            js_util.jsify({
+            js.JsObject.jsify({
               'map': map,
               'path': path,
               'strokeWeight': 4,
@@ -508,12 +515,43 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     return double.tryParse('$value') ?? 0;
   }
 
+  Object? _callJsConstructor(Object? constructor, List<dynamic> args) {
+    if (constructor is! js.JsFunction) {
+      return null;
+    }
+    return js.JsObject(constructor, args);
+  }
+
+  Object? _getJsProperty(Object target, String property) {
+    if (target is js.JsObject) {
+      return target[property];
+    }
+    if (target is html.EventTarget) {
+      return js.JsObject.fromBrowserObject(target)[property];
+    }
+    return null;
+  }
+
+  Object? _callJsMethod(
+    Object target,
+    String method,
+    List<dynamic> args,
+  ) {
+    if (target is js.JsObject) {
+      return target.callMethod(method, args);
+    }
+    if (target is html.EventTarget) {
+      return js.JsObject.fromBrowserObject(target).callMethod(method, args);
+    }
+    return null;
+  }
+
   Object? _getProperty(Object? target, String property) {
     if (target == null) {
       return null;
     }
     try {
-      return js_util.getProperty(target, property);
+      return _getJsProperty(target, property);
     } catch (_) {
       return null;
     }
@@ -524,7 +562,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
       return null;
     }
     try {
-      return js_util.callMethod(target, method, args);
+      return _callJsMethod(target, method, args);
     } catch (_) {
       return null;
     }
@@ -532,7 +570,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
 
   Object? _getWindowProperty(String property) {
     try {
-      return js_util.getProperty(html.window, property);
+      return js.JsObject.fromBrowserObject(html.window)[property];
     } catch (_) {
       return null;
     }
@@ -874,6 +912,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
         connectSequentially: widget.connectSequentially,
         highlightedMarkerId: widget.highlightedMarkerId,
         onMarkerTap: widget.onMarkerTap,
+        onMarkerDetailsRequested: widget.onMarkerDetailsRequested,
         initialCenterLatitude: widget.initialCenterLatitude,
         initialCenterLongitude: widget.initialCenterLongitude,
         height: widget.height,

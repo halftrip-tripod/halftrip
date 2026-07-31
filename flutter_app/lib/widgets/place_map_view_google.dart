@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'google_maps_js_loader_stub.dart'
     if (dart.library.html) 'google_maps_js_loader_web.dart';
@@ -19,6 +20,7 @@ class GooglePlaceMapView extends StatefulWidget {
     this.connectSequentially = false,
     this.highlightedMarkerId,
     this.onMarkerTap,
+    this.onMarkerDetailsRequested,
     this.initialCenterLatitude,
     this.initialCenterLongitude,
     this.height = 420,
@@ -31,6 +33,8 @@ class GooglePlaceMapView extends StatefulWidget {
   final bool connectSequentially;
   final int? highlightedMarkerId;
   final ValueChanged<int>? onMarkerTap;
+  final Future<PlaceMapMarkerData?> Function(PlaceMapMarkerData marker)?
+      onMarkerDetailsRequested;
   final double? initialCenterLatitude;
   final double? initialCenterLongitude;
   final double height;
@@ -45,6 +49,7 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
   BitmapDescriptor? _pin;
   BitmapDescriptor? _pinHighlight;
   List<BitmapDescriptor> _numberedPins = const [];
+  PlaceMapMarkerData? _selectedMarker;
 
   Future<bool> _prepare() async {
     final loaded = await ensureGoogleMapsJs(widget.apiKey);
@@ -98,23 +103,24 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
   /// 하프트립 톤 지도 스타일 — 파스텔 배경·하늘색 물·POI 아이콘 최소화.
   static const _halftripStyle = '''
 [
-  {"elementType":"geometry","stylers":[{"color":"#f8fafc"}]},
-  {"elementType":"labels.text.fill","stylers":[{"color":"#64748b"}]},
-  {"elementType":"labels.text.stroke","stylers":[{"color":"#ffffff"}]},
-  {"featureType":"water","elementType":"geometry","stylers":[{"color":"#bae6fd"}]},
-  {"featureType":"water","elementType":"labels.text.fill","stylers":[{"color":"#0284c7"}]},
-  {"featureType":"landscape.natural","elementType":"geometry","stylers":[{"color":"#eef4ee"}]},
-  {"featureType":"poi","elementType":"labels.icon","stylers":[{"visibility":"off"}]},
-  {"featureType":"poi","elementType":"labels.text","stylers":[{"visibility":"off"}]},
-  {"featureType":"poi.park","elementType":"geometry","stylers":[{"color":"#dcefdc"}]},
-  {"featureType":"poi.park","elementType":"labels.text","stylers":[{"visibility":"on"},{"color":"#4d7c5f"}]},
-  {"featureType":"road","elementType":"geometry","stylers":[{"color":"#ffffff"}]},
-  {"featureType":"road","elementType":"geometry.stroke","stylers":[{"color":"#e2e8f0"}]},
-  {"featureType":"road","elementType":"labels.text.fill","stylers":[{"color":"#94a3b8"}]},
-  {"featureType":"road.highway","elementType":"geometry","stylers":[{"color":"#dbeafe"}]},
-  {"featureType":"road.highway","elementType":"geometry.stroke","stylers":[{"color":"#bfdbfe"}]},
-  {"featureType":"transit","stylers":[{"visibility":"off"}]},
-  {"featureType":"administrative","elementType":"geometry.stroke","stylers":[{"color":"#cbd5e1"}]}
+  {"featureType":"all","elementType":"geometry.fill","stylers":[{"weight":2}]},
+  {"featureType":"all","elementType":"geometry.stroke","stylers":[{"color":"#9c9c9c"}]},
+  {"featureType":"all","elementType":"labels.text","stylers":[{"visibility":"on"}]},
+  {"featureType":"landscape","elementType":"all","stylers":[{"color":"#f2f2f2"}]},
+  {"featureType":"landscape","elementType":"geometry.fill","stylers":[{"color":"#ffffff"}]},
+  {"featureType":"landscape.man_made","elementType":"geometry.fill","stylers":[{"color":"#ffffff"}]},
+  {"featureType":"poi","elementType":"all","stylers":[{"visibility":"off"}]},
+  {"featureType":"road","elementType":"all","stylers":[{"saturation":-100},{"lightness":45}]},
+  {"featureType":"road","elementType":"geometry.fill","stylers":[{"color":"#eeeeee"}]},
+  {"featureType":"road","elementType":"labels.text.fill","stylers":[{"color":"#7b7b7b"}]},
+  {"featureType":"road","elementType":"labels.text.stroke","stylers":[{"color":"#ffffff"}]},
+  {"featureType":"road.highway","elementType":"all","stylers":[{"visibility":"simplified"}]},
+  {"featureType":"road.arterial","elementType":"labels.icon","stylers":[{"visibility":"off"}]},
+  {"featureType":"transit","elementType":"all","stylers":[{"visibility":"off"}]},
+  {"featureType":"water","elementType":"all","stylers":[{"color":"#46bcec"},{"visibility":"on"}]},
+  {"featureType":"water","elementType":"geometry.fill","stylers":[{"color":"#c8d7d4"}]},
+  {"featureType":"water","elementType":"labels.text.fill","stylers":[{"color":"#070707"}]},
+  {"featureType":"water","elementType":"labels.text.stroke","stylers":[{"color":"#ffffff"}]}
 ]
 ''';
   LatLng get _center {
@@ -147,6 +153,57 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
     return null;
   }
 
+  String? _infoSnippet(PlaceMapMarkerData? marker) {
+    if (marker == null) {
+      return null;
+    }
+    final googleFormattedAddress =
+        _googleDetailValue(marker.googlePlaceDetails['formattedAddress']);
+    final googleShortAddress =
+        _googleDetailValue(marker.googlePlaceDetails['shortFormattedAddress']);
+    final address = googleFormattedAddress.isNotEmpty
+        ? googleFormattedAddress
+        : (marker.roadAddress ?? '').trim().isNotEmpty
+        ? marker.roadAddress!.trim()
+        : googleShortAddress.isNotEmpty
+            ? googleShortAddress
+            : marker.address.trim();
+    final category = (marker.categoryName ?? marker.regionLabel ?? '').trim();
+    final phone = (marker.phoneNumber ?? '').trim();
+    final hasPlaceUrl = (marker.placeUrl ?? '').trim().isNotEmpty;
+    final lines = <String>[
+      if (address.isNotEmpty) address,
+      if (category.isNotEmpty) '분류: $category',
+      if (phone.isNotEmpty) '전화: $phone',
+      if (hasPlaceUrl) 'Google 장소 상세 링크 있음',
+    ];
+    return lines.isEmpty ? null : lines.join('\n');
+  }
+
+  Future<void> _selectMarker(PlaceMapMarkerData marker) async {
+    setState(() => _selectedMarker = marker);
+    widget.onMarkerTap?.call(marker.id);
+    final loader = widget.onMarkerDetailsRequested;
+    if (loader == null) {
+      return;
+    }
+    final detailed = await loader(marker);
+    if (!mounted || detailed == null) {
+      return;
+    }
+    if (_selectedMarker?.id == marker.id) {
+      setState(() => _selectedMarker = detailed);
+    }
+  }
+
+  Future<void> _openPlaceUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) {
+      return;
+    }
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
   /// 코스 모드: 번호 핀 하나에 장소 정보·탭을 병합해 중복 핀 없이 표시.
   /// 일반 모드: 장소 핀 그대로.
   Set<Marker> get _gMarkers => {
@@ -155,13 +212,15 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
             Marker(
               markerId: MarkerId('place-${m.id}'),
               position: LatLng(m.latitude, m.longitude),
-              infoWindow: InfoWindow(title: m.name, snippet: m.address),
+              infoWindow: InfoWindow(title: m.name, snippet: _infoSnippet(m)),
               icon: (m.id == widget.highlightedMarkerId
                       ? _pinHighlight
                       : _pin) ??
                   BitmapDescriptor.defaultMarker,
               anchor: const Offset(0.5, 0.5),
-              onTap: () => widget.onMarkerTap?.call(m.id),
+              onTap: () {
+                _selectMarker(m);
+              },
             ),
         if (_courseMode)
           for (var i = 0; i < widget.routeMarkers.length; i++)
@@ -173,14 +232,16 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
                 position: LatLng(route.latitude, route.longitude),
                 infoWindow: InfoWindow(
                   title: place?.name ?? '경유지 ${i + 1}',
-                  snippet: place?.address,
+                  snippet: _infoSnippet(place),
                 ),
                 icon: (i < _numberedPins.length ? _numberedPins[i] : _pin) ??
                     BitmapDescriptor.defaultMarker,
                 anchor: const Offset(0.5, 0.5),
                 onTap: place == null
                     ? null
-                    : () => widget.onMarkerTap?.call(place.id),
+                    : () {
+                        _selectMarker(place);
+                      },
               );
             }(),
       };
@@ -209,9 +270,8 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
         child: Center(child: Text(widget.emptyMessage)),
       );
     }
-    // 지도 비율 4:3 고정 (호출부 height 대신 가로 기준).
-    return AspectRatio(
-      aspectRatio: 4 / 3,
+    return SizedBox(
+      height: widget.height,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
         child: FutureBuilder<bool>(
@@ -220,17 +280,380 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
             if (snapshot.data != true) {
               return const Center(child: CircularProgressIndicator());
             }
-            return GoogleMap(
-              style: _halftripStyle,
-              initialCameraPosition: CameraPosition(target: _center, zoom: 12),
-              markers: _gMarkers,
-              polylines: _polylines,
-              myLocationButtonEnabled: false,
-              mapToolbarEnabled: false,
-              zoomControlsEnabled: false,
-              onMapCreated: (_) {},
+            return Stack(
+              children: [
+                GoogleMap(
+                  style: _halftripStyle,
+                  initialCameraPosition:
+                      CameraPosition(target: _center, zoom: 12),
+                  markers: _gMarkers,
+                  polylines: _polylines,
+                  myLocationButtonEnabled: false,
+                  mapToolbarEnabled: false,
+                  zoomControlsEnabled: false,
+                  onTap: (_) => setState(() => _selectedMarker = null),
+                  onMapCreated: (_) {},
+                ),
+                if (_selectedMarker != null)
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    top: 16,
+                    bottom: 16,
+                    child: _GooglePlaceInfoCard(
+                      marker: _selectedMarker!,
+                      onClose: () => setState(() => _selectedMarker = null),
+                      onOpenPlaceUrl: _openPlaceUrl,
+                    ),
+                  ),
+              ],
             );
           },
+        ),
+      ),
+    );
+  }
+
+  String _businessStatusLabel(String? value) {
+    switch ((value ?? '').trim()) {
+      case 'OPERATIONAL':
+        return '영업 중';
+      case 'CLOSED_TEMPORARILY':
+        return '임시 휴업';
+      case 'CLOSED_PERMANENTLY':
+        return '폐업';
+      default:
+        return (value ?? '').trim();
+    }
+  }
+}
+
+String _googleBusinessStatusLabel(String? value) {
+  switch ((value ?? '').trim()) {
+    case 'OPERATIONAL':
+      return '영업 정보 제공 중';
+    case 'CLOSED_TEMPORARILY':
+      return '임시 휴업';
+    case 'CLOSED_PERMANENTLY':
+      return '폐업';
+    default:
+      return (value ?? '').trim();
+  }
+}
+
+String _googlePriceLevelLabel(String? value) {
+  switch ((value ?? '').trim()) {
+    case 'PRICE_LEVEL_FREE':
+      return '무료';
+    case 'PRICE_LEVEL_INEXPENSIVE':
+      return '저렴';
+    case 'PRICE_LEVEL_MODERATE':
+      return '보통';
+    case 'PRICE_LEVEL_EXPENSIVE':
+      return '비쌈';
+    case 'PRICE_LEVEL_VERY_EXPENSIVE':
+      return '매우 비쌈';
+    default:
+      return (value ?? '').trim();
+  }
+}
+
+List<MapEntry<String, String>> _googlePlaceDetailRows(
+  Map<String, dynamic> details,
+) {
+  const preferredKeys = [
+    'formattedAddress',
+    'shortFormattedAddress',
+    'nationalPhoneNumber',
+    'internationalPhoneNumber',
+    'rating',
+    'userRatingCount',
+    'businessStatus',
+    'priceLevel',
+    'types',
+    'websiteUri',
+    'regularOpeningHours',
+    'currentOpeningHours',
+    'editorialSummary',
+    'id',
+    'name',
+    'googleMapsUri',
+  ];
+  final rows = <MapEntry<String, String>>[];
+  for (final key in preferredKeys) {
+    final value = _googleDetailValue(details[key]);
+    if (value.isNotEmpty) {
+      rows.add(MapEntry(key, value));
+    }
+  }
+  return rows;
+}
+
+String _googleDetailValue(Object? value) {
+  if (value == null) return '';
+  if (value is String) return value.trim();
+  if (value is num || value is bool) return value.toString();
+  if (value is List) {
+    return value.map(_googleDetailValue).where((item) => item.isNotEmpty).take(4).join(', ');
+  }
+  if (value is Map) {
+    final text = value['text'];
+    if (text is String && text.trim().isNotEmpty) return text.trim();
+    final weekdayDescriptions = value['weekdayDescriptions'];
+    if (weekdayDescriptions is List) {
+      return weekdayDescriptions
+          .map(_googleDetailValue)
+          .where((item) => item.isNotEmpty)
+          .take(3)
+          .join('\n');
+    }
+    final lat = value['latitude'];
+    final lng = value['longitude'];
+    if (lat != null && lng != null) return '$lat, $lng';
+  }
+  return '';
+}
+
+class _GooglePlaceInfoCard extends StatelessWidget {
+  const _GooglePlaceInfoCard({
+    required this.marker,
+    required this.onClose,
+    required this.onOpenPlaceUrl,
+  });
+
+  final PlaceMapMarkerData marker;
+  final VoidCallback onClose;
+  final ValueChanged<String> onOpenPlaceUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final address = (marker.roadAddress ?? '').trim().isNotEmpty
+        ? marker.roadAddress!.trim()
+        : marker.address.trim();
+    final category = (marker.categoryName ?? marker.regionLabel ?? '').trim();
+    final phone = (marker.phoneNumber ?? '').trim();
+    final placeUrl = (marker.placeUrl ?? '').trim();
+    final websiteUri = (marker.websiteUri ?? '').trim();
+    final internationalPhone = (marker.internationalPhoneNumber ?? '').trim();
+    final businessStatus = _googleBusinessStatusLabel(marker.businessStatus);
+    final priceLevel = _googlePriceLevelLabel(marker.priceLevel);
+    final rating = marker.rating == null
+        ? ''
+        : '${marker.rating!.toStringAsFixed(1)}점'
+            '${marker.userRatingCount == null ? '' : ' · 리뷰 ${marker.userRatingCount}개'}';
+    final openingHours = marker.openingHours.take(7).toList();
+    final summary = (marker.editorialSummary ?? '').trim();
+
+    Widget infoRow(String value, {required IconData icon}) {
+      if (value.trim().isEmpty) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.only(top: 9),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 18, color: const Color(0xFF008C95)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                value,
+                style: const TextStyle(
+                  color: Color(0xFF334155),
+                  fontSize: 13,
+                  height: 1.28,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    Widget actionButton({
+      required IconData icon,
+      required String label,
+      required VoidCallback onTap,
+    }) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE6FAFD),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 17, color: const Color(0xFF008C95)),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Color(0xFF0F766E),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    Widget hoursSection() {
+      if (openingHours.isEmpty) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.schedule, size: 16, color: Color(0xFF64748B)),
+                  SizedBox(width: 8),
+                  Text(
+                    '영업시간',
+                    style: TextStyle(
+                      color: Color(0xFF334155),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              ...openingHours.take(2).map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(top: 3),
+                  child: Text(
+                    item,
+                    style: const TextStyle(
+                      color: Color(0xFF475569),
+                      fontSize: 12,
+                      height: 1.25,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x22000000),
+              blurRadius: 18,
+              offset: Offset(0, 8),
+            ),
+          ],
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    marker.name,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onClose,
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            if (rating.isNotEmpty || category.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (rating.isNotEmpty)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          rating,
+                          style: const TextStyle(
+                            color: Color(0xFF334155),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.star_rounded,
+                          size: 18,
+                          color: Color(0xFFFFB300),
+                        ),
+                      ],
+                    ),
+                  if (category.isNotEmpty)
+                    Text(
+                      category,
+                      style: const TextStyle(color: Color(0xFF64748B)),
+                    ),
+                ],
+              ),
+            ],
+            if (websiteUri.isNotEmpty || placeUrl.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (placeUrl.isNotEmpty)
+                    actionButton(
+                      icon: Icons.place_outlined,
+                      label: '지도',
+                      onTap: () => onOpenPlaceUrl(placeUrl),
+                    ),
+                  if (websiteUri.isNotEmpty)
+                    actionButton(
+                      icon: Icons.language,
+                      label: '웹사이트',
+                      onTap: () => onOpenPlaceUrl(websiteUri),
+                    ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 4),
+            infoRow(address, icon: Icons.location_on_outlined),
+            infoRow(businessStatus, icon: Icons.storefront),
+            infoRow(phone.isNotEmpty ? phone : internationalPhone,
+                icon: Icons.call),
+            infoRow(priceLevel, icon: Icons.payments_outlined),
+            infoRow(summary, icon: Icons.notes_outlined),
+            hoursSection(),
+            ],
+          ),
         ),
       ),
     );

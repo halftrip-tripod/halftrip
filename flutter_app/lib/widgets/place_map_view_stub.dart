@@ -18,6 +18,7 @@ class PlaceMapView extends StatelessWidget {
     this.onMarkerTap,
     this.onMarkerDoubleTap,
     this.onMarkerAction,
+    this.onMarkerDetailsRequested,
     this.onViewportChanged,
     this.initialCenterLatitude,
     this.initialCenterLongitude,
@@ -33,6 +34,8 @@ class PlaceMapView extends StatelessWidget {
   final ValueChanged<int>? onMarkerTap;
   final ValueChanged<int>? onMarkerDoubleTap;
   final ValueChanged<int>? onMarkerAction;
+  final Future<PlaceMapMarkerData?> Function(PlaceMapMarkerData marker)?
+      onMarkerDetailsRequested;
   final ValueChanged<PlaceMapViewport>? onViewportChanged;
   final double? initialCenterLatitude;
   final double? initialCenterLongitude;
@@ -51,6 +54,7 @@ class PlaceMapView extends StatelessWidget {
         connectSequentially: connectSequentially,
         highlightedMarkerId: highlightedMarkerId,
         onMarkerTap: onMarkerTap,
+        onMarkerDetailsRequested: onMarkerDetailsRequested,
         initialCenterLatitude: initialCenterLatitude,
         initialCenterLongitude: initialCenterLongitude,
         height: height,
