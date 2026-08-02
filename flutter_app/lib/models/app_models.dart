@@ -1677,6 +1677,18 @@ class YoutubeCourseJobStop {
     required this.latitude,
     required this.longitude,
     required this.category,
+    this.phoneNumber = '',
+    this.placeUrl = '',
+    this.websiteUri = '',
+    this.internationalPhoneNumber = '',
+    this.rating,
+    this.userRatingCount = 0,
+    this.businessStatus = '',
+    this.priceLevel = '',
+    this.types = const [],
+    this.openingHours = const [],
+    this.editorialSummary = '',
+    this.googlePlaceDetails = const {},
     required this.source,
     required this.reason,
   });
@@ -1687,10 +1699,23 @@ class YoutubeCourseJobStop {
   final double latitude;
   final double longitude;
   final String category;
+  final String phoneNumber;
+  final String placeUrl;
+  final String websiteUri;
+  final String internationalPhoneNumber;
+  final double? rating;
+  final int userRatingCount;
+  final String businessStatus;
+  final String priceLevel;
+  final List<String> types;
+  final List<String> openingHours;
+  final String editorialSummary;
+  final Map<String, dynamic> googlePlaceDetails;
   final String source;
   final String reason;
 
   factory YoutubeCourseJobStop.fromJson(Map<String, dynamic> json) {
+    final rawDetails = json['googlePlaceDetails'];
     return YoutubeCourseJobStop(
       order: json['order'] as int? ?? 0,
       placeName: json['placeName'] as String? ?? '',
@@ -1698,6 +1723,25 @@ class YoutubeCourseJobStop {
       latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
       category: json['category'] as String? ?? '',
+      phoneNumber: json['phoneNumber'] as String? ?? '',
+      placeUrl: json['placeUrl'] as String? ?? '',
+      websiteUri: json['websiteUri'] as String? ?? '',
+      internationalPhoneNumber:
+          json['internationalPhoneNumber'] as String? ?? '',
+      rating: (json['rating'] as num?)?.toDouble(),
+      userRatingCount: json['userRatingCount'] as int? ?? 0,
+      businessStatus: json['businessStatus'] as String? ?? '',
+      priceLevel: json['priceLevel'] as String? ?? '',
+      types: ((json['types'] as List<dynamic>?) ?? const [])
+          .map((item) => item.toString())
+          .toList(),
+      openingHours: ((json['openingHours'] as List<dynamic>?) ?? const [])
+          .map((item) => item.toString())
+          .toList(),
+      editorialSummary: json['editorialSummary'] as String? ?? '',
+      googlePlaceDetails: rawDetails is Map<String, dynamic>
+          ? rawDetails
+          : const <String, dynamic>{},
       source: json['source'] as String? ?? '',
       reason: json['reason'] as String? ?? '',
     );
@@ -1722,6 +1766,76 @@ class YoutubeCourseJobResult {
       stops: ((json['stops'] as List<dynamic>?) ?? const [])
           .map((item) => YoutubeCourseJobStop.fromJson(item as Map<String, dynamic>))
           .toList(),
+    );
+  }
+}
+
+class GooglePlaceDetailItem {
+  const GooglePlaceDetailItem({
+    required this.placeName,
+    required this.address,
+    required this.latitude,
+    required this.longitude,
+    required this.category,
+    required this.phoneNumber,
+    required this.placeUrl,
+    required this.websiteUri,
+    required this.internationalPhoneNumber,
+    required this.rating,
+    required this.userRatingCount,
+    required this.businessStatus,
+    required this.priceLevel,
+    required this.types,
+    required this.openingHours,
+    required this.editorialSummary,
+    required this.googlePlaceDetails,
+  });
+
+  final String placeName;
+  final String address;
+  final double latitude;
+  final double longitude;
+  final String category;
+  final String phoneNumber;
+  final String placeUrl;
+  final String websiteUri;
+  final String internationalPhoneNumber;
+  final double? rating;
+  final int userRatingCount;
+  final String businessStatus;
+  final String priceLevel;
+  final List<String> types;
+  final List<String> openingHours;
+  final String editorialSummary;
+  final Map<String, dynamic> googlePlaceDetails;
+
+  factory GooglePlaceDetailItem.fromJson(Map<String, dynamic> json) {
+    final rawDetails = json['googlePlaceDetails'];
+    return GooglePlaceDetailItem(
+      placeName: json['placeName'] as String? ?? '',
+      address: json['address'] as String? ?? '',
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
+      category: json['category'] as String? ?? '',
+      phoneNumber: json['phoneNumber'] as String? ?? '',
+      placeUrl: json['placeUrl'] as String? ?? '',
+      websiteUri: json['websiteUri'] as String? ?? '',
+      internationalPhoneNumber:
+          json['internationalPhoneNumber'] as String? ?? '',
+      rating: (json['rating'] as num?)?.toDouble(),
+      userRatingCount: json['userRatingCount'] as int? ?? 0,
+      businessStatus: json['businessStatus'] as String? ?? '',
+      priceLevel: json['priceLevel'] as String? ?? '',
+      types: ((json['types'] as List<dynamic>?) ?? const [])
+          .map((item) => item.toString())
+          .toList(),
+      openingHours: ((json['openingHours'] as List<dynamic>?) ?? const [])
+          .map((item) => item.toString())
+          .toList(),
+      editorialSummary: json['editorialSummary'] as String? ?? '',
+      googlePlaceDetails: rawDetails is Map<String, dynamic>
+          ? rawDetails
+          : const <String, dynamic>{},
     );
   }
 }

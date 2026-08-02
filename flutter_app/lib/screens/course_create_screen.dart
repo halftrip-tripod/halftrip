@@ -5,7 +5,7 @@ import '../theme/app_colors.dart';
 import '../widgets/ui/app_card.dart';
 import 'course_flow_screens.dart';
 import 'region_course_builder_screen.dart';
-import 'youtube_course_analysis_screen.dart';
+import 'youtube_course_start_screen.dart';
 
 /// 코스 만들기 방식 선택 (S1-4a) — 디자인: halftrip-design/course-create.html
 /// ① AI 추천 ② 유튜브 영상 ③ 직접 만들기. 어느 방식이든 결과는 코스 편집으로 수렴.
@@ -17,111 +17,22 @@ class CourseCreateScreen extends StatelessWidget {
   void _openBuilder(BuildContext context, CourseBuildMode mode) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => RegionCourseBuilderScreen(
-          regionId: tripDetail.trip.regionId,
-          regionName: tripDetail.trip.regionName,
-          tripId: tripDetail.trip.id,
-          initialTripPlaces: tripDetail.selectedPlaces,
-          initialMode: mode,
-        ),
+        builder:
+            (_) => RegionCourseBuilderScreen(
+              regionId: tripDetail.trip.regionId,
+              regionName: tripDetail.trip.regionName,
+              tripId: tripDetail.trip.id,
+              initialTripPlaces: tripDetail.selectedPlaces,
+              initialMode: mode,
+            ),
       ),
     );
   }
 
   Future<void> _openYoutubeInput(BuildContext context) async {
-    final controller = TextEditingController();
-    final url = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      showDragHandle: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (sheetContext) => Padding(
-        padding: EdgeInsets.fromLTRB(
-            24, 4, 24, MediaQuery.of(sheetContext).viewInsets.bottom + 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Icon(Icons.play_circle_fill_rounded,
-                    size: 20, color: Color(0xFFE0322B)),
-                SizedBox(width: 8),
-                Text(
-                  '유튜브 영상 링크',
-                  style: TextStyle(
-                    fontFamily: 'Pretendard',
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.ink9,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              '여행 브이로그 링크를 붙여넣으면 영상 속 장소로 코스를 완성해요. 분석은 백그라운드에서 진행돼요.',
-              style: TextStyle(
-                fontFamily: 'Pretendard',
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: AppColors.ink5,
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              keyboardType: TextInputType.url,
-              style: const TextStyle(
-                fontFamily: 'Pretendard',
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: AppColors.ink9,
-              ),
-              decoration: InputDecoration(
-                hintText: 'https://youtu.be/...',
-                hintStyle: const TextStyle(
-                    fontFamily: 'Pretendard',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.ink4),
-                prefixIcon:
-                    const Icon(Icons.link_rounded, color: AppColors.ink4),
-                filled: true,
-                fillColor: AppColors.surf,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.field),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () =>
-                    Navigator.of(sheetContext).pop(controller.text.trim()),
-                child: const Text('코스 만들기'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (url == null || url.isEmpty || !context.mounted) return;
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => YoutubeCourseAnalysisScreen(
-          tripDetail: tripDetail,
-          youtubeUrl: url,
-        ),
+        builder: (_) => YoutubeCourseStartScreen(tripDetail: tripDetail),
       ),
     );
   }
@@ -135,11 +46,13 @@ class CourseCreateScreen extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
         children: [
           const Text.rich(
-            TextSpan(children: [
-              TextSpan(text: '어떤 방식으로\n'),
-              TextSpan(text: '코스', style: TextStyle(color: AppColors.p600)),
-              TextSpan(text: '를 만들까요?'),
-            ]),
+            TextSpan(
+              children: [
+                TextSpan(text: '어떤 방식으로\n'),
+                TextSpan(text: '코스', style: TextStyle(color: AppColors.p600)),
+                TextSpan(text: '를 만들까요?'),
+              ],
+            ),
             style: TextStyle(
               fontFamily: 'Pretendard',
               fontSize: 22,
@@ -166,9 +79,12 @@ class CourseCreateScreen extends StatelessWidget {
             iconFg: AppColors.p600,
             title: 'AI 추천 코스',
             desc: '환급 조건 · 여행 취향에 맞는 코스를 자동으로 생성해요',
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => CourseAiScreen(tripDetail: tripDetail),
-            )),
+            onTap:
+                () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => CourseAiScreen(tripDetail: tripDetail),
+                  ),
+                ),
           ),
           const SizedBox(height: 14),
           _MakeCard(

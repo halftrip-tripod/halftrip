@@ -738,6 +738,18 @@ class MockTravelRepository implements TravelRepository {
             latitude: entry.value.latitude ?? 0,
             longitude: entry.value.longitude ?? 0,
             category: '관광지',
+            phoneNumber: '',
+            placeUrl: '',
+            websiteUri: '',
+            internationalPhoneNumber: '',
+            rating: null,
+            userRatingCount: 0,
+            businessStatus: '',
+            priceLevel: '',
+            types: const [],
+            openingHours: const [],
+            editorialSummary: '',
+            googlePlaceDetails: const {},
             source: 'youtube_mock',
             reason: 'Mock 유튜브 분석 결과',
           ),
@@ -783,6 +795,16 @@ class MockTravelRepository implements TravelRepository {
         .toList()
       ..sort((a, b) => (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now()));
     return jobs.isEmpty ? null : jobs.first;
+  }
+
+  @override
+  Future<GooglePlaceDetailItem?> searchGooglePlaceDetail({
+    required String placeName,
+    required String address,
+    required double latitude,
+    required double longitude,
+  }) async {
+    return null;
   }
 
   @override
