@@ -36,6 +36,7 @@ class _YoutubeCourseAnalysisScreenState
   bool _creating = true;
   Timer? _pollingTimer;
   bool _saving = false;
+  bool _customOrder = false;
   int? _selectedStopOrder;
   final TextEditingController _titleController = TextEditingController();
 
@@ -215,6 +216,298 @@ class _YoutubeCourseAnalysisScreenState
           ),
         )
         .toList();
+  }
+
+  YoutubeCourseJobStop _copyStopWithOrder(
+    YoutubeCourseJobStop stop,
+    int order,
+  ) {
+    return YoutubeCourseJobStop(
+      order: order,
+      placeName: stop.placeName,
+      address: stop.address,
+      latitude: stop.latitude,
+      longitude: stop.longitude,
+      category: stop.category,
+      phoneNumber: stop.phoneNumber,
+      placeUrl: stop.placeUrl,
+      websiteUri: stop.websiteUri,
+      internationalPhoneNumber: stop.internationalPhoneNumber,
+      rating: stop.rating,
+      userRatingCount: stop.userRatingCount,
+      businessStatus: stop.businessStatus,
+      priceLevel: stop.priceLevel,
+      types: stop.types,
+      openingHours: stop.openingHours,
+      editorialSummary: stop.editorialSummary,
+      googlePlaceDetails: stop.googlePlaceDetails,
+      source: stop.source,
+      reason: stop.reason,
+    );
+  }
+
+  YoutubeCourseJobItem _copyJobWithStops(
+    YoutubeCourseJobItem job,
+    List<YoutubeCourseJobStop> stops,
+  ) {
+    final result = job.result!;
+    return YoutubeCourseJobItem(
+      jobId: job.jobId,
+      userId: job.userId,
+      tripId: job.tripId,
+      regionId: job.regionId,
+      regionName: job.regionName,
+      youtubeUrl: job.youtubeUrl,
+      status: job.status,
+      result: YoutubeCourseJobResult(
+        title: result.title,
+        summary: result.summary,
+        stops: stops,
+      ),
+      errorMessage: job.errorMessage,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt,
+    );
+  }
+
+  Future<void> _openStopReorderSheet() async {
+    final job = _job;
+    final result = job?.result;
+    if (job == null || result == null || result.stops.length < 2) return;
+
+    final draftStops = List<YoutubeCourseJobStop>.from(result.stops);
+    final reorderedStops = await showModalBottomSheet<
+      List<YoutubeCourseJobStop>
+    >(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return FractionallySizedBox(
+              heightFactor: 0.78,
+              child: Material(
+                color: Colors.white,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  children: [
+                    const SizedBox(height: 10),
+                    Container(
+                      width: 42,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD9DCE5),
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 18, 12, 12),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '장소 순서 재배열',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.ink9,
+                                  ),
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  '오른쪽 손잡이를 끌어 방문 순서를 바꿔보세요.',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: AppColors.ink5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.of(sheetContext).pop(),
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: ReorderableListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                        buildDefaultDragHandles: false,
+                        itemCount: draftStops.length,
+                        onReorder: (oldIndex, newIndex) {
+                          setSheetState(() {
+                            if (newIndex > oldIndex) newIndex -= 1;
+                            final item = draftStops.removeAt(oldIndex);
+                            draftStops.insert(newIndex, item);
+                          });
+                        },
+                        itemBuilder: (context, index) {
+                          final stop = draftStops[index];
+                          return Container(
+                            key: ValueKey(
+                              '${stop.order}-${stop.placeName}-${stop.latitude}-${stop.longitude}',
+                            ),
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8F8FC),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: const Color(0xFFE2E4EC),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 34,
+                                  height: 34,
+                                  alignment: Alignment.center,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF5146E5),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Text(
+                                    '${index + 1}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        stop.placeName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: AppColors.ink9,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                      if (stop.category.isNotEmpty ||
+                                          stop.address.isNotEmpty) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          stop.category.isNotEmpty
+                                              ? stop.category
+                                              : stop.address,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: AppColors.ink5,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                ReorderableDragStartListener(
+                                  index: index,
+                                  child: const Padding(
+                                    padding: EdgeInsets.all(8),
+                                    child: Icon(
+                                      Icons.drag_handle_rounded,
+                                      color: AppColors.ink5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    SafeArea(
+                      top: false,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed:
+                                    () => Navigator.of(sheetContext).pop(),
+                                child: const Text('취소'),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: FilledButton(
+                                onPressed:
+                                    () => Navigator.of(sheetContext).pop([
+                                      for (
+                                        var index = 0;
+                                        index < draftStops.length;
+                                        index++
+                                      )
+                                        _copyStopWithOrder(
+                                          draftStops[index],
+                                          index + 1,
+                                        ),
+                                    ]),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: const Color(0xFF5146E5),
+                                ),
+                                child: const Text('순서 적용'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (!mounted || reorderedStops == null) return;
+    final updatedJob = _copyJobWithStops(job, reorderedStops);
+    setState(() {
+      _job = updatedJob;
+      _customOrder = true;
+      _selectedStopOrder = reorderedStops.first.order;
+    });
+
+    try {
+      await AppScope.of(context).saveCompletedYoutubeCourse(
+        updatedJob,
+        preferredTitle: _titleController.text.trim(),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('순서는 적용됐지만 코스함 저장에 실패했습니다.')),
+      );
+      return;
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('방문 순서를 변경했습니다.')));
   }
 
   Future<PlaceMapMarkerData?> _loadGoogleMarkerDetails(
@@ -472,10 +765,12 @@ class _YoutubeCourseAnalysisScreenState
                 routePoints: routePoints,
                 selectedStop: selectedStop,
                 saving: _saving,
+                customOrder: _customOrder,
                 onSelectStop: (stop) {
                   setState(() => _selectedStopOrder = stop.order);
                 },
                 onMarkerDetailsRequested: _loadGoogleMarkerDetails,
+                onReorder: _openStopReorderSheet,
                 onRecompose: _saving ? null : _saveToPlanner,
                 onEdit: _openTravelPlan,
                 onDirections:
@@ -514,8 +809,10 @@ class _CompletedItineraryView extends StatelessWidget {
     required this.routePoints,
     required this.selectedStop,
     required this.saving,
+    required this.customOrder,
     required this.onSelectStop,
     required this.onMarkerDetailsRequested,
+    required this.onReorder,
     required this.onRecompose,
     required this.onEdit,
     required this.onDirections,
@@ -526,9 +823,11 @@ class _CompletedItineraryView extends StatelessWidget {
   final List<PlaceMapRoutePoint> routePoints;
   final YoutubeCourseJobStop? selectedStop;
   final bool saving;
+  final bool customOrder;
   final ValueChanged<YoutubeCourseJobStop> onSelectStop;
   final Future<PlaceMapMarkerData?> Function(PlaceMapMarkerData marker)
   onMarkerDetailsRequested;
+  final VoidCallback onReorder;
   final VoidCallback? onRecompose;
   final VoidCallback onEdit;
   final VoidCallback? onDirections;
@@ -553,10 +852,10 @@ class _CompletedItineraryView extends StatelessWidget {
               children: [
                 Expanded(
                   child: _ModeButton(
-                    icon: Icons.play_circle_outline_rounded,
-                    label: '영상 순서대로',
+                    icon: Icons.swap_vert_rounded,
+                    label: '순서 재배열',
                     active: false,
-                    onTap: () {},
+                    onTap: onReorder,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -632,7 +931,7 @@ class _CompletedItineraryView extends StatelessWidget {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            '총 ${result.stops.length}개 장소 · 영상 등장 순서 기준',
+                            '총 ${result.stops.length}개 장소 · ${customOrder ? '사용자 지정 순서' : '영상 등장 순서 기준'}',
                             style: const TextStyle(
                               color: AppColors.ink5,
                               fontSize: 13,
