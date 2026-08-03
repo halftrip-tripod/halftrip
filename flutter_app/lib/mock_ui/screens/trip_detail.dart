@@ -223,6 +223,12 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
               subtitle: '${course.regionName} · ${course.stops.length}곳',
               tinted: true,
               onTap: () => _push(PlannerScreen(tripId: widget.tripId)),
+            ),
+          if (course != null)
+            OutlineButton(
+              '유튜브로 새 코스 만들기',
+              icon: Icons.play_circle_outline_rounded,
+              onTap: () => _openYoutubeAnalysis(detail),
             )
           else ...[
             OutlineButton(
