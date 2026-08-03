@@ -158,6 +158,7 @@ abstract class TravelRepository {
     List<String> photos,
     String? courseName,
     String? courseMeta,
+    List<SavedCourseStop> courseStops,
     int? tripId,
     required String visibility,
   });
@@ -175,6 +176,9 @@ abstract class TravelRepository {
     List<String>? photos,
     String? courseName,
     String? courseMeta,
+    List<SavedCourseStop>? courseStops,
+    bool clearCourse,
+    String? visibility,
   });
   Future<List<CommunityCommentData>> getCommunityComments(int postId, {int? userId});
   Future<CommunityCommentData> addCommunityComment(int postId, int userId, String body,

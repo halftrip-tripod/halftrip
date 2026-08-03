@@ -165,6 +165,7 @@ class AppState extends ChangeNotifier {
       photos: data.photos,
       courseName: data.courseName,
       courseMeta: data.courseMeta,
+      courseStops: data.courseStops,
       likes: data.likeCount,
       comments: data.commentCount,
       saves: data.saveCount,
@@ -240,6 +241,7 @@ class AppState extends ChangeNotifier {
             photos: p.photos,
             courseName: p.courseName,
             courseMeta: p.courseMeta,
+            courseStops: p.courseStops,
             visibility: p.private ? 'PRIVATE' : 'PUBLIC',
             tripId: tripId,
           )
