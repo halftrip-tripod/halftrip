@@ -85,7 +85,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
     if (mounted) await _reload();
   }
 
-  /// 실서버 regionId → 지역명 → 지역 상세(목업 데이터 기반) 진입.
+  /// 실서버 regionId → 지역 상세(실 API) 진입.
   Future<void> _openRegion(int regionId) async {
     try {
       final controller = AppScope.of(context);
@@ -96,10 +96,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
       if (match == null || !mounted) return;
       await Navigator.of(context).push(
         MaterialPageRoute(
-          builder:
-              (_) => RegionDetailScreen(
-                region: mock.AppState.I.regionByName(match.name),
-              ),
+          builder: (_) => RegionDetailScreen(region: match),
         ),
       );
     } catch (_) {}

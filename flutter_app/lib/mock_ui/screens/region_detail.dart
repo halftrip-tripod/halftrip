@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-import '../data/models.dart';
+import '../../core/app_scope.dart';
+import '../../data/region_guides.dart';
+import '../../models/app_models.dart';
+import '../data/models.dart' show Post;
 import '../state/app_state.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui.dart';
 import 'community.dart';
 import 'place_detail.dart';
 
-/// S1-2 지역 상세 (신청 판단 허브).
+/// S1-2 지역 상세 (신청 판단 허브) — 실 API(RegionSummary) 연동.
 class RegionDetailScreen extends StatefulWidget {
   const RegionDetailScreen({super.key, required this.region});
-  final Region region;
+  final RegionSummary region;
 
   @override
   State<RegionDetailScreen> createState() => _RegionDetailScreenState();
@@ -19,6 +23,7 @@ class RegionDetailScreen extends StatefulWidget {
 class _RegionDetailScreenState extends State<RegionDetailScreen> {
   final _openAcc = {0};
 
+  // 환급 인정 관광지 — 장소 API 연동 전까지 쓰는 임시 목업 리스트.
   static const _places = [
     ('🏯', '다산초당', '역사·문화'),
     ('🌉', '가우도 출렁다리', '자연·체험'),
@@ -26,26 +31,26 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
     ('🌾', '강진만 생태공원', '자연'),
   ];
 
-  static const _accordions = [
-    (Icons.photo_camera_outlined, '관광지 인증', [
-      '강진 관광지 2개소 이상 방문 사진이 필요합니다.',
-      '반드시 신청대표자와 신청구성원 얼굴이 모두 나와야 합니다.',
-    ]),
-    (Icons.credit_card_rounded, '경비 · 결제', [
-      '개인 3만원 이상, 팀(2인 이상) 5만원 이상 지출 영수증이 필요합니다.',
-      '신청대표자 명의 카드영수증을 인정합니다.',
-      '대표자 번호가 기재된 현금영수증·CHAK 거래내역을 인정합니다.',
-      '연 30억원 이상 매출 업소 결제 비용은 지원 제외입니다.',
-    ]),
-    (Icons.bed_outlined, '숙박', [
-      '선결제한 경우 숙소 이용 완료 내역서와 결제 영수증을 함께 제출해야 합니다.',
-    ]),
-  ];
+  bool get _isPreparing => widget.region.statusCode.toUpperCase() == 'PREPARING';
+
+  Future<void> _openUrl(String url) async {
+    if (url.trim().isEmpty) {
+      showMock(context, '연결된 링크가 없어요.');
+      return;
+    }
+    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final controller = AppScope.of(context);
     final r = widget.region;
-    final soon = r.status == RegionStatus.soon;
+    final guide = settlementGuideFor(r.name);
+    final guideText = guide.sections.expand((s) => s.bullets).join(' ');
+    final isFavorite =
+        controller.currentUser?.favoriteRegions.any((f) => f.id == r.id) ?? false;
+    final dday = _mockDday[r.name];
+
     return DetailScaffold(
       title: r.name,
       actions: [
@@ -55,35 +60,27 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
         ),
       ],
       // 오픈예정: 관심 등록 = 오픈 알림이므로 별표 없이 알림 CTA 하나만.
-      // 접수중: 별표(관심·마감 알림 대상) + 신청 CTA.
+      // 접수중: 별표(즐겨찾기) + 신청 CTA(실제 지자체 신청 링크로 이동).
       cta: CtaBar(children: [
-        if (soon)
-          ValueListenableBuilder(
-            valueListenable: r.favorite,
-            builder: (_, fav, _) => PrimaryButton(
-              fav ? '오픈 알림 신청됨 ✓' : '오픈 알림 받기',
-              icon: fav ? null : Icons.notifications_none_rounded,
-              onTap: () {
-                AppState.I.toggleFavorite(r);
-                showMock(
-                    context,
-                    fav
-                        ? '${r.name} 오픈 알림을 해제했어요.'
-                        : '${r.name}을(를) 관심 지역에 담고 오픈 알림을 신청했어요!');
-              },
-            ),
+        if (_isPreparing)
+          PrimaryButton(
+            controller.preopenAlertRegionIds.contains(r.id) ? '오픈 알림 신청됨 ✓' : '오픈 알림 받기',
+            icon: controller.preopenAlertRegionIds.contains(r.id) ? null : Icons.notifications_none_rounded,
+            onTap: () async {
+              final wasEnabled = controller.preopenAlertRegionIds.contains(r.id);
+              await controller.togglePreopenAlertRegion(r.id);
+              if (!context.mounted) return;
+              showMock(context,
+                  wasEnabled ? '${r.name} 오픈 알림을 해제했어요.' : '${r.name}을(를) 관심 지역에 담고 오픈 알림을 신청했어요!');
+            },
           )
         else ...[
-          ValueListenableBuilder(
-            valueListenable: r.favorite,
-            builder: (_, fav, _) => GhostButton(
-              icon: fav ? Icons.star_rounded : Icons.star_outline_rounded,
-              active: fav,
-              onTap: () => AppState.I.toggleFavorite(r),
-            ),
+          GhostButton(
+            icon: isFavorite ? Icons.star_rounded : Icons.star_outline_rounded,
+            active: isFavorite,
+            onTap: () => controller.toggleFavoriteRegion(r),
           ),
-          PrimaryButton('신청하러 가기',
-              onTap: () => showMock(context, '지자체 신청 페이지로 이동해요. (외부 링크 · 목업)')),
+          PrimaryButton('신청하러 가기', onTap: () => _openUrl(r.halfPriceApplyUrl)),
         ],
       ]),
       children: [
@@ -91,7 +88,7 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
         AppCard(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              EmojiBox(r.emoji, size: 64, fontSize: 34, radius: 20),
+              EmojiBox(_regionEmoji(r.name), size: 64, fontSize: 34, radius: 20),
               const SizedBox(width: 14),
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(r.name,
@@ -103,60 +100,34 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
             ]),
             const SizedBox(height: 14),
             Row(children: [
-              Pill(soon ? '오픈예정' : '접수중', tone: soon ? PillTone.gray : PillTone.sky),
-              if (r.mintBenefit) ...[const SizedBox(width: 8), const Pill('디민증 중복혜택', tone: PillTone.mint)],
+              Pill(r.statusLabel, tone: _isPreparing ? PillTone.gray : PillTone.sky),
+              if (r.digitalBenefitAvailable) ...[const SizedBox(width: 8), const Pill('디민증 중복혜택', tone: PillTone.mint)],
               const Spacer(),
-              DdayChip(soon ? '오픈 D-${r.dday}' : '마감 D-${r.dday}', warn: r.ddayWarn),
+              DdayChip(
+                dday == null
+                    ? (_isPreparing ? '오픈일 확인 필요' : '마감일 확인 필요')
+                    : (_isPreparing ? '오픈 D-${dday.$1}' : '마감 D-${dday.$1}'),
+                warn: !_isPreparing && (dday?.$2 ?? false),
+              ),
             ]),
           ]),
         ),
         // 오픈 전 안내 (조건은 지자체 공고 기준으로 미리 공개)
-        if (soon)
+        if (_isPreparing)
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(color: AppColors.p50, borderRadius: BorderRadius.circular(16)),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Icon(Icons.campaign_outlined, size: 20, color: AppColors.p600),
-              const SizedBox(width: 10),
+            child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(Icons.campaign_outlined, size: 20, color: AppColors.p600),
+              SizedBox(width: 10),
               Expanded(
-                child: Text.rich(
-                  TextSpan(children: [
-                    TextSpan(
-                        text: '${r.openLabel} · 선착순 접수\n',
-                        style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.p700)),
-                    const TextSpan(
-                        text: '아래 조건은 지자체 사업 공고 기준이에요. 미리 확인하고 오픈되면 바로 신청하세요.'),
-                  ]),
-                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink5, height: 1.5),
+                child: Text(
+                  '아직 접수 전이에요. 아래 조건은 지자체 사업 공고 기준 — 미리 확인하고 오픈되면 바로 신청하세요.',
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink5, height: 1.5),
                 ),
               ),
             ]),
           ),
-        // 신청 일정
-        _DCard(title: '신청 일정', children: [
-          if (soon)
-            _CRow(icon: Icons.calendar_today_outlined, label: '접수 시작', rich: [
-              TextSpan(
-                  text: r.openLabel ?? '',
-                  style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.ink9)),
-              TextSpan(text: ' 10:00 · D-${r.dday}'),
-            ])
-          else
-            const _CRow(icon: Icons.calendar_today_outlined, label: '접수 기간', rich: [
-              TextSpan(text: '6.02 ~ 6.18', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.ink9)),
-              TextSpan(text: ' · 마감 D-5'),
-            ]),
-          _CRow(icon: Icons.calendar_month_outlined, label: '여행 기간', rich: [
-            TextSpan(
-                text: soon ? '6.16 ~ 7.13' : '6.02 ~ 6.30',
-                style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.ink9)),
-            const TextSpan(text: ' 중 1박2일'),
-          ]),
-          const _CRow(icon: Icons.schedule_rounded, label: '정산 신청', rich: [
-            TextSpan(text: '여행 종료 다음날부터 '),
-            TextSpan(text: '7일 이내', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.ink9)),
-          ]),
-        ]),
         // 환급 조건 요약
         _DCard(title: '환급 조건 요약', children: [
           Container(
@@ -166,16 +137,16 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.end, children: [
               Text('50%', style: TextStyle(fontSize: 25, fontWeight: FontWeight.w900, color: AppColors.p600, letterSpacing: -1.2, height: 1)),
               SizedBox(width: 9),
-              Text('여행경비 환급 · 1인 최대 25만원',
+              Text('여행경비 환급',
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink7)),
             ]),
           ),
-          const _Kv('결제 수단', '강진사랑상품권 Chak\n카드 · 현금영수증'),
-          const _Kv('인증 조건', '영수증 + 여행 인증 사진'),
-          const _Kv('최소 소비', '개인 3만원 / 팀 5만원 이상'),
-          const _Kv('지정관광지', '2곳 이상 방문 인증 · 1박 숙박 필수'),
+          _Kv('결제 수단', _paymentSummary(guideText)),
+          _Kv('인증 조건', _proofSummary(guideText)),
+          _Kv('최소 소비', _minSpendSummary(guideText)),
+          _Kv('1인 최대 환급', '${_formatWon(r.refundConditionAmount)}원'),
         ]),
-        // 인정 관광지
+        // 인정 관광지 — 장소 API 연동 전까지 목업.
         _DCard(title: '환급 인정 관광지', children: [
           SizedBox(
             height: 148,
@@ -225,53 +196,52 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
                 child: const Icon(Icons.schedule_rounded, size: 19, color: AppColors.p600),
               ),
               const SizedBox(width: 11),
-              const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('정산 신청 기한',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.p600)),
-                SizedBox(height: 2),
-                Text('여행 종료 다음날부터 7일 이내',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink9)),
-              ]),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('정산 신청 기한',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.p600)),
+                  const SizedBox(height: 2),
+                  Text(guide.deadline,
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink9)),
+                ]),
+              ),
             ]),
           ),
-          // 아코디언들을 한 그룹으로 묶어 _DCard 간격이 한 번만 적용되게 →
-          // 항목 사이 구분선 위/아래 여백이 14로 대칭이 된다.
           Column(children: [
-            for (var i = 0; i < _accordions.length; i++) _accordion(i),
+            for (var i = 0; i < guide.sections.length; i++) _accordion(i, guide.sections[i]),
           ]),
+          if (guide.note != null && guide.note!.trim().isNotEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: const Color(0xFFFFF6E9), borderRadius: BorderRadius.circular(15)),
+              child: Text(guide.note!,
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF9A6800), height: 1.55)),
+            ),
         ]),
         // 디민증
-        _DCard(title: '디지털 관광주민증 혜택', children: [
-          const Text('반값여행 + 디민증 중복 혜택 가능',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: AppColors.mintDeep)),
-          Text('${r.name} 관광주민증 제시 시 일부 가맹점에서 추가 할인 혜택을 받을 수 있어요.',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.ink5, height: 1.45)),
-          OutlineButton('관광주민증 발급받으러 가기',
-              icon: Icons.badge_outlined,
-              trailingIcon: Icons.open_in_new_rounded,
-              onTap: () => showMock(context, '디민증 발급 페이지로 이동해요. (외부 링크 · 목업)')),
-        ]),
+        if (r.digitalBenefitAvailable)
+          _DCard(title: '디지털 관광주민증 혜택', children: [
+            const Text('반값여행 + 디민증 중복 혜택 가능',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: AppColors.mintDeep)),
+            Text('${r.name} 관광주민증 제시 시 일부 가맹점에서 추가 할인 혜택을 받을 수 있어요.',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.ink5, height: 1.45)),
+            OutlineButton('관광주민증 발급받으러 가기',
+                icon: Icons.badge_outlined,
+                trailingIcon: Icons.open_in_new_rounded,
+                onTap: () => _openUrl(r.digitalTourCardApplyUrl)),
+          ]),
         // 지역화폐
         _DCard(title: '지역화폐 앱 안내', children: [
-          const Text('강진사랑상품권 · Chak',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.ink9)),
-          const Text('강진사랑상품권 Chak 거래내역을 정산 증빙으로 활용할 수 있어요.',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.ink5, height: 1.45)),
-          OutlineButton('앱 바로가기',
-              icon: Icons.account_balance_wallet_outlined,
-              trailingIcon: Icons.open_in_new_rounded,
-              onTap: () => showMock(context, 'Chak 앱으로 이동해요. (외부 링크 · 목업)')),
+          Text(_localCurrencyAppName(r.name),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.ink9)),
+          Text(_localCurrencyDescription(r.name),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.ink5, height: 1.45)),
         ]),
-        // 후기 — 지난 차수·작년 운영 지역이면 오픈 전이어도 후기가 있을 수 있다.
-        // 커뮤니티 글 데이터 기반: 이 지역 글이 하나도 없으면 섹션 자체를 뺀다.
+        // 후기 — 커뮤니티 API 연동 전까지 목업 게시글 데이터 기반.
         if (regionPosts.isNotEmpty)
           _DCard(
-            titleWidget: Row(children: [
-              Text('${r.name} 여행 후기',
-                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.3)),
-              const SizedBox(width: 7),
-              Pill('${regionPosts.length}'),
-            ]),
+            title: '${r.name} 여행 후기',
             children: [
               const Text('다녀온 사람들의 생생한 후기로 코스를 그려보세요.',
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.ink5)),
@@ -282,20 +252,18 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
               OutlineButton('${r.name} 후기 전체보기',
                   icon: Icons.chat_bubble_outline_rounded,
                   trailingIcon: Icons.chevron_right_rounded,
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => CommunityFeedScreen(region: r.name)))),
+                  onTap: () => Navigator.of(context)
+                      .push(MaterialPageRoute(builder: (_) => CommunityFeedScreen(region: r.name)))),
             ],
           ),
       ],
     );
   }
 
-  List<Post> get regionPosts => AppState.I.posts
-      .where((p) => !p.private && p.region == widget.region.name)
-      .toList();
+  List<Post> get regionPosts =>
+      AppState.I.posts.where((p) => !p.private && p.region == widget.region.name).toList();
 
-  Widget _accordion(int i) {
-    final (icon, title, bullets) = _accordions[i];
+  Widget _accordion(int i, RegionRuleSection section) {
     final open = _openAcc.contains(i);
     return Column(children: [
       if (i > 0) const Divider(height: 1),
@@ -308,11 +276,11 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
               width: 34,
               height: 34,
               decoration: BoxDecoration(color: AppColors.p50, borderRadius: BorderRadius.circular(11)),
-              child: Icon(icon, size: 18, color: AppColors.p600),
+              child: Icon(_sectionIcon(section.title), size: 18, color: AppColors.p600),
             ),
             const SizedBox(width: 11),
             Expanded(
-              child: Text(title,
+              child: Text(section.title,
                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink9)),
             ),
             AnimatedRotation(
@@ -327,7 +295,7 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
         Padding(
           padding: const EdgeInsets.only(left: 45, bottom: 14, right: 2),
           child: Column(children: [
-            for (final b in bullets)
+            for (final b in section.bullets)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -351,56 +319,28 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
   }
 }
 
+IconData _sectionIcon(String title) {
+  if (title.contains('인증') || title.contains('사진')) return Icons.photo_camera_outlined;
+  if (title.contains('결제') || title.contains('경비') || title.contains('소비')) return Icons.credit_card_rounded;
+  if (title.contains('숙박')) return Icons.bed_outlined;
+  return Icons.description_outlined;
+}
+
 /// 지역상세 카드 (제목 + 컨텐츠 리스트).
 class _DCard extends StatelessWidget {
-  const _DCard({this.title, this.titleWidget, required this.children});
-  final String? title;
-  final Widget? titleWidget;
+  const _DCard({required this.title, required this.children});
+  final String title;
   final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
     return AppCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        titleWidget ??
-            Text(title!,
-                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.3)),
+        Text(title,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.3)),
         for (final c in children) ...[const SizedBox(height: 13), c],
       ]),
     );
-  }
-}
-
-class _CRow extends StatelessWidget {
-  const _CRow({required this.icon, required this.label, required this.rich});
-  final IconData icon;
-  final String label;
-  final List<TextSpan> rich;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Container(
-        width: 22,
-        height: 22,
-        margin: const EdgeInsets.only(top: 1),
-        decoration: BoxDecoration(color: AppColors.p50, borderRadius: BorderRadius.circular(7)),
-        child: Icon(icon, size: 14, color: AppColors.p600),
-      ),
-      const SizedBox(width: 11),
-      SizedBox(
-        width: 62,
-        child: Text(label,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink5)),
-      ),
-      const SizedBox(width: 8),
-      Expanded(
-        child: Text.rich(
-          TextSpan(children: rich),
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink7, height: 1.45),
-        ),
-      ),
-    ]);
   }
 }
 
@@ -417,17 +357,26 @@ class _Kv extends StatelessWidget {
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         SizedBox(
           width: 88,
-          child: Text(k,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink5)),
+          child: Text(k, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink5)),
         ),
         Expanded(
-          child: Text(v,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink9, height: 1.4)),
+          child: Text(v, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink9, height: 1.4)),
         ),
       ]),
     );
   }
 }
+
+/// 임시 D-day 목업값 — 백엔드에 마감일 필드가 생기면 이 테이블은 지우고 실 데이터로 교체.
+const _mockDday = <String, (int, bool)>{
+  '평창': (2, true),
+  '강진': (5, false),
+  '영월': (3, false),
+  '거창': (7, false),
+  '고창': (11, false),
+  '완도': (9, false),
+  '제천': (12, false),
+};
 
 class _ReviewRow extends StatelessWidget {
   const _ReviewRow({required this.post});
@@ -480,4 +429,93 @@ class _ReviewRow extends StatelessWidget {
       ]),
     );
   }
+}
+
+String _formatWon(int amount) {
+  final digits = amount.toString();
+  final buffer = StringBuffer();
+  for (var i = 0; i < digits.length; i++) {
+    final indexFromEnd = digits.length - i;
+    buffer.write(digits[i]);
+    if (indexFromEnd > 1 && indexFromEnd % 3 == 1) buffer.write(',');
+  }
+  return buffer.toString();
+}
+
+String _paymentSummary(String guideText) {
+  if (guideText.contains('카드') && guideText.contains('간편결제')) return '지역화폐, 카드, 간편결제';
+  if (guideText.contains('제로페이')) return '지역화폐, 제로페이, 카드';
+  if (guideText.contains('현금영수증')) return '카드, 현금영수증, 지역화폐';
+  return '지역화폐, 카드 결제';
+}
+
+String _proofSummary(String guideText) {
+  if (guideText.contains('인증샷') || guideText.contains('사진')) return '영수증 + 여행 인증 사진';
+  return '영수증 제출';
+}
+
+String _minSpendSummary(String guideText) {
+  if (guideText.contains('개인 신청자 3만 원')) return '개인 30,000원 / 팀 50,000원 이상';
+  if (guideText.contains('개인 신청자 5만원')) return '개인 50,000원 / 팀 100,000원 이상';
+  if (guideText.contains('개인당 5만원')) return '개인 50,000원 / 팀 100,000원 이상';
+  if (guideText.contains('최소 소비액(여행경비) 5만원')) return '50,000원 이상';
+  return '지역 공고 기준 확인';
+}
+
+String _localCurrencyAppName(String regionName) => switch (regionName) {
+      '평창' => '평창사랑상품권',
+      '횡성' => '횡성몰 / 홈페이지',
+      '영월' => '영월별빛고운카드',
+      '제천' => '제천화폐 Chak',
+      '거창' => '거창반값여행 상품권',
+      '고창' => '고창사랑카드',
+      '합천' => '합천반값여행 상품권',
+      '영광' => '그리고',
+      '밀양' => '밀양사랑상품권',
+      '영암' => '월출페이',
+      '하동' => '하동반값여행 상품권',
+      '강진' => '강진사랑상품권 Chak',
+      '남해' => '남해사랑상품권',
+      '해남' => '해남사랑상품권',
+      '고흥' => '고흥사랑상품권',
+      '완도' => '완도사랑상품권',
+      _ => '지역화폐 앱',
+    };
+
+String _localCurrencyDescription(String regionName) => switch (regionName) {
+      '평창' => '평창사랑상품권 가맹점에서 사용할 수 있어요.',
+      '횡성' => '횡성 지역 공지에 따라 사용 앱이 공개될 예정입니다.',
+      '영월' => '영월 지역화폐 결제 내역과 카드 정보를 함께 확인해요.',
+      '제천' => '제천화폐 사용 내역은 Chak 시스템 기준으로 정산됩니다.',
+      '거창' => '거창 반값여행 상품권 사용 내역을 앱에서 확인해요.',
+      '고창' => '고창사랑카드 결제 내역을 정산 전에 확인해 주세요.',
+      '합천' => '모바일 합천반값여행 상품권 사용 내역이 필요해요.',
+      '영광' => '그리고 앱 또는 카드 거래내역을 준비해 주세요.',
+      '밀양' => '밀양사랑상품권 제로페이 사용 내역이 필요해요.',
+      '영암' => '월출페이 이용내역 상세 화면으로 정산에 활용해요.',
+      '하동' => '하동반값여행 상품권 제로페이 전자영수증이 필요해요.',
+      '강진' => '강진사랑상품권 Chak 거래내역을 확인할 수 있어요.',
+      _ => '지역화폐 거래내역을 정산 증빙으로 활용할 수 있어요.',
+    };
+
+String _regionEmoji(String regionName) {
+  const map = <String, String>{
+    '평창': '🏔️',
+    '횡성': '🥩',
+    '영월': '🌊',
+    '제천': '⛰️',
+    '거창': '🌿',
+    '고창': '🏛️',
+    '합천': '🌄',
+    '영광': '🐟',
+    '밀양': '🏞️',
+    '영암': '🏎️',
+    '하동': '🍃',
+    '강진': '🍲',
+    '남해': '🌴',
+    '해남': '🌾',
+    '고흥': '🚀',
+    '완도': '🏝️',
+  };
+  return map[regionName] ?? '📍';
 }
