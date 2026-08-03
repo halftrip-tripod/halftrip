@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../core/app_scope.dart';
 import '../../models/app_models.dart';
+import '../data/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui.dart';
@@ -150,29 +151,36 @@ class _HomeTabState extends State<HomeTab> {
                 ]),
               ),
               const SizedBox(height: 22),
-              // 커뮤니티 인기 코스 (아직 목업 — 커뮤니티 탭 API 연동은 별도 작업)
-              AppCard(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [
-                    const Icon(Icons.chat_bubble_outline_rounded, size: 19, color: AppColors.p600),
-                    const SizedBox(width: 8),
-                    const Text('인기 코스',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.5)),
-                    const Spacer(),
-                    GestureDetector(
-                      onTap: () => AppState.I.tabRequest.value = 3,
-                      child: const Text('더보기',
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink5)),
-                    ),
+              // 커뮤니티 인기 글 — 공개 글 좋아요순 상위 2개 (코스 태그 우선).
+              if (_popularPosts().isNotEmpty)
+                AppCard(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      const Icon(Icons.chat_bubble_outline_rounded, size: 19, color: AppColors.p600),
+                      const SizedBox(width: 8),
+                      const Text('인기 코스',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.5)),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () => AppState.I.tabRequest.value = 3,
+                        child: const Text('더보기',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink5)),
+                      ),
+                    ]),
+                    const SizedBox(height: 14),
+                    Row(children: [
+                      for (final (i, p) in _popularPosts().indexed) ...[
+                        if (i > 0) const SizedBox(width: 12),
+                        Expanded(
+                            child: _PopCard(
+                                region: p.region,
+                                title: p.courseName ?? p.text,
+                                likes: p.likes,
+                                onTap: () => _openPost(context, p))),
+                      ],
+                    ]),
                   ]),
-                  const SizedBox(height: 14),
-                  Row(children: [
-                    Expanded(child: _PopCard(region: '완도', title: '하루 동선 짜는 법', likes: 18, onTap: () => _openPost(context))),
-                    const SizedBox(width: 12),
-                    Expanded(child: _PopCard(region: '영월', title: '숙박확인서 꿀팁', likes: 12, onTap: () => _openPost(context))),
-                  ]),
-                ]),
-              ),
+                ),
             ],
           ),
         );
@@ -180,9 +188,20 @@ class _HomeTabState extends State<HomeTab> {
     );
   }
 
-  void _openPost(BuildContext context) {
+  /// 공개 글 좋아요순 상위 2개 — 코스 첨부/코스 태그 글 우선.
+  List<Post> _popularPosts() {
+    final public = AppState.I.posts.where((p) => !p.private).toList();
+    int weight(Post p) => (p.courseName != null || p.tag == PostTag.course) ? 1 : 0;
+    public.sort((a, b) {
+      final byCourse = weight(b).compareTo(weight(a));
+      return byCourse != 0 ? byCourse : b.likes.compareTo(a.likes);
+    });
+    return public.take(2).toList();
+  }
+
+  void _openPost(BuildContext context, Post post) {
     Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => CommunityDetailScreen(post: AppState.I.posts.first)));
+        builder: (_) => CommunityDetailScreen(post: post)));
   }
 }
 
@@ -451,6 +470,8 @@ class _PopCard extends StatelessWidget {
           Pill(region),
           const SizedBox(height: 8),
           Text(title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink9, height: 1.35)),
           const SizedBox(height: 8),
           Row(children: [

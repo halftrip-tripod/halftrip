@@ -1326,6 +1326,7 @@ class MockTravelRepository implements TravelRepository {
     List<String> photos = const [],
     String? courseName,
     String? courseMeta,
+    List<SavedCourseStop> courseStops = const [],
     int? tripId,
     required String visibility,
   }) async {
@@ -1365,6 +1366,9 @@ class MockTravelRepository implements TravelRepository {
     List<String>? photos,
     String? courseName,
     String? courseMeta,
+    List<SavedCourseStop>? courseStops,
+    bool clearCourse = false,
+    String? visibility,
   }) async {
     throw UnsupportedError('mock 모드는 로컬퍼스트 커뮤니티를 사용합니다');
   }

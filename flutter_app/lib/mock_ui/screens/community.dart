@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../data/mock_data.dart';
 import '../data/models.dart';
+import '../../core/app_config.dart';
 import '../../core/app_scope.dart';
+import '../../models/app_models.dart' show SavedCourse, SavedCourseStop;
+import '../../widgets/place_map_view.dart';
 import '../../utils/profile_presets.dart';
 import '../state/app_state.dart';
 import 'my_trips_tab.dart' show durationLabelOf;
@@ -460,6 +462,27 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
   _Cmt? _replyTo; // 답글 대상 (인스타식 — 루트 댓글)
   late List<_Cmt> _comments = _seedComments();
 
+  /// 첨부 코스를 실코스함(controller.savedCourses)으로 저장.
+  /// 정차지 스냅샷이 없는 옛 글은 복원할 코스가 없어 저장을 막는다.
+  Future<void> _saveAttachedCourse(BuildContext context, Post p) async {
+    if (p.courseStops.isEmpty) {
+      showMock(context, '이 글엔 코스 상세 정보가 없어 저장할 수 없어요.');
+      return;
+    }
+    final controller = AppScope.of(context);
+    await controller.saveCourse(SavedCourse(
+      id: 'community-post-${p.serverId ?? p.hashCode}',
+      regionId: 0,
+      regionName: p.region,
+      title: p.courseName!,
+      preferences: [if (p.courseMeta != null) p.courseMeta!, '커뮤니티 저장'],
+      stops: p.courseStops,
+      createdAt: DateTime.now(),
+    ));
+    if (!context.mounted) return;
+    showMock(context, '코스를 내 코스함에 저장했어요. 내 여행 > 저장 코스에서 확인!');
+  }
+
   List<_Cmt> _seedComments() {
     if (AppState.I.serverMode) {
       _loadServerComments();
@@ -810,26 +833,34 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
                 child: Column(children: [
                   _AttachedCourse(name: p.courseName!, meta: p.courseMeta ?? ''),
                   const SizedBox(height: 10),
-                  const CourseMapCard(),
+                  if (p.courseStops.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: PlaceMapView(
+                        markers: [
+                          for (final (i, stop) in p.courseStops.indexed)
+                            PlaceMapMarkerData(
+                              id: stop.placeId > 0 ? stop.placeId : i + 1,
+                              name: stop.name,
+                              address: stop.address,
+                              latitude: stop.latitude,
+                              longitude: stop.longitude,
+                              selected: false,
+                            ),
+                        ],
+                        connectSequentially: true,
+                        emptyMessage: '코스 동선 정보가 없어요.',
+                        kakaoEnabled: AppConfig.fromEnvironment().canUseKakaoMap,
+                        height: 230,
+                      ),
+                    )
+                  else
+                    // 정차지 스냅샷이 없는 옛 글 — 연출용 지도로 대체.
+                    const CourseMapCard(),
                   const SizedBox(height: 10),
                   OutlineButton('내 코스함에 저장',
                       icon: Icons.bookmark_add_outlined,
-                      onTap: () {
-                        final r = AppState.I.regionByName(p.region);
-                        AppState.I.addCourse(Course(
-                          emoji: r.emoji,
-                          region: r.name,
-                          province: r.province,
-                          title: p.courseName!,
-                          source: CourseSource.manual,
-                          durationLabel: '1박 2일',
-                          placeCount: 7,
-                          refundOk: true,
-                          savedAgo: '방금 저장',
-                          stops: gangjinStops(),
-                        ));
-                        showMock(context, '코스를 내 코스함에 저장했어요. 내 여행 > 저장 코스에서 확인!');
-                      }),
+                      onTap: () => _saveAttachedCourse(context, p)),
                 ]),
               ),
             ],
@@ -968,6 +999,7 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
   // 내 코스함에서 고른 첨부 코스 (실데이터). 수정 모드는 기존 스냅샷 유지.
   String? _courseName = null;
   String? _courseMeta = null;
+  List<SavedCourseStop> _courseStops = const [];
   bool _courseInitialized = false;
 
   bool get _isEdit => widget.editPost != null;
@@ -994,6 +1026,7 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
       verified: _verify,
       courseName: _courseName,
       courseMeta: _courseMeta,
+      courseStops: _courseStops,
       likes: 0,
       comments: 0,
       saves: 0,
@@ -1022,6 +1055,7 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
       ..title = '$_region ${tagLabel(PostTag.values[_tag])}'
       ..courseName = _courseName
       ..courseMeta = _courseMeta
+      ..courseStops = _courseStops
       ..private = _visibility == 1
       ..edited = true;
     s.update();
@@ -1036,8 +1070,11 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
           body: text,
           courseName: _courseName,
           courseMeta: _courseMeta,
+          courseStops: _courseStops,
+          // 코스를 뗀 채 저장하면 서버에도 제거를 명시 (필드 생략과 구분).
+          clearCourse: _courseName == null,
+          visibility: _visibility == 1 ? 'PRIVATE' : 'PUBLIC',
         );
-        if (post.private != (widget.editPost!.private)) {}
       } catch (_) {}
     } else {
       s.persistCommunity();
@@ -1054,6 +1091,7 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
       _courseInitialized = true;
       _courseName = widget.editPost?.courseName;
       _courseMeta = widget.editPost?.courseMeta;
+      _courseStops = widget.editPost?.courseStops ?? const [];
     }
     final controller = AppScope.of(context);
     final candidates = controller.savedCourses
@@ -1086,6 +1124,7 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
             onTap: () => setState(() {
               _courseName = null;
               _courseMeta = null;
+              _courseStops = const [];
             }),
             child: const Icon(Icons.close_rounded, size: 18, color: AppColors.ink4),
           ),
@@ -1104,6 +1143,7 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
       setState(() {
         _courseName = course.title;
         _courseMeta = '${course.regionName} · ${course.stops.length}곳';
+        _courseStops = course.stops;
       });
     });
   }
@@ -1171,6 +1211,7 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
                     // 지역이 바뀌면 이전 지역 코스 첨부는 무효 — 새 지역에서 다시 선택.
                     _courseName = null;
                     _courseMeta = null;
+                    _courseStops = const [];
                   });
                 }
               },
@@ -1267,7 +1308,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen> {
   @override
   Widget build(BuildContext context) {
     final mine = AppState.I.posts
-        .where((p) => p.mine || true) // 목업: 전체 글을 내 글처럼 노출
+        .where((p) => p.mine)
         .where((p) => _filter == 0 || tagLabel(p.tag) == _filters[_filter])
         .toList();
     final likes = mine.fold(0, (s, p) => s + p.likes);
@@ -1288,6 +1329,7 @@ class _MyReviewsScreenState extends State<MyReviewsScreen> {
           ]),
         ),
         CatChips(labels: _filters, selected: _filter, onChanged: (i) => setState(() => _filter = i)),
+        if (mine.isEmpty) const NoteRow('아직 작성한 글이 없어요. 커뮤니티 탭에서 첫 글을 남겨보세요!'),
         for (final p in mine)
           Opacity(
             opacity: p.private ? .75 : 1,

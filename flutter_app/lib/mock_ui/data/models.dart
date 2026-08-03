@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../models/app_models.dart' show SavedCourseStop;
+
 /// 지역 접수 상태.
 enum RegionStatus { open, soon, closed }
 
@@ -121,6 +123,7 @@ class Post {
     this.photos = const [],
     this.courseName,
     this.courseMeta,
+    this.courseStops = const [],
     required this.likes,
     required this.comments,
     required this.saves,
@@ -150,6 +153,7 @@ class Post {
   final List<String> photos; // 이모지 플레이스홀더
   String? courseName; // 수정 가능
   String? courseMeta; // 수정 가능
+  List<SavedCourseStop> courseStops; // 첨부 코스 정차지 스냅샷 — 지도·코스함 저장용
   int likes;
   int comments; // 댓글 작성 시 갱신
   int saves;

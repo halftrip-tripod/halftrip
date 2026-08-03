@@ -199,6 +199,7 @@ class CommunityPostData {
     required this.photos,
     required this.courseName,
     required this.courseMeta,
+    this.courseStops = const [],
     required this.verified,
     required this.edited,
     required this.visibility,
@@ -221,6 +222,7 @@ class CommunityPostData {
   final List<String> photos;
   final String? courseName;
   final String? courseMeta;
+  final List<SavedCourseStop> courseStops;
   final bool verified;
   final bool edited;
   final String visibility;
@@ -246,6 +248,9 @@ class CommunityPostData {
             .toList(),
         courseName: json['courseName'] as String?,
         courseMeta: json['courseMeta'] as String?,
+        courseStops: ((json['courseStops'] as List<dynamic>?) ?? const [])
+            .map((e) => SavedCourseStop.fromJson(e as Map<String, dynamic>))
+            .toList(),
         verified: json['verified'] as bool? ?? false,
         edited: json['edited'] as bool? ?? false,
         visibility: json['visibility'] as String? ?? 'PUBLIC',

@@ -717,6 +717,7 @@ class ApiTravelRepository implements TravelRepository {
     List<String> photos = const [],
     String? courseName,
     String? courseMeta,
+    List<SavedCourseStop> courseStops = const [],
     int? tripId,
     required String visibility,
   }) async {
@@ -729,6 +730,8 @@ class ApiTravelRepository implements TravelRepository {
       'photos': photos,
       if (courseName != null) 'courseName': courseName,
       if (courseMeta != null) 'courseMeta': courseMeta,
+      if (courseStops.isNotEmpty)
+        'courseStops': courseStops.map((s) => s.toJson()).toList(),
       if (tripId != null) 'tripId': tripId,
       'visibility': visibility,
     });
@@ -765,6 +768,9 @@ class ApiTravelRepository implements TravelRepository {
     List<String>? photos,
     String? courseName,
     String? courseMeta,
+    List<SavedCourseStop>? courseStops,
+    bool clearCourse = false,
+    String? visibility,
   }) async {
     final response = await _jsonRequest('PATCH', '/community/posts/$postId', body: {
       'userId': userId,
@@ -775,6 +781,10 @@ class ApiTravelRepository implements TravelRepository {
       if (photos != null) 'photos': photos,
       if (courseName != null) 'courseName': courseName,
       if (courseMeta != null) 'courseMeta': courseMeta,
+      if (courseStops != null && courseStops.isNotEmpty)
+        'courseStops': courseStops.map((s) => s.toJson()).toList(),
+      if (clearCourse) 'clearCourse': true,
+      if (visibility != null) 'visibility': visibility,
     });
     return CommunityPostData.fromJson(response['data'] as Map<String, dynamic>);
   }
