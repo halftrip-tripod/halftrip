@@ -120,18 +120,11 @@ class _MyTripsTabState extends State<MyTripsTab> {
                   .then((_) => setState(() {})),
             ),
           ]),
-          const SizedBox(height: 22),
-          const SectionTitle('지난 여행'),
-          const SizedBox(height: 12),
-          if (past.isEmpty)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(color: AppColors.surf, borderRadius: BorderRadius.circular(18)),
-              child: const Text('정산까지 마친 여행이 여기 모여요.',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink5)),
-            )
-          else
+          // 지난 여행이 없으면 섹션 자체를 숨긴다.
+          if (past.isNotEmpty) ...[
+            const SizedBox(height: 22),
+            const SectionTitle('지난 여행'),
+            const SizedBox(height: 12),
             for (final trip in past) ...[
               AppCard(
                 onTap: () => Navigator.of(context).push(
@@ -153,6 +146,7 @@ class _MyTripsTabState extends State<MyTripsTab> {
               ),
               const SizedBox(height: 12),
             ],
+          ],
         ],
       ),
     );
