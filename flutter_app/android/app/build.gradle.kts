@@ -32,6 +32,13 @@ android {
         }
         manifestPlaceholders["GOOGLE_MAP_API_KEY"] =
             localProperties.getProperty("GOOGLE_MAP_API_KEY") ?: ""
+        // 소셜 로그인 키 — local.properties에서 읽음(커밋 금지). 미설정이면 빈 값(앱에서 안내만 노출).
+        manifestPlaceholders["KAKAO_NATIVE_APP_KEY"] =
+            localProperties.getProperty("KAKAO_NATIVE_APP_KEY") ?: ""
+        manifestPlaceholders["NAVER_CLIENT_ID"] =
+            localProperties.getProperty("NAVER_CLIENT_ID") ?: ""
+        manifestPlaceholders["NAVER_CLIENT_SECRET"] =
+            localProperties.getProperty("NAVER_CLIENT_SECRET") ?: ""
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

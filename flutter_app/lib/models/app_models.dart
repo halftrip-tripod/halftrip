@@ -444,6 +444,19 @@ class AppNotification {
   }
 }
 
+/// 소셜 로그인 결과 (서버 계약: /api/auth/social-login).
+class SocialLoginResult {
+  const SocialLoginResult({
+    required this.user,
+    required this.newUser,
+    required this.needsResidence,
+  });
+
+  final AppUser user;
+  final bool newUser;
+  final bool needsResidence;
+}
+
 class AppUser {
   const AppUser({
     required this.id,

@@ -16,6 +16,15 @@ class MockTravelRepository implements TravelRepository {
   @override
   String get modeName => 'Mock Mode';
 
+  @override
+  Future<SocialLoginResult> socialLogin({
+    required LoginProvider provider,
+    required String accessToken,
+  }) async {
+    final user = await mockLogin(provider);
+    return SocialLoginResult(user: user, newUser: false, needsResidence: false);
+  }
+
   late AppUser _user;
   String _localLoginId = 'sample';
   String _localPassword = '1234';

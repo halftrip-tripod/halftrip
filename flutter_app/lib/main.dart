@@ -4,12 +4,14 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' as kakao;
 
 import 'core/app_config.dart';
 import 'core/app_controller.dart';
 import 'core/app_scope.dart';
 import 'mock_ui/screens/onboarding.dart';
 import 'mock_ui/screens/shell.dart';
+import 'mock_ui/screens/splash.dart';
 import 'mock_ui/theme/app_theme.dart';
 import 'repositories/api_travel_repository.dart';
 import 'repositories/mock_travel_repository.dart';
@@ -28,6 +30,13 @@ Future<void> main() async {
     }
   }
   final config = AppConfig.fromEnvironment();
+  if (config.kakaoLoginConfigured) {
+    // 카카오 로그인 SDK — 키는 --dart-define(KAKAO_NATIVE_APP_KEY 등)으로 주입, 미설정이면 스킵.
+    kakao.KakaoSdk.init(
+      nativeAppKey: config.kakaoNativeAppKey,
+      javaScriptAppKey: config.kakaoJavaScriptKey,
+    );
+  }
   final repository = _buildRepository(config);
   final controller = AppController(repository: repository);
   try {
@@ -77,24 +86,48 @@ class HalftripApp extends StatelessWidget {
   }
 }
 
-/// 로그인 → 거주지 설정 → 메인 셸 게이트.
-class _RootGate extends StatelessWidget {
+/// 스플래시 → 로그인 → 거주지 설정 → 메인 셸 게이트.
+class _RootGate extends StatefulWidget {
   const _RootGate();
+
+  @override
+  State<_RootGate> createState() => _RootGateState();
+}
+
+class _RootGateState extends State<_RootGate> {
+  bool _splashDone = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // 스플래시 노출 후 실제 첫 화면으로 페이드 전환.
+    Future.delayed(const Duration(milliseconds: 1800), () {
+      if (mounted) setState(() => _splashDone = true);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final controller = AppScope.of(context);
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (context, _) {
-        if (!controller.isLoggedIn) {
-          return const LoginScreen();
-        }
-        if (controller.needsResidenceSetup) {
-          return const ResidenceScreen();
-        }
-        return const MainShell();
-      },
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 450),
+      child: !_splashDone
+          ? const SplashScreen()
+          : KeyedSubtree(
+              key: const ValueKey('root'),
+              child: AnimatedBuilder(
+                animation: controller,
+                builder: (context, _) {
+                  if (!controller.isLoggedIn) {
+                    return const LoginScreen();
+                  }
+                  if (controller.needsResidenceSetup) {
+                    return const ResidenceScreen();
+                  }
+                  return const MainShell();
+                },
+              ),
+            ),
     );
   }
 }
