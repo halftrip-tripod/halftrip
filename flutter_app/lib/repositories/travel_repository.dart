@@ -6,6 +6,11 @@ abstract class TravelRepository {
   String get modeName;
 
   Future<AppUser> mockLogin(LoginProvider provider);
+  /// 소셜 로그인 — SDK가 받은 액세스 토큰을 서버가 제공자 API로 검증.
+  Future<SocialLoginResult> socialLogin({
+    required LoginProvider provider,
+    required String accessToken,
+  });
   Future<AppUser> localLogin({
     required String loginId,
     required String password,

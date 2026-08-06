@@ -84,6 +84,22 @@ class AppController extends ChangeNotifier {
     await _syncFcmToken();
   }
 
+  /// 실 소셜 로그인 — SDK 액세스 토큰을 서버로 검증. 거주지 필요 여부는 서버 응답을 따른다.
+  Future<void> loginWithSocial(LoginProvider provider, String accessToken) async {
+    await _runBusy(() async {
+      final result = await _repository.socialLogin(
+        provider: provider,
+        accessToken: accessToken,
+      );
+      currentUser = result.user;
+      trips = await _repository.getTrips(result.user.id);
+      await _loadLocalDashboardData();
+      await _syncFcmToken();
+      await _attachCommunityIfServer();
+      needsResidenceSetup = result.needsResidence;
+    });
+  }
+
   Future<void> login(LoginProvider provider) async {
     await _runBusy(() async {
       final authUser = await _repository.mockLogin(provider);

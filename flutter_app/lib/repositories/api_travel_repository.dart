@@ -129,6 +129,28 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<SocialLoginResult> socialLogin({
+    required LoginProvider provider,
+    required String accessToken,
+  }) async {
+    final response = await _jsonRequest(
+      'POST',
+      '/auth/social-login',
+      body: {
+        'provider': provider.wireName,
+        'accessToken': accessToken,
+      },
+    );
+    final data = response['data'] as Map<String, dynamic>;
+    final user = await getUser(data['userId'] as int);
+    return SocialLoginResult(
+      user: user,
+      newUser: data['newUser'] as bool? ?? false,
+      needsResidence: data['needsResidence'] as bool? ?? false,
+    );
+  }
+
+  @override
   Future<AppUser> mockLogin(LoginProvider provider) async {
     final response = await _jsonRequest(
       'POST',

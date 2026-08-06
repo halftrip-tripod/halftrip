@@ -480,18 +480,22 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       const _StageBar(current: 2),
       _DCard(
         title: '증빙 자료 준비',
+        sub: '여행이 끝나도 정산 전까지 자유롭게 추가·수정할 수 있어요.',
         children: [
           _CheckLine(
             '관광지 인증샷 ${authCount.clamp(0, authRequired)}/$authRequired',
             done: authCount >= authRequired,
+            onTap: () => _push(AuthPhotoUploadScreen(tripId: widget.tripId)),
           ),
           _CheckLine(
             '영수증 · 소비 ${_man(detail.trip.totalSpentAmount)}${spentOk ? ' (조건 충족)' : ''}',
             done: detail.receipts.isNotEmpty && spentOk,
+            onTap: () => _push(ReceiptEvidenceScreen(tripId: widget.tripId)),
           ),
           _CheckLine(
             '숙박확인서 ${lodgingDone ? '서명 완료' : '미작성'}',
             done: lodgingDone,
+            onTap: () => _push(LodgingFormScreen(tripId: widget.tripId)),
           ),
         ],
       ),
@@ -820,9 +824,24 @@ class _StageBar extends StatelessWidget {
     return AppCard(
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (var i = 0; i < 4; i++)
-            Expanded(
+          for (var i = 0; i < 4; i++) ...[
+            if (i > 0)
+              // 단계 원 사이 점선 커넥터 — 지나온 구간은 파란색.
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 13, left: 3, right: 3),
+                  child: CustomPaint(
+                    size: const Size(double.infinity, 2),
+                    painter: _DashPainter(
+                      color: i <= current ? AppColors.p500 : AppColors.track,
+                    ),
+                  ),
+                ),
+              ),
+            SizedBox(
+              width: 62,
               child: Column(
                 children: [
                   Container(
@@ -869,10 +888,35 @@ class _StageBar extends StatelessWidget {
                 ],
               ),
             ),
+          ],
         ],
       ),
     );
   }
+}
+
+/// 가로 점선 페인터 — 단계 커넥터용.
+class _DashPainter extends CustomPainter {
+  const _DashPainter({required this.color});
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    const dash = 4.0;
+    const gap = 4.0;
+    final y = size.height / 2;
+    for (double x = 0; x < size.width; x += dash + gap) {
+      canvas.drawLine(
+          Offset(x, y), Offset((x + dash).clamp(0, size.width), y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashPainter oldDelegate) => oldDelegate.color != color;
 }
 
 class _DCard extends StatelessWidget {
@@ -1006,13 +1050,14 @@ class _UpRow extends StatelessWidget {
 }
 
 class _CheckLine extends StatelessWidget {
-  const _CheckLine(this.text, {this.done = true});
+  const _CheckLine(this.text, {this.done = true, this.onTap});
   final String text;
   final bool done;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final row = Row(
       children: [
         Container(
           width: 22,
@@ -1038,7 +1083,12 @@ class _CheckLine extends StatelessWidget {
             ),
           ),
         ),
+        if (onTap != null)
+          const Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.ink4),
       ],
     );
+    if (onTap == null) return row;
+    return GestureDetector(
+        onTap: onTap, behavior: HitTestBehavior.opaque, child: row);
   }
 }

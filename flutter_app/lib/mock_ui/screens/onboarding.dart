@@ -1,5 +1,11 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException;
+import 'package:flutter_naver_login/flutter_naver_login.dart';
+import 'package:flutter_naver_login/interface/types/naver_login_status.dart';
+import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' as kakao;
 
+import '../../core/app_config.dart';
 import '../../core/app_scope.dart';
 import '../../models/app_models.dart';
 import '../../screens/info_screens.dart';
@@ -12,8 +18,66 @@ class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
 
   Future<void> _social(BuildContext context, LoginProvider provider) async {
-    // 로그인 후 거주지 미설정이면 루트 게이트가 ResidenceScreen을 띄운다.
-    await AppScope.of(context).login(provider);
+    final controller = AppScope.of(context);
+    final config = AppConfig.fromEnvironment();
+    // mock 로그인 모드는 기존 mock-login 경로 유지 (QA·개발용).
+    if (config.useMockLogin) {
+      await controller.login(provider);
+      return;
+    }
+    try {
+      final accessToken = switch (provider) {
+        LoginProvider.kakao => await _kakaoAccessToken(context, config),
+        LoginProvider.naver => await _naverAccessToken(context),
+        _ => null,
+      };
+      if (accessToken == null) return; // 취소 또는 키 미설정 (안내는 내부에서)
+      if (!context.mounted) return;
+      // 로그인 후 거주지 미설정이면 루트 게이트가 ResidenceScreen을 띄운다.
+      await controller.loginWithSocial(provider, accessToken);
+    } catch (_) {
+      if (context.mounted) {
+        showMock(context, '로그인에 실패했어요. 잠시 후 다시 시도해주세요.');
+      }
+    }
+  }
+
+  /// 카카오 SDK 로그인 → 액세스 토큰. 카카오톡 설치 시 앱 전환, 아니면 계정 로그인(웹뷰).
+  Future<String?> _kakaoAccessToken(BuildContext context, AppConfig config) async {
+    if (!config.kakaoLoginConfigured) {
+      showMock(context, '카카오 로그인 준비 중이에요. (개발자 앱 키 등록 대기)');
+      return null;
+    }
+    try {
+      final token = !kIsWeb && await kakao.isKakaoTalkInstalled()
+          ? await kakao.UserApi.instance.loginWithKakaoTalk()
+          : await kakao.UserApi.instance.loginWithKakaoAccount();
+      return token.accessToken;
+    } on kakao.KakaoAuthException catch (e) {
+      if (e.error == kakao.AuthErrorCause.accessDenied) return null; // 사용자 취소
+      rethrow;
+    } on PlatformException catch (e) {
+      if (e.code == 'CANCELED') return null; // 카카오톡 앱 전환 취소
+      rethrow;
+    }
+  }
+
+  /// 네이버 SDK 로그인 → 액세스 토큰. 키는 AndroidManifest 메타데이터로 주입(웹 미지원).
+  Future<String?> _naverAccessToken(BuildContext context) async {
+    if (kIsWeb) {
+      showMock(context, '네이버 로그인은 앱에서 이용할 수 있어요.');
+      return null;
+    }
+    final result = await FlutterNaverLogin.logIn();
+    if (result.status == NaverLoginStatus.loggedIn) {
+      final token = result.accessToken?.accessToken;
+      return (token == null || token.isEmpty) ? null : token;
+    }
+    // loggedOut = 사용자 취소 → 조용히 종료, error = 키 미설정·SDK 오류 → 안내.
+    if (result.status == NaverLoginStatus.error && context.mounted) {
+      showMock(context, '네이버 로그인 준비 중이에요. (개발자 앱 키 등록 대기)');
+    }
+    return null;
   }
 
   @override
@@ -27,19 +91,20 @@ class LoginScreen extends StatelessWidget {
             Image.asset('assets/logo/logo-3d.png', height: 285),
             const Spacer(flex: 4),
             const Text(
-              '여행경비의 절반,',
+              '복잡한 반값여행,',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -1, height: 1.3),
             ),
             const Text.rich(
               TextSpan(children: [
-                TextSpan(text: '돌려받는', style: TextStyle(color: AppColors.p600)),
-                TextSpan(text: ' 국내여행'),
+                TextSpan(text: '하프트립', style: TextStyle(color: AppColors.p600)),
+                TextSpan(text: ' 하나로'),
               ]),
               style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -1, height: 1.3),
             ),
             const SizedBox(height: 10),
-            const Text('반값여행 + 디지털 관광주민증을 한 번에',
+            const Text('정보 확인부터 인증·증빙·정산 관리까지',
+                textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink5)),
             const SizedBox(height: 22),
             _OfficialLoginButton(
