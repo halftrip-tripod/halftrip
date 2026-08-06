@@ -3,6 +3,11 @@ import 'package:flutter/material.dart';
 import '../screens/my_trips_tab.dart' show regionEmojiOf;
 import 'ui.dart';
 
+// Add a key here only after the matching PNG is added under
+// assets/illust/region. This prevents Flutter Web from requesting missing
+// assets and logging a 404 before the emoji fallback is rendered.
+const Set<String> _availableRegionArtKeys = <String>{};
+
 /// 지역 대표 이미지 — AI 일러스트(assets/illust/region/{키}.png)가 있으면 사용,
 /// 없으면 기존 이모지 폴백. 일러스트는 docs/illustration-guide.md 규약으로 제작.
 class RegionArt extends StatelessWidget {
@@ -47,7 +52,7 @@ class RegionArt extends StatelessWidget {
       fontSize: fontSize,
       radius: radius,
     );
-    if (key == null) return fallback;
+    if (key == null || !_availableRegionArtKeys.contains(key)) return fallback;
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: Image.asset(
