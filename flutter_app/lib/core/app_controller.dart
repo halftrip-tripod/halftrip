@@ -672,6 +672,22 @@ class AppController extends ChangeNotifier {
           ),
         ),
       );
+      return;
+    }
+    // 커뮤니티·리마인더 등 일반 푸시 — 안드로이드는 포그라운드에서 시스템 알림을
+    // 자동 표시하지 않으므로 앱 사용 중에는 스낵바로 대신 보여준다.
+    final title = message.notification?.title;
+    if (title != null && title.isNotEmpty) {
+      final body = message.notification?.body;
+      scaffoldMessengerKey.currentState?.showSnackBar(
+        SnackBar(
+          content: Text(
+            body == null || body.isEmpty ? title : '$title\n$body',
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      );
     }
   }
 
