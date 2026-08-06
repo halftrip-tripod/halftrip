@@ -4,7 +4,9 @@ import 'package:intl/intl.dart';
 import '../core/app_config.dart';
 import '../core/app_scope.dart';
 import '../models/app_models.dart';
+import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/ui/pill.dart';
 import '../widgets/place_map_view.dart';
 
 enum CourseBuildMode { ai, manual }
@@ -122,7 +124,56 @@ class _RegionCourseBuilderScreenState extends State<RegionCourseBuilderScreen> {
     });
   }
 
-  void _generateAiCourse(RegionDetail detail) {
+  Future<void> _generateAiCourse(RegionDetail detail) async {
+    // AI 생성 연출 — 목업 코스 시뮬의 로딩 다이얼로그.
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: const Padding(
+          padding: EdgeInsets.all(26),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: CircularProgressIndicator(
+                    strokeWidth: 3.5, color: AppColors.p500),
+              ),
+              SizedBox(height: 18),
+              Text(
+                'AI가 코스를 만들고 있어요',
+                style: TextStyle(
+                  fontFamily: 'Pretendard',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.ink9,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                '취향·환급 조건 분석 → 장소 선정 → 동선 최적화',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Pretendard',
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.ink5,
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 2000));
+    if (!mounted) return;
+    Navigator.of(context).pop();
+
     final scored = detail.halfPricePlaces
         .where((place) => place.latitude != null && place.longitude != null)
         .map(
@@ -288,7 +339,7 @@ class _RegionCourseBuilderScreenState extends State<RegionCourseBuilderScreen> {
     final config = AppConfig.fromEnvironment();
 
     return AppShell(
-      title: '${widget.regionName} 코스 미리보기',
+      title: '${widget.regionName} 코스 만들기',
       modeName: controller.modeName,
       actions: [
         Padding(
@@ -447,32 +498,55 @@ class _HeroCourseCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0F766E), Color(0xFF2563EB)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        boxShadow: AppShadows.card,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(
-            '$regionName 나만의 코스',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                ),
+          Container(
+            width: 48,
+            height: 48,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.p50,
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: const Icon(Icons.route_outlined, size: 24, color: AppColors.p600),
           ),
-          const SizedBox(height: 10),
-          Text(
-            '현재 플래너 $stopCount곳 · 취향 우선순위 ${preferenceSummary.isEmpty ? '미설정' : preferenceSummary}',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.88),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$regionName 나만의 코스',
+                  style: const TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.ink9,
+                    letterSpacing: -0.3,
+                  ),
                 ),
+                const SizedBox(height: 3),
+                Text(
+                  '취향 우선순위 ${preferenceSummary.isEmpty ? '미설정' : preferenceSummary}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink5,
+                  ),
+                ),
+              ],
+            ),
           ),
+          Pill('$stopCount곳'),
         ],
       ),
     );
@@ -510,17 +584,18 @@ class _AiPreferenceSection extends StatelessWidget {
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  color: AppColors.surf,
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: Row(
                   children: [
                     CircleAvatar(
-                      radius: 16,
-                      backgroundColor: const Color(0xFFDBEAFE),
-                      foregroundColor: const Color(0xFF1D4ED8),
-                      child: Text('${index + 1}'),
+                      radius: 14,
+                      backgroundColor: AppColors.p500,
+                      foregroundColor: Colors.white,
+                      child: Text('${index + 1}',
+                          style: const TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w900)),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -531,7 +606,7 @@ class _AiPreferenceSection extends StatelessWidget {
                             ),
                       ),
                     ),
-                    const Icon(Icons.drag_handle_rounded, color: Color(0xFF94A3B8)),
+                    const Icon(Icons.drag_indicator_rounded, color: AppColors.ink4),
                   ],
                 ),
               );
@@ -596,9 +671,8 @@ class _ManualBuilderSection extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEFF6FF),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFFBFDBFE)),
+                    color: AppColors.p50,
+                    borderRadius: BorderRadius.circular(AppRadius.field),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -627,9 +701,8 @@ class _ManualBuilderSection extends StatelessWidget {
           final listSection = Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+              color: AppColors.surf,
+              borderRadius: BorderRadius.circular(AppRadius.field),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -663,28 +736,25 @@ class _ManualBuilderSection extends StatelessWidget {
                         child: Ink(
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
-                            color: isHighlighted
-                                ? const Color(0xFFEFF6FF)
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: isHighlighted
-                                  ? const Color(0xFF93C5FD)
-                                  : const Color(0xFFE2E8F0),
-                            ),
+                            color: isHighlighted ? AppColors.p50 : Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: AppShadows.soft,
                           ),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               CircleAvatar(
-                                radius: 18,
+                                radius: 15,
                                 backgroundColor: marker.selected
-                                    ? const Color(0xFF16A34A)
-                                    : const Color(0xFFE2E8F0),
+                                    ? AppColors.p500
+                                    : AppColors.track,
                                 foregroundColor: marker.selected
                                     ? Colors.white
-                                    : const Color(0xFF475569),
-                                child: Text('${index + 1}'),
+                                    : AppColors.ink5,
+                                child: Text('${index + 1}',
+                                    style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w900)),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -776,8 +846,8 @@ class _PlannerEditorSection extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(20),
+                color: AppColors.surf,
+                borderRadius: BorderRadius.circular(AppRadius.field),
               ),
               child: const Text('아직 담은 장소가 없습니다. 지도에서 두 번 클릭해 추가해 주세요.'),
             )
@@ -794,17 +864,19 @@ class _PlannerEditorSection extends StatelessWidget {
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: AppShadows.soft,
                   ),
                   child: Row(
                     children: [
                       CircleAvatar(
-                        radius: 16,
-                        backgroundColor: const Color(0xFF7C3AED),
+                        radius: 14,
+                        backgroundColor: AppColors.p500,
                         foregroundColor: Colors.white,
-                        child: Text('${index + 1}'),
+                        child: Text('${index + 1}',
+                            style: const TextStyle(
+                                fontSize: 13, fontWeight: FontWeight.w900)),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -831,7 +903,7 @@ class _PlannerEditorSection extends StatelessWidget {
                         onPressed: () => onRemove(stop),
                         icon: const Icon(Icons.close_rounded),
                       ),
-                      const Icon(Icons.drag_handle_rounded, color: Color(0xFF94A3B8)),
+                      const Icon(Icons.drag_indicator_rounded, color: AppColors.ink4),
                     ],
                   ),
                 );

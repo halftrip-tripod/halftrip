@@ -8,7 +8,10 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/app_models.dart';
+import '../repositories/mock_travel_repository.dart';
+import '../repositories/api_travel_repository.dart';
 import '../repositories/travel_repository.dart';
+import '../mock_ui/state/app_state.dart' as mock;
 import '../screens/youtube_course_analysis_screen.dart';
 
 class AppController extends ChangeNotifier {
@@ -81,6 +84,22 @@ class AppController extends ChangeNotifier {
     await _syncFcmToken();
   }
 
+  /// 실 소셜 로그인 — SDK 액세스 토큰을 서버로 검증. 거주지 필요 여부는 서버 응답을 따른다.
+  Future<void> loginWithSocial(LoginProvider provider, String accessToken) async {
+    await _runBusy(() async {
+      final result = await _repository.socialLogin(
+        provider: provider,
+        accessToken: accessToken,
+      );
+      currentUser = result.user;
+      trips = await _repository.getTrips(result.user.id);
+      await _loadLocalDashboardData();
+      await _syncFcmToken();
+      await _attachCommunityIfServer();
+      needsResidenceSetup = result.needsResidence;
+    });
+  }
+
   Future<void> login(LoginProvider provider) async {
     await _runBusy(() async {
       final authUser = await _repository.mockLogin(provider);
@@ -88,9 +107,19 @@ class AppController extends ChangeNotifier {
       trips = await _repository.getTrips(authUser.id);
       await _loadLocalDashboardData();
       await _syncFcmToken();
+      await _attachCommunityIfServer();
       // 소셜 가입은 거주지 입력 온보딩을 거치도록 한다.
       needsResidenceSetup = true;
     });
+  }
+
+  /// 실서버 모드면 커뮤니티 화면(AppState)의 데이터 소스를 서버로 전환한다.
+  Future<void> _attachCommunityIfServer() async {
+    final user = currentUser;
+    if (user == null || _repository is! ApiTravelRepository) {
+      return;
+    }
+    await mock.AppState.I.attachCommunityServer(_repository, user.id);
   }
 
   /// 거주지 온보딩 완료 — 현재 사용자 거주지를 갱신하고 메인으로 진입한다.
@@ -102,25 +131,57 @@ class AppController extends ChangeNotifier {
 
   /// 거주지 변경 — 마이페이지에서 온보딩 완료 후 거주지만 갱신한다.
   /// (온보딩 진입 플래그를 건드리지 않아 completeResidenceSetup과 구분된다.)
-  void updateResidence(String residence) {
-    currentUser = currentUser?.copyWith(residence: residence);
+  Future<void> updateResidence(String residence) async {
+    final user = currentUser;
+    if (user == null) return;
+    // 낙관 갱신 후 서버 동기화 — 거주지 API(핸드오프 K) 배포 전에는 실패해도 로컬 유지.
+    currentUser = user.copyWith(residence: residence);
     notifyListeners();
+    try {
+      final updated = await repository.updateResidence(user.id, residence);
+      currentUser = currentUser?.copyWith(residence: updated.residence);
+      notifyListeners();
+    } catch (_) {}
   }
 
-  /// 프로필 편집 — 닉네임·아바타 프리셋 변경. (백엔드 연동 전 로컬 갱신)
-  void updateProfile({String? nickname, String? avatarPreset}) {
+  /// 프로필 편집 — 닉네임·아바타 프리셋 변경. 낙관 갱신 + 서버 동기화(핸드오프 K).
+  Future<void> updateProfile({String? nickname, String? avatarPreset}) async {
     final user = currentUser;
     if (user == null) return;
     final trimmed = nickname?.trim();
+    final effectiveNickname =
+        (trimmed != null && trimmed.isNotEmpty) ? trimmed : null;
     currentUser = user.copyWith(
-      nickname: (trimmed != null && trimmed.isNotEmpty) ? trimmed : null,
+      nickname: effectiveNickname,
       avatarPreset: avatarPreset,
     );
     notifyListeners();
+    try {
+      await repository.updateProfile(
+        user.id,
+        nickname: effectiveNickname,
+        avatarPreset: avatarPreset,
+      );
+    } catch (_) {}
   }
 
   /// 로그아웃 — 세션 상태를 비우고 로그인 화면으로 되돌린다.
+  /// 회원 탈퇴 — 서버 계정 삭제 후 기기 저장 데이터(코스·커뮤 글 등)까지 파기.
+  /// 백엔드 DELETE 미배포 상태면 실패를 그대로 던진다(화면에서 안내).
+  Future<void> deleteAccount() async {
+    final user = currentUser;
+    if (user == null) return;
+    await repository.deleteAccount(user.id);
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.clear();
+    savedCourses = const [];
+    selectedCourseIdsByTrip = const <int, String>{};
+    pendingYoutubeCourseJobs = const [];
+    logout();
+  }
+
   void logout() {
+    mock.AppState.I.detachCommunityServer();
     currentUser = null;
     trips = const [];
     needsResidenceSetup = false;
@@ -140,6 +201,7 @@ class AppController extends ChangeNotifier {
       trips = await _repository.getTrips(authUser.id);
       await _loadLocalDashboardData();
       await _syncFcmToken();
+      await _attachCommunityIfServer();
     });
   }
 
@@ -173,6 +235,21 @@ class AppController extends ChangeNotifier {
     await _runBusy(() async {
       trips = await _repository.getTrips(user.id);
     }, resetError: false);
+    await _pruneStaleCourseSelections();
+  }
+
+  /// 존재하지 않는 여행을 가리키는 확정 코스 매핑 제거.
+  /// mock 여행 id가 재사용될 때 이전 세션의 로컬 저장 매핑이 새 여행에 붙는 것을 막는다.
+  Future<void> _pruneStaleCourseSelections() async {
+    final validIds = trips.map((t) => t.id).toSet();
+    final pruned = {
+      for (final entry in selectedCourseIdsByTrip.entries)
+        if (validIds.contains(entry.key)) entry.key: entry.value,
+    };
+    if (pruned.length == selectedCourseIdsByTrip.length) return;
+    selectedCourseIdsByTrip = pruned;
+    await _persistLocalDashboardData();
+    notifyListeners();
   }
 
   Future<AppUser> refreshCurrentUser() async {
@@ -228,6 +305,43 @@ class AppController extends ChangeNotifier {
     await _persistLocalDashboardData();
     notifyListeners();
   }
+
+  List<SavedCourse> _demoSavedCourses() => [
+        SavedCourse(
+          id: 'demo_gangjin_course',
+          regionId: 2,
+          regionName: '강진',
+          title: '강진 미식 1박2일 코스',
+          preferences: const ['맛집', '자연', '문화'],
+          stops: const [
+            SavedCourseStop(
+              placeId: 2,
+              name: '강진만 생태공원',
+              address: '전라남도 강진군 강진만길 20',
+              latitude: 34.575,
+              longitude: 126.78,
+              sourceType: 'PLACE',
+            ),
+            SavedCourseStop(
+              placeId: 3,
+              name: '가우도 출렁다리',
+              address: '전라남도 강진군 대구면 저두리',
+              latitude: 34.6,
+              longitude: 126.81,
+              sourceType: 'PLACE',
+            ),
+            SavedCourseStop(
+              placeId: 4,
+              name: '다산초당',
+              address: '전라남도 강진군 도암면 만덕리',
+              latitude: 34.58,
+              longitude: 126.74,
+              sourceType: 'PLACE',
+            ),
+          ],
+          createdAt: DateTime(2026, 7, 6),
+        ),
+      ];
 
   Future<void> saveCourse(SavedCourse course) async {
     final next = [...savedCourses];
@@ -476,6 +590,11 @@ class AppController extends ChangeNotifier {
     savedCourses = rawCourses
         .map((item) => SavedCourse.fromJson(jsonDecode(item) as Map<String, dynamic>))
         .toList();
+    // mock 모드 데모: 저장 코스가 비어 있으면 시연용 코스를 채워
+    // 홈 저장 코스 카드가 목업과 동일한 상태로 시작하게 한다.
+    if (savedCourses.isEmpty && _repository is MockTravelRepository) {
+      savedCourses = _demoSavedCourses();
+    }
     final rawSelectedCourseIds = preferences.getString(_selectedCoursesKey);
     if (rawSelectedCourseIds == null || rawSelectedCourseIds.isEmpty) {
       selectedCourseIdsByTrip = const <int, String>{};
@@ -566,6 +685,22 @@ class AppController extends ChangeNotifier {
           action: SnackBarAction(
             label: '보기',
             onPressed: () => _openYoutubeJob(jobId),
+          ),
+        ),
+      );
+      return;
+    }
+    // 커뮤니티·리마인더 등 일반 푸시 — 안드로이드는 포그라운드에서 시스템 알림을
+    // 자동 표시하지 않으므로 앱 사용 중에는 스낵바로 대신 보여준다.
+    final title = message.notification?.title;
+    if (title != null && title.isNotEmpty) {
+      final body = message.notification?.body;
+      scaffoldMessengerKey.currentState?.showSnackBar(
+        SnackBar(
+          content: Text(
+            body == null || body.isEmpty ? title : '$title\n$body',
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       );

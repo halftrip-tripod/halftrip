@@ -151,20 +151,24 @@ class NotificationSettings {
   const NotificationSettings({
     required this.favoriteRegionPreopenAlert,
     required this.tripEndSettlementAlert,
+    this.marketingAlert = false,
   });
 
   final bool favoriteRegionPreopenAlert;
   final bool tripEndSettlementAlert;
+  final bool marketingAlert;
 
   NotificationSettings copyWith({
     bool? favoriteRegionPreopenAlert,
     bool? tripEndSettlementAlert,
+    bool? marketingAlert,
   }) {
     return NotificationSettings(
       favoriteRegionPreopenAlert:
           favoriteRegionPreopenAlert ?? this.favoriteRegionPreopenAlert,
       tripEndSettlementAlert:
           tripEndSettlementAlert ?? this.tripEndSettlementAlert,
+      marketingAlert: marketingAlert ?? this.marketingAlert,
     );
   }
 
@@ -173,13 +177,201 @@ class NotificationSettings {
       favoriteRegionPreopenAlert:
           json['favoriteRegionPreopenAlert'] as bool? ?? false,
       tripEndSettlementAlert: json['tripEndSettlementAlert'] as bool? ?? false,
+      marketingAlert: json['marketingAlert'] as bool? ?? false,
     );
   }
 
   Map<String, dynamic> toJson() => {
         'favoriteRegionPreopenAlert': favoriteRegionPreopenAlert,
         'tripEndSettlementAlert': tripEndSettlementAlert,
+        'marketingAlert': marketingAlert,
       };
+}
+
+/// 커뮤니티 게시글 (서버 계약: /api/community/posts — 2026-07-28).
+class CommunityPostData {
+  const CommunityPostData({
+    required this.id,
+    required this.type,
+    required this.title,
+    required this.body,
+    required this.regionName,
+    required this.photos,
+    required this.courseName,
+    required this.courseMeta,
+    this.courseStops = const [],
+    required this.verified,
+    required this.edited,
+    required this.visibility,
+    required this.likeCount,
+    required this.commentCount,
+    required this.saveCount,
+    required this.likedByMe,
+    required this.savedByMe,
+    required this.mine,
+    required this.authorNickname,
+    required this.authorAvatarPreset,
+    required this.createdAt,
+  });
+
+  final int id;
+  final String type;
+  final String? title;
+  final String body;
+  final String? regionName;
+  final List<String> photos;
+  final String? courseName;
+  final String? courseMeta;
+  final List<SavedCourseStop> courseStops;
+  final bool verified;
+  final bool edited;
+  final String visibility;
+  final int likeCount;
+  final int commentCount;
+  final int saveCount;
+  final bool likedByMe;
+  final bool savedByMe;
+  final bool mine;
+  final String authorNickname;
+  final String authorAvatarPreset;
+  final DateTime createdAt;
+
+  factory CommunityPostData.fromJson(Map<String, dynamic> json) =>
+      CommunityPostData(
+        id: json['id'] as int,
+        type: json['type'] as String? ?? 'REVIEW',
+        title: json['title'] as String?,
+        body: json['body'] as String? ?? '',
+        regionName: json['regionName'] as String?,
+        photos: ((json['photos'] as List<dynamic>?) ?? const [])
+            .map((e) => e.toString())
+            .toList(),
+        courseName: json['courseName'] as String?,
+        courseMeta: json['courseMeta'] as String?,
+        courseStops: ((json['courseStops'] as List<dynamic>?) ?? const [])
+            .map((e) => SavedCourseStop.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        verified: json['verified'] as bool? ?? false,
+        edited: json['edited'] as bool? ?? false,
+        visibility: json['visibility'] as String? ?? 'PUBLIC',
+        likeCount: json['likeCount'] as int? ?? 0,
+        commentCount: json['commentCount'] as int? ?? 0,
+        saveCount: json['saveCount'] as int? ?? 0,
+        likedByMe: json['likedByMe'] as bool? ?? false,
+        savedByMe: json['savedByMe'] as bool? ?? false,
+        mine: json['mine'] as bool? ?? false,
+        authorNickname: json['authorNickname'] as String? ?? '여행자',
+        authorAvatarPreset: json['authorAvatarPreset'] as String? ?? '0:0',
+        createdAt:
+            DateTime.tryParse(json['createdAt'] as String? ?? '')?.toLocal() ??
+                DateTime.now(),
+      );
+}
+
+class CommunityCommentData {
+  const CommunityCommentData({
+    required this.id,
+    required this.authorId,
+    required this.parentId,
+    required this.body,
+    required this.authorNickname,
+    required this.authorAvatarPreset,
+    required this.isPostAuthor,
+    required this.mine,
+    required this.likeCount,
+    required this.likedByMe,
+    required this.createdAt,
+  });
+
+  final int id;
+  final int authorId;
+
+  /// 인스타식 1단계 답글 — 루트 댓글 id (답글의 답글도 서버가 루트로 정규화).
+  final int? parentId;
+  final String body;
+  final String authorNickname;
+  final String authorAvatarPreset;
+  final bool isPostAuthor;
+  final bool mine;
+  final int likeCount;
+  final bool likedByMe;
+  final DateTime createdAt;
+
+  factory CommunityCommentData.fromJson(Map<String, dynamic> json) =>
+      CommunityCommentData(
+        id: json['id'] as int,
+        authorId: json['authorId'] as int? ?? 0,
+        parentId: json['parentId'] as int?,
+        body: json['body'] as String? ?? '',
+        authorNickname: json['authorNickname'] as String? ?? '여행자',
+        authorAvatarPreset: json['authorAvatarPreset'] as String? ?? '0:0',
+        isPostAuthor: json['isPostAuthor'] as bool? ?? false,
+        mine: json['mine'] as bool? ?? false,
+        likeCount: json['likeCount'] as int? ?? 0,
+        likedByMe: json['likedByMe'] as bool? ?? false,
+        createdAt:
+            DateTime.tryParse(json['createdAt'] as String? ?? '')?.toLocal() ??
+                DateTime.now(),
+      );
+}
+
+class CommunityMyPosts {
+  const CommunityMyPosts({
+    required this.postCount,
+    required this.receivedLikeCount,
+    required this.receivedSaveCount,
+    required this.posts,
+  });
+
+  final int postCount;
+  final int receivedLikeCount;
+  final int receivedSaveCount;
+  final List<CommunityPostData> posts;
+
+  factory CommunityMyPosts.fromJson(Map<String, dynamic> json) =>
+      CommunityMyPosts(
+        postCount: json['postCount'] as int? ?? 0,
+        receivedLikeCount: json['receivedLikeCount'] as int? ?? 0,
+        receivedSaveCount: json['receivedSaveCount'] as int? ?? 0,
+        posts: ((json['posts'] as List<dynamic>?) ?? const [])
+            .map((e) => CommunityPostData.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+/// 출발 준비 체크리스트 항목 — 계약: GET/PUT /api/trips/{tripId}/checklist (핸드오프 E, 사용자 직접 체크안).
+class ChecklistItem {
+  const ChecklistItem({
+    required this.key,
+    required this.label,
+    required this.checked,
+  });
+
+  final String key;
+  final String label;
+  final bool checked;
+
+  ChecklistItem copyWith({bool? checked}) =>
+      ChecklistItem(key: key, label: label, checked: checked ?? this.checked);
+
+  factory ChecklistItem.fromJson(Map<String, dynamic> json) => ChecklistItem(
+        key: json['key'] as String? ?? '',
+        label: json['label'] as String? ?? '',
+        // 서버는 done(자동판정+수동체크 합산)과 checked(수동)를 함께 준다 — 표시 기준은 done.
+        checked: (json['done'] ?? json['checked']) as bool? ?? false,
+      );
+
+  Map<String, dynamic> toJson() => {'key': key, 'checked': checked};
+
+  /// 서버 시드와 동일한 기본 4항목 — 백엔드 배포 전 폴백.
+  static List<ChecklistItem> defaults() => const [
+        ChecklistItem(key: 'currency_app', label: '지역화폐 앱 설치', checked: false),
+        ChecklistItem(
+            key: 'payment_method', label: '결제수단(인정 카드) 확인', checked: false),
+        ChecklistItem(
+            key: 'auth_guide', label: '인증사진 가이드 확인', checked: false),
+        ChecklistItem(key: 'lodging', label: '숙소 예약 확인', checked: false),
+      ];
 }
 
 /// 알림 유형 — 백엔드 wire enum(REGION_OPEN 등)과 매핑.
@@ -250,6 +442,19 @@ class AppNotification {
       refId: json['refId'] as int?,
     );
   }
+}
+
+/// 소셜 로그인 결과 (서버 계약: /api/auth/social-login).
+class SocialLoginResult {
+  const SocialLoginResult({
+    required this.user,
+    required this.newUser,
+    required this.needsResidence,
+  });
+
+  final AppUser user;
+  final bool newUser;
+  final bool needsResidence;
 }
 
 class AppUser {
@@ -691,6 +896,11 @@ class TripSummary {
     required this.totalSpentAmount,
     required this.refundConditionAmount,
     required this.settlementApplied,
+    this.authCertifiedCount,
+    this.authRequiredCount,
+    this.checklistDoneCount,
+    this.checklistTotal,
+    this.settlementDeadline,
   });
 
   final int id;
@@ -704,6 +914,13 @@ class TripSummary {
   final int totalSpentAmount;
   final int refundConditionAmount;
   final bool settlementApplied;
+
+  /// 여행 진행 카운트(백엔드 E) — 서버 미지원 시 null.
+  final int? authCertifiedCount;
+  final int? authRequiredCount;
+  final int? checklistDoneCount;
+  final int? checklistTotal;
+  final DateTime? settlementDeadline;
 
   TripSummary copyWith({
     int? travelerCount,
@@ -723,6 +940,11 @@ class TripSummary {
       totalSpentAmount: totalSpentAmount ?? this.totalSpentAmount,
       refundConditionAmount: refundConditionAmount,
       settlementApplied: settlementApplied ?? this.settlementApplied,
+      authCertifiedCount: authCertifiedCount,
+      authRequiredCount: authRequiredCount,
+      checklistDoneCount: checklistDoneCount,
+      checklistTotal: checklistTotal,
+      settlementDeadline: settlementDeadline,
     );
   }
 
@@ -739,6 +961,13 @@ class TripSummary {
       totalSpentAmount: json['totalSpentAmount'] as int? ?? 0,
       refundConditionAmount: json['refundConditionAmount'] as int? ?? 0,
       settlementApplied: json['settlementApplied'] as bool? ?? false,
+      authCertifiedCount: json['authCertifiedCount'] as int?,
+      authRequiredCount: json['authRequiredCount'] as int?,
+      checklistDoneCount: json['checklistDoneCount'] as int?,
+      checklistTotal: json['checklistTotal'] as int?,
+      settlementDeadline: json['settlementDeadline'] == null
+          ? null
+          : DateTime.tryParse(json['settlementDeadline'] as String),
     );
   }
 }
@@ -839,6 +1068,10 @@ class AuthPhotoReviewResult {
     required this.facesClear,
     required this.backgroundVisible,
     required this.reason,
+    this.gpsPresent,
+    this.capturedAt,
+    this.locationVerified,
+    this.withinTripPeriod,
   });
 
   final bool approved;
@@ -848,6 +1081,12 @@ class AuthPhotoReviewResult {
   final bool backgroundVisible;
   final String reason;
 
+  /// EXIF 위치·시각 검증(백엔드 F) — 검증 미수행이면 null.
+  final bool? gpsPresent;
+  final DateTime? capturedAt;
+  final bool? locationVerified;
+  final bool? withinTripPeriod;
+
   factory AuthPhotoReviewResult.fromJson(Map<String, dynamic> json) {
     return AuthPhotoReviewResult(
       approved: json['approved'] as bool? ?? false,
@@ -856,6 +1095,12 @@ class AuthPhotoReviewResult {
       facesClear: json['facesClear'] as bool? ?? false,
       backgroundVisible: json['backgroundVisible'] as bool? ?? false,
       reason: json['reason'] as String? ?? '',
+      gpsPresent: json['gpsPresent'] as bool?,
+      capturedAt: json['capturedAt'] == null
+          ? null
+          : DateTime.tryParse(json['capturedAt'] as String),
+      locationVerified: json['locationVerified'] as bool?,
+      withinTripPeriod: json['withinTripPeriod'] as bool?,
     );
   }
 }
@@ -1450,6 +1695,18 @@ class YoutubeCourseJobStop {
     required this.latitude,
     required this.longitude,
     required this.category,
+    this.phoneNumber = '',
+    this.placeUrl = '',
+    this.websiteUri = '',
+    this.internationalPhoneNumber = '',
+    this.rating,
+    this.userRatingCount = 0,
+    this.businessStatus = '',
+    this.priceLevel = '',
+    this.types = const [],
+    this.openingHours = const [],
+    this.editorialSummary = '',
+    this.googlePlaceDetails = const {},
     required this.source,
     required this.reason,
   });
@@ -1460,10 +1717,23 @@ class YoutubeCourseJobStop {
   final double latitude;
   final double longitude;
   final String category;
+  final String phoneNumber;
+  final String placeUrl;
+  final String websiteUri;
+  final String internationalPhoneNumber;
+  final double? rating;
+  final int userRatingCount;
+  final String businessStatus;
+  final String priceLevel;
+  final List<String> types;
+  final List<String> openingHours;
+  final String editorialSummary;
+  final Map<String, dynamic> googlePlaceDetails;
   final String source;
   final String reason;
 
   factory YoutubeCourseJobStop.fromJson(Map<String, dynamic> json) {
+    final rawDetails = json['googlePlaceDetails'];
     return YoutubeCourseJobStop(
       order: json['order'] as int? ?? 0,
       placeName: json['placeName'] as String? ?? '',
@@ -1471,6 +1741,25 @@ class YoutubeCourseJobStop {
       latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
       category: json['category'] as String? ?? '',
+      phoneNumber: json['phoneNumber'] as String? ?? '',
+      placeUrl: json['placeUrl'] as String? ?? '',
+      websiteUri: json['websiteUri'] as String? ?? '',
+      internationalPhoneNumber:
+          json['internationalPhoneNumber'] as String? ?? '',
+      rating: (json['rating'] as num?)?.toDouble(),
+      userRatingCount: json['userRatingCount'] as int? ?? 0,
+      businessStatus: json['businessStatus'] as String? ?? '',
+      priceLevel: json['priceLevel'] as String? ?? '',
+      types: ((json['types'] as List<dynamic>?) ?? const [])
+          .map((item) => item.toString())
+          .toList(),
+      openingHours: ((json['openingHours'] as List<dynamic>?) ?? const [])
+          .map((item) => item.toString())
+          .toList(),
+      editorialSummary: json['editorialSummary'] as String? ?? '',
+      googlePlaceDetails: rawDetails is Map<String, dynamic>
+          ? rawDetails
+          : const <String, dynamic>{},
       source: json['source'] as String? ?? '',
       reason: json['reason'] as String? ?? '',
     );
@@ -1495,6 +1784,76 @@ class YoutubeCourseJobResult {
       stops: ((json['stops'] as List<dynamic>?) ?? const [])
           .map((item) => YoutubeCourseJobStop.fromJson(item as Map<String, dynamic>))
           .toList(),
+    );
+  }
+}
+
+class GooglePlaceDetailItem {
+  const GooglePlaceDetailItem({
+    required this.placeName,
+    required this.address,
+    required this.latitude,
+    required this.longitude,
+    required this.category,
+    required this.phoneNumber,
+    required this.placeUrl,
+    required this.websiteUri,
+    required this.internationalPhoneNumber,
+    required this.rating,
+    required this.userRatingCount,
+    required this.businessStatus,
+    required this.priceLevel,
+    required this.types,
+    required this.openingHours,
+    required this.editorialSummary,
+    required this.googlePlaceDetails,
+  });
+
+  final String placeName;
+  final String address;
+  final double latitude;
+  final double longitude;
+  final String category;
+  final String phoneNumber;
+  final String placeUrl;
+  final String websiteUri;
+  final String internationalPhoneNumber;
+  final double? rating;
+  final int userRatingCount;
+  final String businessStatus;
+  final String priceLevel;
+  final List<String> types;
+  final List<String> openingHours;
+  final String editorialSummary;
+  final Map<String, dynamic> googlePlaceDetails;
+
+  factory GooglePlaceDetailItem.fromJson(Map<String, dynamic> json) {
+    final rawDetails = json['googlePlaceDetails'];
+    return GooglePlaceDetailItem(
+      placeName: json['placeName'] as String? ?? '',
+      address: json['address'] as String? ?? '',
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
+      category: json['category'] as String? ?? '',
+      phoneNumber: json['phoneNumber'] as String? ?? '',
+      placeUrl: json['placeUrl'] as String? ?? '',
+      websiteUri: json['websiteUri'] as String? ?? '',
+      internationalPhoneNumber:
+          json['internationalPhoneNumber'] as String? ?? '',
+      rating: (json['rating'] as num?)?.toDouble(),
+      userRatingCount: json['userRatingCount'] as int? ?? 0,
+      businessStatus: json['businessStatus'] as String? ?? '',
+      priceLevel: json['priceLevel'] as String? ?? '',
+      types: ((json['types'] as List<dynamic>?) ?? const [])
+          .map((item) => item.toString())
+          .toList(),
+      openingHours: ((json['openingHours'] as List<dynamic>?) ?? const [])
+          .map((item) => item.toString())
+          .toList(),
+      editorialSummary: json['editorialSummary'] as String? ?? '',
+      googlePlaceDetails: rawDetails is Map<String, dynamic>
+          ? rawDetails
+          : const <String, dynamic>{},
     );
   }
 }

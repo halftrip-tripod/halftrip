@@ -16,6 +16,15 @@ class MockTravelRepository implements TravelRepository {
   @override
   String get modeName => 'Mock Mode';
 
+  @override
+  Future<SocialLoginResult> socialLogin({
+    required LoginProvider provider,
+    required String accessToken,
+  }) async {
+    final user = await mockLogin(provider);
+    return SocialLoginResult(user: user, newUser: false, needsResidence: false);
+  }
+
   late AppUser _user;
   String _localLoginId = 'sample';
   String _localPassword = '1234';
@@ -245,7 +254,7 @@ class MockTravelRepository implements TravelRepository {
         digitalTourCardApplyUrl:
             'https://www.gangjintour.com/advance/advance_req.html?',
         dataSourceNote: 'SAMPLE_SEED',
-        statusCode: 'PREPARING',
+        statusCode: 'APPLYING',
         digitalBenefitAvailable: true,
         displayOrder: 2,
         mapTopPercent: 86,
@@ -309,7 +318,7 @@ class MockTravelRepository implements TravelRepository {
         halfPriceApplyUrl: 'https://tour.pc.go.kr/Home/index',
         digitalTourCardApplyUrl: 'https://tour.pc.go.kr/Home/index',
         dataSourceNote: 'SAMPLE_SEED',
-        statusCode: 'PREPARING',
+        statusCode: 'APPLYING',
         digitalBenefitAvailable: true,
         displayOrder: 3,
         mapTopPercent: 18,
@@ -475,6 +484,28 @@ class MockTravelRepository implements TravelRepository {
 
   @override
   Future<AppUser> getUser(int userId) async => _user;
+
+  @override
+  Future<void> deleteAccount(int userId) async {}
+
+  @override
+  Future<AppUser> updateResidence(int userId, String residence) async {
+    _user = _user.copyWith(residence: residence);
+    return _user;
+  }
+
+  @override
+  Future<AppUser> updateProfile(
+    int userId, {
+    String? nickname,
+    String? avatarPreset,
+  }) async {
+    _user = _user.copyWith(
+      nickname: nickname,
+      avatarPreset: avatarPreset,
+    );
+    return _user;
+  }
 
   @override
   Future<List<TripSummary>> getTrips(int userId) async {
@@ -716,6 +747,18 @@ class MockTravelRepository implements TravelRepository {
             latitude: entry.value.latitude ?? 0,
             longitude: entry.value.longitude ?? 0,
             category: '관광지',
+            phoneNumber: '',
+            placeUrl: '',
+            websiteUri: '',
+            internationalPhoneNumber: '',
+            rating: null,
+            userRatingCount: 0,
+            businessStatus: '',
+            priceLevel: '',
+            types: const [],
+            openingHours: const [],
+            editorialSummary: '',
+            googlePlaceDetails: const {},
             source: 'youtube_mock',
             reason: 'Mock 유튜브 분석 결과',
           ),
@@ -761,6 +804,16 @@ class MockTravelRepository implements TravelRepository {
         .toList()
       ..sort((a, b) => (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now()));
     return jobs.isEmpty ? null : jobs.first;
+  }
+
+  @override
+  Future<GooglePlaceDetailItem?> searchGooglePlaceDetail({
+    required String placeName,
+    required String address,
+    required double latitude,
+    required double longitude,
+  }) async {
+    return null;
   }
 
   @override
@@ -833,6 +886,7 @@ class MockTravelRepository implements TravelRepository {
   Future<AuthPhotoReviewResult> analyzeAuthPhoto({
     required int tripId,
     required int uploadedFileId,
+    int? placeId,
   }) async {
     final trip = _requireTrip(tripId);
     return AuthPhotoReviewResult(
@@ -1246,7 +1300,11 @@ class MockTravelRepository implements TravelRepository {
   }
 
   @override
-  Future<void> applySettlement(int tripId) async {
+  Future<void> applySettlement(
+    int tripId, {
+    String? applicantName,
+    String? phoneNumber,
+  }) async {
     final trip = _requireTrip(tripId);
     _trips[tripId] = trip.copyWith(
       status: '정산 신청 완료',
@@ -1263,14 +1321,117 @@ class MockTravelRepository implements TravelRepository {
     return settings;
   }
 
+  // 커뮤니티 — mock 모드는 화면이 AppState 로컬퍼스트를 직접 쓰므로 서버 경로는 비활성.
   @override
-  Future<List<AppNotification>> getNotifications() async {
+  Future<List<CommunityPostData>> getCommunityFeed({int? userId}) async => const [];
+
+  @override
+  Future<CommunityPostData> createCommunityPost({
+    required int userId,
+    required String type,
+    String? regionName,
+    String? title,
+    required String body,
+    List<String> photos = const [],
+    String? courseName,
+    String? courseMeta,
+    List<SavedCourseStop> courseStops = const [],
+    int? tripId,
+    required String visibility,
+  }) async {
+    throw UnsupportedError('mock 모드는 로컬퍼스트 커뮤니티를 사용합니다');
+  }
+
+  @override
+  Future<void> toggleCommunityLike(int postId, int userId) async {}
+
+  @override
+  Future<void> toggleCommunityBookmark(int postId, int userId) async {}
+
+  @override
+  Future<void> updateCommunityVisibility(
+      int postId, int userId, String visibility) async {}
+
+  @override
+  Future<List<CommunityCommentData>> getCommunityComments(int postId,
+          {int? userId}) async =>
+      const [];
+
+  @override
+  Future<CommunityCommentData> addCommunityComment(
+      int postId, int userId, String body,
+      {int? parentId, int? mentionUserId}) async {
+    throw UnsupportedError('mock 모드는 로컬퍼스트 커뮤니티를 사용합니다');
+  }
+
+  @override
+  Future<CommunityPostData> updateCommunityPost({
+    required int postId,
+    required int userId,
+    String? type,
+    String? regionName,
+    String? title,
+    String? body,
+    List<String>? photos,
+    String? courseName,
+    String? courseMeta,
+    List<SavedCourseStop>? courseStops,
+    bool clearCourse = false,
+    String? visibility,
+  }) async {
+    throw UnsupportedError('mock 모드는 로컬퍼스트 커뮤니티를 사용합니다');
+  }
+
+  @override
+  Future<void> deleteCommunityPost(int postId, int userId) async {}
+
+  @override
+  Future<void> toggleCommunityCommentLike(int commentId, int userId) async {}
+
+  @override
+  Future<void> deleteCommunityComment(int commentId, int userId) async {}
+
+  @override
+  Future<void> reportCommunity({
+    required int userId,
+    required String targetType,
+    required int targetId,
+    String? reason,
+  }) async {}
+
+  @override
+  Future<CommunityMyPosts> getMyCommunityPosts(int userId) async =>
+      const CommunityMyPosts(
+          postCount: 0, receivedLikeCount: 0, receivedSaveCount: 0, posts: []);
+
+  @override
+  Future<List<CommunityPostData>> getMyCommunityBookmarks(int userId) async =>
+      const [];
+
+  final Map<int, List<ChecklistItem>> _checklists = {};
+
+  @override
+  Future<List<ChecklistItem>> getTripChecklist(int tripId) async {
+    return _checklists.putIfAbsent(tripId, ChecklistItem.defaults);
+  }
+
+  @override
+  Future<List<ChecklistItem>> updateTripChecklist(
+    int tripId,
+    List<ChecklistItem> items,
+  ) async {
+    _checklists[tripId] = List.of(items);
+    return items;
+  }
+
+  @override
+  Future<List<AppNotification>> getNotifications(int userId) async {
     return [..._notifications]
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
   @override
-  Future<void> markAllNotificationsRead() async {
+  Future<void> markAllNotificationsRead(int userId) async {
     _notifications =
         _notifications.map((n) => n.copyWith(read: true)).toList();
   }
@@ -1281,6 +1442,7 @@ class MockTravelRepository implements TravelRepository {
       AppNotification(
         type: NotificationType.regionOpen,
         title: '강진 반값여행 접수 시작 🎉',
+        refType: 'REGION', refId: 2,
         body: '관심 등록한 강진의 6월 반값여행 접수가 열렸어요. 지금 신청해보세요.',
         createdAt: now.subtract(const Duration(minutes: 10)),
         read: false,
@@ -1288,6 +1450,7 @@ class MockTravelRepository implements TravelRepository {
       AppNotification(
         type: NotificationType.courseDone,
         title: '유튜브 코스가 완성됐어요',
+        refType: 'COURSE', refId: 1,
         body: '강진 유튜브 추천 코스를 내 코스함에 저장했어요. 확인해보세요.',
         createdAt: now.subtract(const Duration(hours: 1)),
         read: false,
@@ -1295,6 +1458,7 @@ class MockTravelRepository implements TravelRepository {
       AppNotification(
         type: NotificationType.communityLike,
         title: '여행하는민트님 외 4명이 좋아해요',
+        refType: 'POST', refId: 1,
         body: '내 글 "강진 여행 후기"에 좋아요가 달렸어요.',
         createdAt: now.subtract(const Duration(hours: 3)),
         read: false,
@@ -1302,6 +1466,7 @@ class MockTravelRepository implements TravelRepository {
       AppNotification(
         type: NotificationType.settleDeadline,
         title: '영월 정산 신청 마감 D-3',
+        refType: 'TRIP', refId: 1,
         body: '여행 종료 다음날부터 7일 이내에 정산을 신청하세요.',
         createdAt: now.subtract(const Duration(days: 1)),
         read: true,
@@ -1309,6 +1474,7 @@ class MockTravelRepository implements TravelRepository {
       AppNotification(
         type: NotificationType.communityComment,
         title: '강진가고파님이 댓글을 남겼어요',
+        refType: 'POST', refId: 1,
         body: '가우도 주차는 어디 하셨어요?',
         createdAt: now.subtract(const Duration(days: 2)),
         read: true,
@@ -1316,6 +1482,7 @@ class MockTravelRepository implements TravelRepository {
       AppNotification(
         type: NotificationType.settleDeadline,
         title: '완도 접수 마감 D-1',
+        refType: 'REGION', refId: 1,
         body: '관심 등록한 완도 반값여행 접수가 곧 마감돼요.',
         createdAt: now.subtract(const Duration(days: 3)),
         read: true,
@@ -1323,6 +1490,7 @@ class MockTravelRepository implements TravelRepository {
       AppNotification(
         type: NotificationType.benefit,
         title: '디지털 관광주민증 혜택 추가',
+        refType: 'MERCHANT', refId: 1,
         body: '강진 가맹점에 디민증 추가 할인 혜택이 생겼어요.',
         createdAt: now.subtract(const Duration(days: 7)),
         read: true,

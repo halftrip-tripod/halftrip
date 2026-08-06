@@ -7,6 +7,8 @@ import '../widgets/ui/app_card.dart';
 import '../widgets/ui/pill.dart';
 import 'auth_photo_upload_screen.dart';
 import 'lodging_form_screen.dart';
+import 'course_create_screen.dart';
+import 'main_navigation_screen.dart';
 import 'planner_screen.dart';
 import 'receipt_card_screen.dart';
 import 'receipt_evidence_screen.dart';
@@ -133,7 +135,14 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     return [
       _CourseCard(
         course: course,
+        regionName: detail.trip.regionName,
         onTap: () => _push(PlannerScreen(tripId: widget.tripId)),
+        onAdd: () => _push(CourseCreateScreen(tripDetail: detail)),
+        onCommunity: () => Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+              builder: (_) => const MainNavigationScreen(initialIndex: 3)),
+          (route) => false,
+        ),
       ),
       const SizedBox(height: 14),
       _SectionCard(
@@ -155,29 +164,143 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         ),
       ),
       const SizedBox(height: 14),
-      const _SectionCard(
+      _SectionCard(
         title: '여행 중 · 후 할 일',
-        subtitle: '출발하면 순서대로 열려요.',
+        subtitle: '출발하면 순서대로 열려요. 눌러서 준비 방법을 미리 확인해두세요.',
         child: Column(children: [
-          _UpcomingRow(
-              icon: Icons.photo_camera_outlined,
-              label: '관광지 인증샷 (EXIF)',
-              when: '여행 중'),
-          _UpcomingRow(
-              icon: Icons.receipt_long_outlined,
-              label: '영수증 OCR · 소비 추적',
-              when: '여행 중'),
-          _UpcomingRow(
-              icon: Icons.hotel_outlined,
-              label: '숙박확인서 작성·서명',
-              when: '여행 중'),
-          _UpcomingRow(
-              icon: Icons.description_outlined,
-              label: '증빙 패키지 · 정산 신청',
-              when: '여행 후'),
+          for (var i = 0; i < _taskGuides.length; i++)
+            _UpcomingRow(
+              icon: _taskGuides[i].$1,
+              label: _taskGuides[i].$2,
+              when: _taskGuides[i].$3,
+              onTap: () => _showTaskGuide(i),
+            ),
         ]),
       ),
     ];
+  }
+
+  /// 여행 전 할 일 준비 가이드 — 등록 화면은 여행이 시작되면 열린다.
+  /// 디자인: 목업 여행 상세 가이드 시트.
+  static const _taskGuides = [
+    (Icons.photo_camera_outlined, '관광지 인증샷 (EXIF)', '여행 중', [
+      '지정관광지 2곳 이상에서 인증샷을 찍어야 해요.',
+      '기본 카메라로 촬영해 위치·시간(GPS·EXIF) 정보가 남아야 자동 인증돼요.',
+      '신청 대표자와 일행 얼굴, 배경이 함께 나오게 찍어주세요.',
+      '캡처·SNS 저장본은 촬영 정보가 지워져 인증이 어려워요.',
+    ]),
+    (Icons.receipt_long_outlined, '영수증 OCR · 소비 추적', '여행 중', [
+      '인정 결제수단: 지역화폐 · 신청 대표자 명의 카드 · 현금영수증.',
+      '최소 소비 조건은 지역 공고 기준이에요 (예: 개인 3만원 / 팀 5만원 이상).',
+      '영수증 사진을 올리면 상호·금액·결제수단을 자동으로 인식해 누적 소비로 관리해줘요.',
+      '간이영수증·계좌이체는 인정되지 않을 수 있어요.',
+    ]),
+    (Icons.hotel_outlined, '숙박확인서 작성·서명', '여행 중', [
+      '반값여행은 1박 숙박이 필수예요.',
+      '숙소명·대표자·일정·금액을 적고 체크아웃 때 숙소 대표자 서명을 받아요.',
+      '선결제한 경우 숙소 이용 완료 내역서와 결제 영수증을 함께 준비하세요.',
+    ]),
+    (Icons.description_outlined, '증빙 패키지 · 정산 신청', '여행 후', [
+      '여행이 끝나면 인증샷 + 영수증 + 숙박확인서를 제출 규격 PDF로 자동으로 묶어드려요.',
+      '정산 신청은 여행 종료 다음날부터 7일 이내, 지자체 정산 페이지에서 해요.',
+      '제출 후 심사를 거쳐 보통 1~2개월 뒤 지역화폐로 환급돼요.',
+    ]),
+  ];
+
+  void _showTaskGuide(int index) {
+    final (icon, title, timing, bullets) = _taskGuides[index];
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.p50,
+                    borderRadius: BorderRadius.circular(AppRadius.chip),
+                  ),
+                  child: Icon(icon, size: 22, color: AppColors.p600),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(title,
+                      style: const TextStyle(
+                          fontFamily: 'Pretendard',
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.ink9,
+                          letterSpacing: -0.5)),
+                ),
+                Pill(timing,
+                    tone: timing == '여행 중' ? PillTone.sky : PillTone.gray),
+              ]),
+              const SizedBox(height: 18),
+              for (final bullet in bullets)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 5,
+                        height: 5,
+                        margin: const EdgeInsets.only(top: 8),
+                        decoration: const BoxDecoration(
+                            color: AppColors.p400, shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(bullet,
+                            style: const TextStyle(
+                                fontFamily: 'Pretendard',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.ink7,
+                                height: 1.5)),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 4),
+              const Row(children: [
+                Icon(Icons.info_outline_rounded,
+                    size: 14, color: AppColors.p600),
+                SizedBox(width: 6),
+                Expanded(
+                  child: Text('여행이 시작되면 이 화면에서 바로 등록할 수 있어요.',
+                      style: TextStyle(
+                          fontFamily: 'Pretendard',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.ink5)),
+                ),
+              ]),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.of(sheetContext).pop(),
+                  child: const Text('확인했어요'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   // ---------- 여행 중 ----------
@@ -229,7 +352,14 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       const SizedBox(height: 14),
       _CourseCard(
         course: course,
+        regionName: detail.trip.regionName,
         onTap: () => _push(PlannerScreen(tripId: widget.tripId)),
+        onAdd: () => _push(CourseCreateScreen(tripDetail: detail)),
+        onCommunity: () => Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+              builder: (_) => const MainNavigationScreen(initialIndex: 3)),
+          (route) => false,
+        ),
       ),
     ];
   }
@@ -548,57 +678,129 @@ class _SectionCard extends StatelessWidget {
 }
 
 class _CourseCard extends StatelessWidget {
-  const _CourseCard({required this.course, required this.onTap});
+  const _CourseCard({
+    required this.course,
+    required this.onTap,
+    required this.onAdd,
+    required this.onCommunity,
+    required this.regionName,
+  });
+
   final SavedCourse? course;
   final VoidCallback onTap;
+  final VoidCallback onAdd;
+  final VoidCallback onCommunity;
+  final String regionName;
 
   @override
   Widget build(BuildContext context) {
     return _SectionCard(
-      title: '확정 코스',
-      child: Material(
-        color: AppColors.p50,
-        borderRadius: BorderRadius.circular(AppRadius.field),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(AppRadius.field),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: const BoxDecoration(
-                    color: AppColors.white, shape: BoxShape.circle),
-                child: const Icon(Icons.route_rounded,
-                    color: AppColors.p600, size: 20),
+      title: '여행 코스',
+      child: course == null
+          // 코스가 없으면: 만들기 + 커뮤니티 인기 코스 구경 (목업 UX)
+          ? Column(children: [
+              _CourseActionButton(
+                icon: Icons.add_rounded,
+                label: '코스 추가하기',
+                onTap: onAdd,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(course?.title ?? '코스를 정해보세요',
-                        style: const TextStyle(
-                            fontFamily: 'Pretendard',
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.ink9)),
-                    const SizedBox(height: 2),
-                    Text(
-                        course == null
-                            ? '아직 확정 코스가 없어요'
-                            : '${course!.regionName} · ${course!.stops.length}곳',
-                        style: const TextStyle(
-                            fontFamily: 'Pretendard',
-                            fontSize: 13,
-                            color: AppColors.ink5)),
-                  ],
+              const SizedBox(height: 10),
+              _CourseActionButton(
+                icon: Icons.chat_bubble_outline_rounded,
+                label: '$regionName 인기 코스 보러 가기',
+                trailing: Icons.chevron_right_rounded,
+                onTap: onCommunity,
+              ),
+            ])
+          : Material(
+              color: AppColors.p50,
+              borderRadius: BorderRadius.circular(AppRadius.field),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(AppRadius.field),
+                onTap: onTap,
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Row(children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: const BoxDecoration(
+                          color: AppColors.white, shape: BoxShape.circle),
+                      child: const Icon(Icons.route_rounded,
+                          color: AppColors.p600, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(course!.title,
+                              style: const TextStyle(
+                                  fontFamily: 'Pretendard',
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.ink9)),
+                          const SizedBox(height: 2),
+                          Text(
+                              '${course!.regionName} · ${course!.stops.length}곳',
+                              style: const TextStyle(
+                                  fontFamily: 'Pretendard',
+                                  fontSize: 13,
+                                  color: AppColors.ink5)),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right_rounded,
+                        color: AppColors.p600),
+                  ]),
                 ),
               ),
-              const Icon(Icons.chevron_right_rounded, color: AppColors.p600),
-            ]),
-          ),
+            ),
+    );
+  }
+}
+
+/// 코스 빈 상태 액션 버튼 (surf 배경 아웃라인 톤).
+class _CourseActionButton extends StatelessWidget {
+  const _CourseActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.trailing,
+  });
+
+  final IconData icon;
+  final String label;
+  final IconData? trailing;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        decoration: BoxDecoration(
+          color: AppColors.surf,
+          borderRadius: BorderRadius.circular(AppRadius.chip),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 16, color: AppColors.p600),
+            const SizedBox(width: 6),
+            Text(label,
+                style: const TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.ink7)),
+            if (trailing != null) ...[
+              const SizedBox(width: 4),
+              Icon(trailing, size: 15, color: AppColors.ink4),
+            ],
+          ],
         ),
       ),
     );
@@ -730,14 +932,17 @@ class _CheckRow extends StatelessWidget {
 
 class _UpcomingRow extends StatelessWidget {
   const _UpcomingRow(
-      {required this.icon, required this.label, required this.when});
+      {required this.icon, required this.label, required this.when, this.onTap});
   final IconData icon;
   final String label;
   final String when;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(children: [
         Icon(icon, size: 20, color: AppColors.ink4),
@@ -757,6 +962,7 @@ class _UpcomingRow extends StatelessWidget {
                 fontWeight: FontWeight.w700,
                 color: AppColors.ink4)),
       ]),
+      ),
     );
   }
 }

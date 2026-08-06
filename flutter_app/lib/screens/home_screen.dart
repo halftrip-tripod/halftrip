@@ -2,12 +2,17 @@ import 'package:flutter/material.dart';
 
 import '../core/app_scope.dart';
 import '../models/app_models.dart';
+import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
+import '../widgets/korea_map.dart';
+import '../widgets/ui/app_card.dart';
+import '../widgets/ui/pill.dart';
+import '../widgets/ui/seg_chips.dart';
 import 'region_action_screen.dart';
 import 'region_course_builder_screen.dart';
 
-enum _RegionFilter { all, applying, preparing, closed }
-
+/// 홈 대시보드 (S1-1) — 디자인: halftrip-design/home.html
+/// 인사말 + 거주지 칩 + 뷰 전환(전국지도/접수중/오픈예정) + 저장 코스.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
@@ -25,7 +30,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   Future<_HomeDashboardData>? _future;
   bool _initialized = false;
-  _RegionFilter _selectedFilter = _RegionFilter.all;
+  int _pane = 0; // 0 전국지도 / 1 접수중 / 2 오픈예정
 
   @override
   void didChangeDependencies() {
@@ -78,19 +83,10 @@ class _HomeScreenState extends State<HomeScreen> {
     await _future;
   }
 
-  List<RegionSummary> _filtered(List<RegionSummary> regions) {
-    return regions.where((region) {
-      switch (_selectedFilter) {
-        case _RegionFilter.all:
-          return true;
-        case _RegionFilter.applying:
-          return region.statusCode.toUpperCase() == 'APPLYING';
-        case _RegionFilter.preparing:
-          return region.statusCode.toUpperCase() == 'PREPARING';
-        case _RegionFilter.closed:
-          return region.statusCode.toUpperCase() == 'CLOSED';
-      }
-    }).toList();
+  void _openRegion(RegionSummary region) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => RegionActionScreen(region: region)),
+    );
   }
 
   @override
@@ -125,64 +121,62 @@ class _HomeScreenState extends State<HomeScreen> {
             return const Center(child: Text('표시할 데이터가 없습니다.'));
           }
 
-          final filtered = _filtered(data.regions);
+          final applying = data.regions
+              .where((r) => r.statusCode.toUpperCase() == 'APPLYING')
+              .toList();
+          final preparing = data.regions
+              .where((r) => r.statusCode.toUpperCase() == 'PREPARING')
+              .toList();
 
           return RefreshIndicator(
             onRefresh: _refresh,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final width = constraints.maxWidth;
-                final columns = width >= 680 ? 3 : 2;
-                final ratio = columns == 3 ? 0.9 : 0.84;
-
-                return ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 120),
-                  children: [
-                    _ResidenceHeader(user: data.user),
-                    const SizedBox(height: 18),
-                    const _PromoBanner(),
-                    const SizedBox(height: 18),
-                    _FilterRow(
-                      regions: data.regions,
-                      selected: _selectedFilter,
-                      onChanged: (next) {
-                        setState(() => _selectedFilter = next);
-                      },
-                    ),
-                    const SizedBox(height: 18),
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: filtered.length,
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: columns,
-                        mainAxisSpacing: 14,
-                        crossAxisSpacing: 14,
-                        childAspectRatio: ratio,
-                      ),
-                      itemBuilder: (context, index) {
-                        final region = filtered[index];
-                        return _RegionCard(
-                          region: region,
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => RegionActionScreen(region: region),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 22),
-                    SectionCard(
-                      title: '저장 코스',
-                      subtitle: '저장해둔 여행 코스를 다시 열어보고 일정을 이어서 만들 수 있어요.',
-                      child: _SavedCourses(courses: data.savedCourses),
-                    ),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 120),
+              children: [
+                _Greeting(user: data.user),
+                const SizedBox(height: 22),
+                SegChips(
+                  labels: [
+                    '전국지도',
+                    '접수중 ${applying.length}',
+                    '오픈예정 ${preparing.length}',
                   ],
-                );
-              },
+                  selected: _pane,
+                  onChanged: (i) => setState(() => _pane = i),
+                ),
+                const SizedBox(height: 14),
+                if (_pane == 0)
+                  AppCard(
+                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+                    child: KoreaMap(
+                      regions: data.regions,
+                      residenceLabel: data.user.residence,
+                      onSelect: _openRegion,
+                    ),
+                  ),
+                if (_pane == 1) ...[
+                  for (final region in applying) ...[
+                    _ApplyingCard(region: region, onTap: () => _openRegion(region)),
+                    const SizedBox(height: 14),
+                  ],
+                  if (applying.isEmpty)
+                    const _EmptyBlock(message: '지금 접수 중인 지역이 없어요.'),
+                ],
+                if (_pane == 2) ...[
+                  for (final region in preparing) ...[
+                    _PreparingRow(region: region, onTap: () => _openRegion(region)),
+                    const SizedBox(height: 10),
+                  ],
+                  if (preparing.isEmpty)
+                    const _EmptyBlock(message: '오픈 예정인 지역이 없어요.'),
+                ],
+                const SizedBox(height: 10),
+                _SavedCoursesCard(courses: data.savedCourses),
+                const SizedBox(height: 22),
+                _PopularCoursesCard(
+                  onMore: () => widget.onTabSelected?.call(3),
+                ),
+              ],
             ),
           );
         },
@@ -203,573 +197,540 @@ class _HomeDashboardData {
   final List<SavedCourse> savedCourses;
 }
 
-class _ResidenceHeader extends StatelessWidget {
-  const _ResidenceHeader({required this.user});
+/// 인사말 + 거주지 칩 (우측).
+class _Greeting extends StatelessWidget {
+  const _Greeting({required this.user});
 
   final AppUser user;
 
-  String _displayResidence(String residence) {
-    final tokens = residence.trim().split(RegExp(r'\s+'));
-    if (tokens.isEmpty || tokens.first.isEmpty) {
-      return residence;
-    }
-
-    final primary = tokens.first;
-    return primary
-        .replaceAll('특별자치도', '')
-        .replaceAll('특별자치시', '')
-        .replaceAll('광역시', '')
-        .replaceAll('특별시', '')
-        .replaceAll('자치시', '')
-        .replaceAll('자치도', '')
-        .replaceAll('도', '')
-        .trim();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final primaryResidence = _displayResidence(user.residence);
+    final residence = user.residence.trim().isEmpty
+        ? '미설정'
+        : user.residence.trim().split(RegExp(r'\s+')).first;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '내 거주지',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: const Color(0xFF334155),
-                      fontWeight: FontWeight.w800,
-                    ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                primaryResidence,
-                style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF111827),
-                      letterSpacing: -1.3,
-                    ),
-              ),
-            ],
-          ),
-        ),
-        OutlinedButton(
-          onPressed: () {},
-          style: OutlinedButton.styleFrom(
-            foregroundColor: const Color(0xFF64748B),
-            backgroundColor: Colors.white,
-            side: const BorderSide(color: Color(0xFFD9E2EC)),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(999),
-            ),
-          ),
-          child: const Text('변경'),
-        ),
-      ],
-    );
-  }
-}
-
-class _PromoBanner extends StatelessWidget {
-  const _PromoBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(22, 22, 20, 22),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFF1FBF2), Color(0xFFF8FFF9)],
-        ),
-        border: Border.all(color: const Color(0xFFDDF3E3)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0C0F172A),
-            blurRadius: 24,
-            offset: Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '지금, 반값여행을\n시작해보세요',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        color: const Color(0xFF1B8E4B),
-                        height: 1.22,
-                      ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  '여행경비의 50%를 환급해드려요!',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: const Color(0xFF64748B),
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-                const SizedBox(height: 18),
-                FilledButton(
-                  onPressed: () {},
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(0, 48),
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF334155),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(999),
-                      side: const BorderSide(color: Color(0xFFD8E4DB)),
-                    ),
-                  ),
-                  child: const Text('이용 방법 안내'),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 14),
-          const SizedBox(
-            width: 144,
-            height: 144,
-            child: _PromoIllustration(),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PromoIllustration extends StatelessWidget {
-  const _PromoIllustration();
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        Positioned(
-          top: 10,
-          left: 6,
-          child: _accentChip(
-            angle: -0.24,
-            color: const Color(0xFF56C78A),
-            width: 28,
-            height: 16,
-          ),
-        ),
-        Positioned(
-          right: 0,
-          top: 24,
-          child: _accentChip(
-            angle: 0.22,
-            color: const Color(0xFFF6B27F),
-            width: 24,
-            height: 15,
-          ),
-        ),
-        Positioned(
-          left: 0,
-          bottom: 12,
-          child: _accentChip(
-            angle: -0.08,
-            color: const Color(0xFF9EDAB0),
-            width: 20,
-            height: 20,
-            borderRadius: 8,
-            icon: Icons.park_rounded,
-          ),
-        ),
-        Container(
-          width: 132,
-          height: 132,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: const Color(0xFFD9F0DF), width: 2),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x140F172A),
-                blurRadius: 24,
-                offset: Offset(0, 12),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(26),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Image.asset(
-                  'assets/card/card.jpg',
-                  fit: BoxFit.cover,
-                  alignment: Alignment.center,
-                ),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Colors.white.withValues(alpha: 0.12),
-                        const Color(0xFFDAF2E1).withValues(alpha: 0.30),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _accentChip({
-    required double angle,
-    required Color color,
-    required double width,
-    required double height,
-    double borderRadius = 6,
-    IconData? icon,
-  }) {
-    return Transform.rotate(
-      angle: angle,
-      child: Container(
-        width: width,
-        height: height,
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(borderRadius),
-        ),
-        child: icon == null
-            ? null
-            : Icon(
-                icon,
-                size: 12,
-                color: Colors.white,
-              ),
-      ),
-    );
-  }
-}
-
-class _FilterRow extends StatelessWidget {
-  const _FilterRow({
-    required this.regions,
-    required this.selected,
-    required this.onChanged,
-  });
-
-  final List<RegionSummary> regions;
-  final _RegionFilter selected;
-  final ValueChanged<_RegionFilter> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final counts = <_RegionFilter, int>{
-      _RegionFilter.all: regions.length,
-      _RegionFilter.applying:
-          regions.where((e) => e.statusCode.toUpperCase() == 'APPLYING').length,
-      _RegionFilter.preparing:
-          regions.where((e) => e.statusCode.toUpperCase() == 'PREPARING').length,
-      _RegionFilter.closed:
-          regions.where((e) => e.statusCode.toUpperCase() == 'CLOSED').length,
-    };
-
-    return Row(
-      children: [
-        for (final filter in _RegionFilter.values) ...[
-          Expanded(
-            child: _FilterChip(
-              label: _filterLabel(filter),
-              count: counts[filter] ?? 0,
-              selected: filter == selected,
-              onTap: () => onChanged(filter),
-            ),
-          ),
-          if (filter != _RegionFilter.values.last) const SizedBox(width: 10),
-        ],
-      ],
-    );
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({
-    required this.label,
-    required this.count,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final int count;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFF111827) : Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: selected ? const Color(0xFF111827) : const Color(0xFFDCE4EC),
-          ),
-          boxShadow: selected
-              ? const []
-              : const [
-                  BoxShadow(
-                    color: Color(0x080F172A),
-                    blurRadius: 12,
-                    offset: Offset(0, 6),
-                  ),
-                ],
-        ),
-        child: Center(
-          child: Text(
-            '$label $count',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+        const Expanded(
+          child: Text.rich(
+            TextSpan(children: [
+              TextSpan(text: '지금 떠날 수 있는\n'),
+              TextSpan(text: '반값여행', style: TextStyle(color: AppColors.p600)),
+            ]),
             style: TextStyle(
-              color: selected ? Colors.white : const Color(0xFF334155),
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
+              fontFamily: 'Pretendard',
+              fontSize: 25,
+              fontWeight: FontWeight.w900,
+              color: AppColors.ink9,
+              letterSpacing: -1.2,
+              height: 1.25,
             ),
           ),
         ),
-      ),
+        const SizedBox(width: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+          margin: const EdgeInsets.only(bottom: 3),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            boxShadow: AppShadows.soft,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.place_outlined, size: 14, color: AppColors.p600),
+              const SizedBox(width: 5),
+              Text(
+                residence,
+                style: const TextStyle(
+                  fontFamily: 'Pretendard',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.ink7,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
 
-class _RegionCard extends StatelessWidget {
-  const _RegionCard({
-    required this.region,
-    required this.onTap,
-  });
+/// 접수중 지역 카드 (디자인 .urg) — 조건 요약 + 잔여 예산 + 관심 토글.
+class _ApplyingCard extends StatelessWidget {
+  const _ApplyingCard({required this.region, required this.onTap});
 
   final RegionSummary region;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final controller = AppScope.of(context);
+    final isFavorite = controller.currentUser?.favoriteRegions
+            .any((item) => item.id == region.id) ??
+        false;
     final remaining = region.mockBudgetRemaining.clamp(0, 100);
-    final tone = _budgetTone(remaining);
+    final urgent = remaining < 35;
 
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(28),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(28),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: const Color(0xFFE7EDF3)),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x0A0F172A),
-                blurRadius: 18,
-                offset: Offset(0, 10),
-              ),
-            ],
+    return AppCard(
+      padding: const EdgeInsets.all(16),
+      radius: 20,
+      onTap: onTap,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _RegionEmojiBox(name: region.name, size: 52, fontSize: 26),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      region.name,
+                      style: const TextStyle(
+                        fontFamily: 'Pretendard',
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.ink9,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        region.province,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'Pretendard',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.ink4,
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => controller.toggleFavoriteRegion(region),
+                      child: Icon(
+                        isFavorite ? Icons.star_rounded : Icons.star_outline_rounded,
+                        size: 22,
+                        color: isFavorite ? AppColors.warning : AppColors.ink4,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  region.refundConditionAmount > 0
+                      ? '최소 소비 ${_man(region.refundConditionAmount)} · 지정관광지 2곳 인증'
+                      : '지정관광지 2곳 인증 · 1박 숙박',
+                  style: const TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink5,
+                  ),
+                ),
+                if (region.digitalBenefitAvailable) ...[
+                  const SizedBox(height: 7),
+                  const Row(children: [Pill('디민증 중복혜택', tone: PillTone.mint)]),
+                ],
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: urgent ? const Color(0xFFFEECEC) : AppColors.p100,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            urgent ? Icons.local_fire_department_rounded : Icons.savings_outlined,
+                            size: 14,
+                            color: urgent ? AppColors.danger : AppColors.p700,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            urgent ? '잔여 예산 $remaining% · 마감 임박' : '잔여 예산 $remaining%',
+                            style: TextStyle(
+                              fontFamily: 'Pretendard',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: urgent ? AppColors.danger : AppColors.p700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Spacer(),
+                    const Text(
+                      '신청 정보 보기',
+                      style: TextStyle(
+                        fontFamily: 'Pretendard',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.p600,
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right_rounded, size: 17, color: AppColors.p600),
+                  ],
+                ),
+              ],
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+        ],
+      ),
+    );
+  }
+}
+
+/// 오픈예정 행 (디자인 .row + 관심 버튼).
+class _PreparingRow extends StatelessWidget {
+  const _PreparingRow({required this.region, required this.onTap});
+
+  final RegionSummary region;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = AppScope.of(context);
+    final isFavorite = controller.currentUser?.favoriteRegions
+            .any((item) => item.id == region.id) ??
+        false;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.surf,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          children: [
+            _RegionEmojiBox(name: region.name, size: 40, fontSize: 18, boxColor: Colors.white, shadow: true),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FBFD),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      _regionEmoji(region.name),
-                      style: const TextStyle(fontSize: 26),
+                  Text(
+                    '${region.name} · ${region.province}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'Pretendard',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.ink9,
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          region.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style:
-                              Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                    fontWeight: FontWeight.w900,
-                                    color: const Color(0xFF111827),
-                                    letterSpacing: -0.8,
-                                  ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          region.province,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: const Color(0xFF7C8798),
-                                fontWeight: FontWeight.w700,
-                              ),
-                        ),
-                      ],
+                  const SizedBox(height: 2),
+                  const Text(
+                    '오픈 예정 · 조건은 상세에서 미리 확인',
+                    style: TextStyle(
+                      fontFamily: 'Pretendard',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.ink5,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
-              _StatusBadge(statusCode: region.statusCode),
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  Text(
-                    '잔여 예산',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFF475569),
-                          fontWeight: FontWeight.w700,
-                        ),
+            ),
+            GestureDetector(
+              onTap: () {
+                controller.toggleFavoriteRegion(region);
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(isFavorite
+                      ? '${region.name} 관심 등록을 해제했어요.'
+                      : '${region.name}을(를) 관심 지역에 담았어요. 오픈하면 알려드릴게요!'),
+                ));
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                decoration: BoxDecoration(
+                  color: isFavorite ? AppColors.p100 : AppColors.p500,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  isFavorite ? '관심 ✓' : '+ 관심',
+                  style: TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: isFavorite ? AppColors.p700 : Colors.white,
                   ),
-                  const Spacer(),
-                  Text(
-                    '$remaining%',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: const Color(0xFF111827),
-                          fontWeight: FontWeight.w900,
-                        ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(999),
-                child: LinearProgressIndicator(
-                  value: remaining / 100,
-                  minHeight: 7,
-                  backgroundColor: const Color(0xFFEAEFF3),
-                  valueColor: AlwaysStoppedAnimation<Color>(tone.$1),
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                tone.$2,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: tone.$3,
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _SavedCourses extends StatelessWidget {
-  const _SavedCourses({required this.courses});
+/// 저장 코스 카드 (디자인 .card + .row).
+class _SavedCoursesCard extends StatelessWidget {
+  const _SavedCoursesCard({required this.courses});
 
   final List<SavedCourse> courses;
 
   @override
   Widget build(BuildContext context) {
-    if (courses.isEmpty) {
-      return const _EmptyBlock(message: '저장한 여행 코스가 없어요.');
-    }
-
-    return Column(
-      children: courses.take(3).map((course) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Material(
-            color: const Color(0xFFF8FBFD),
-            borderRadius: BorderRadius.circular(20),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(20),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => RegionCourseBuilderScreen(
-                      regionId: course.regionId,
-                      regionName: course.regionName,
-                    ),
-                  ),
-                );
-              },
-              child: Padding(
-                padding: const EdgeInsets.all(15),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(15),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: const Icon(
-                        Icons.route_rounded,
-                        color: Color(0xFF0F766E),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            course.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF0F172A),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${course.regionName} · ${course.stops.length}개 장소',
-                            style: const TextStyle(
-                              color: Color(0xFF64748B),
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Icon(
-                      Icons.chevron_right_rounded,
-                      color: Color(0xFF94A3B8),
-                    ),
-                  ],
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.bookmark_rounded, size: 19, color: AppColors.p600),
+              SizedBox(width: 8),
+              Text(
+                '저장 코스',
+                style: TextStyle(
+                  fontFamily: 'Pretendard',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.ink9,
+                  letterSpacing: -0.5,
                 ),
               ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (courses.isEmpty)
+            const _EmptyBlock(message: '저장한 여행 코스가 없어요.')
+          else
+            for (final course in courses.take(3)) ...[
+              _SavedCourseRow(course: course),
+              if (course != courses.take(3).last) const SizedBox(height: 10),
+            ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SavedCourseRow extends StatelessWidget {
+  const _SavedCourseRow({required this.course});
+
+  final SavedCourse course;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => RegionCourseBuilderScreen(
+              regionId: course.regionId,
+              regionName: course.regionName,
             ),
           ),
         );
-      }).toList(),
+      },
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.surf,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(13),
+                boxShadow: AppShadows.soft,
+              ),
+              child: const Icon(Icons.route_outlined, size: 20, color: AppColors.p600),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    course.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'Pretendard',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.ink9,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${course.regionName} · ${course.stops.length}개 장소',
+                    style: const TextStyle(
+                      fontFamily: 'Pretendard',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.ink5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: AppColors.ink4),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 커뮤니티 인기 코스 카드 — 디자인 home.html .pop (탭하면 커뮤니티 탭으로).
+class _PopularCoursesCard extends StatelessWidget {
+  const _PopularCoursesCard({required this.onMore});
+
+  final VoidCallback onMore;
+
+  static const _posts = [
+    ('완도', '하루 동선 짜는 법', 18),
+    ('영월', '숙박확인서 꿀팁', 12),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.chat_bubble_outline_rounded,
+                  size: 19, color: AppColors.p600),
+              const SizedBox(width: 8),
+              const Text(
+                '인기 코스',
+                style: TextStyle(
+                  fontFamily: 'Pretendard',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.ink9,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: onMore,
+                child: const Text(
+                  '더보기',
+                  style: TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.ink5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              for (final (region, title, likes) in _posts)
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                        right: region == _posts.last.$1 ? 0 : 12),
+                    child: GestureDetector(
+                      onTap: onMore,
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppColors.surf,
+                          borderRadius: BorderRadius.circular(AppRadius.field),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Pill(region),
+                            const SizedBox(height: 8),
+                            Text(
+                              title,
+                              style: const TextStyle(
+                                fontFamily: 'Pretendard',
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.ink9,
+                                height: 1.35,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const Icon(Icons.favorite_rounded,
+                                    size: 13, color: AppColors.ink4),
+                                const SizedBox(width: 5),
+                                Text(
+                                  '$likes',
+                                  style: const TextStyle(
+                                    fontFamily: 'Pretendard',
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.ink5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 지역 이모지 박스.
+class _RegionEmojiBox extends StatelessWidget {
+  const _RegionEmojiBox({
+    required this.name,
+    required this.size,
+    required this.fontSize,
+    this.boxColor = AppColors.p50,
+    this.shadow = false,
+  });
+
+  final String name;
+  final double size;
+  final double fontSize;
+  final Color boxColor;
+  final bool shadow;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: boxColor,
+        borderRadius: BorderRadius.circular(size * 0.3),
+        boxShadow: shadow ? AppShadows.soft : null,
+      ),
+      child: Text(_regionEmoji(name), style: TextStyle(fontSize: fontSize)),
     );
   }
 }
@@ -785,14 +746,14 @@ class _EmptyBlock extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FBFD),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE4EBF1)),
+        color: AppColors.surf,
+        borderRadius: BorderRadius.circular(18),
       ),
       child: Text(
         message,
         style: const TextStyle(
-          color: Color(0xFF64748B),
+          fontFamily: 'Pretendard',
+          color: AppColors.ink5,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -811,17 +772,9 @@ int _statusPriority(String code) {
   }
 }
 
-String _filterLabel(_RegionFilter filter) {
-  switch (filter) {
-    case _RegionFilter.all:
-      return '전체';
-    case _RegionFilter.applying:
-      return '접수중';
-    case _RegionFilter.preparing:
-      return '오픈예정';
-    case _RegionFilter.closed:
-      return '마감';
-  }
+String _man(int amount) {
+  if (amount % 10000 == 0) return '${amount ~/ 10000}만원';
+  return '${(amount / 10000).toStringAsFixed(1)}만원';
 }
 
 String _regionEmoji(String regionName) {
@@ -844,73 +797,4 @@ String _regionEmoji(String regionName) {
     '완도': '🏝️',
   };
   return map[regionName] ?? '📍';
-}
-
-(Color, String, Color) _budgetTone(int remaining) {
-  if (remaining >= 60) {
-    return (
-      const Color(0xFF22B35E),
-      '여유 있어요',
-      const Color(0xFF1B8E4B),
-    );
-  }
-  if (remaining >= 35) {
-    return (
-      const Color(0xFFF5A623),
-      '서둘러 확인해보세요',
-      const Color(0xFFB87200),
-    );
-  }
-  return (
-    const Color(0xFFEF4444),
-    '마감이 가까워요',
-    const Color(0xFFB91C1C),
-  );
-}
-
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.statusCode});
-
-  final String statusCode;
-
-  @override
-  Widget build(BuildContext context) {
-    late final Color background;
-    late final Color foreground;
-    late final String label;
-
-    switch (statusCode.toUpperCase()) {
-      case 'APPLYING':
-        background = const Color(0xFFE9F9EE);
-        foreground = const Color(0xFF16A34A);
-        label = '접수중';
-        break;
-      case 'PREPARING':
-        background = const Color(0xFFF4F7FB);
-        foreground = const Color(0xFF64748B);
-        label = '오픈예정';
-        break;
-      default:
-        background = const Color(0xFFF4F5F7);
-        foreground = const Color(0xFF6B7280);
-        label = '마감';
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: background.withValues(alpha: 0.95)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: foreground,
-          fontSize: 13,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
 }

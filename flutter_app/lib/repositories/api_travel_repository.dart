@@ -58,6 +58,13 @@ class ApiTravelRepository implements TravelRepository {
           body: jsonEncode(body ?? const {}),
         );
         break;
+      case 'PATCH':
+        response = await http.patch(
+          uri,
+          headers: headers,
+          body: jsonEncode(body ?? const {}),
+        );
+        break;
       case 'DELETE':
         response = await http.delete(
           uri,
@@ -122,6 +129,28 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<SocialLoginResult> socialLogin({
+    required LoginProvider provider,
+    required String accessToken,
+  }) async {
+    final response = await _jsonRequest(
+      'POST',
+      '/auth/social-login',
+      body: {
+        'provider': provider.wireName,
+        'accessToken': accessToken,
+      },
+    );
+    final data = response['data'] as Map<String, dynamic>;
+    final user = await getUser(data['userId'] as int);
+    return SocialLoginResult(
+      user: user,
+      newUser: data['newUser'] as bool? ?? false,
+      needsResidence: data['needsResidence'] as bool? ?? false,
+    );
+  }
+
+  @override
   Future<AppUser> mockLogin(LoginProvider provider) async {
     final response = await _jsonRequest(
       'POST',
@@ -181,6 +210,38 @@ class ApiTravelRepository implements TravelRepository {
   @override
   Future<AppUser> getUser(int userId) async {
     final response = await _jsonRequest('GET', '/users/$userId');
+    return AppUser.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<void> deleteAccount(int userId) async {
+    await _jsonRequest('DELETE', '/users/$userId');
+  }
+
+  @override
+  Future<AppUser> updateResidence(int userId, String residence) async {
+    final response = await _jsonRequest(
+      'PATCH',
+      '/users/$userId/residence',
+      body: {'residence': residence},
+    );
+    return AppUser.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<AppUser> updateProfile(
+    int userId, {
+    String? nickname,
+    String? avatarPreset,
+  }) async {
+    final response = await _jsonRequest(
+      'PATCH',
+      '/users/$userId/profile',
+      body: {
+        if (nickname != null) 'nickname': nickname,
+        if (avatarPreset != null) 'avatarPreset': avatarPreset,
+      },
+    );
     return AppUser.fromJson(response['data'] as Map<String, dynamic>);
   }
 
@@ -341,6 +402,30 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<GooglePlaceDetailItem?> searchGooglePlaceDetail({
+    required String placeName,
+    required String address,
+    required double latitude,
+    required double longitude,
+  }) async {
+    final response = await _jsonRequest(
+      'POST',
+      '/google-places/search',
+      body: {
+        'placeName': placeName,
+        'address': address,
+        'latitude': latitude,
+        'longitude': longitude,
+      },
+    );
+    final data = response['data'];
+    if (data is! Map<String, dynamic>) {
+      return null;
+    }
+    return GooglePlaceDetailItem.fromJson(data);
+  }
+
+  @override
   Future<YoutubeCourseJobItem?> getActiveYoutubeCourseJob({
     required int userId,
     required int tripId,
@@ -426,10 +511,12 @@ class ApiTravelRepository implements TravelRepository {
   Future<AuthPhotoReviewResult> analyzeAuthPhoto({
     required int tripId,
     required int uploadedFileId,
+    int? placeId,
   }) async {
     final response = await _jsonRequest(
       'POST',
       '/trips/$tripId/auth-photos/analyze/$uploadedFileId',
+      query: placeId == null ? null : {'placeId': placeId},
       body: const {},
     );
     return AuthPhotoReviewResult.fromJson(
@@ -569,11 +656,18 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
-  Future<void> applySettlement(int tripId) async {
+  Future<void> applySettlement(
+    int tripId, {
+    String? applicantName,
+    String? phoneNumber,
+  }) async {
     await _jsonRequest(
       'POST',
       '/trips/$tripId/settlement-apply',
-      body: const {},
+      body: {
+        if (applicantName != null) 'applicantName': applicantName,
+        if (phoneNumber != null) 'phoneNumber': phoneNumber,
+      },
     );
   }
 
@@ -624,9 +718,204 @@ class ApiTravelRepository implements TravelRepository {
     return _downloadFromUri(uri, 'trip-$tripId-documents.pdf');
   }
 
+  // ── 커뮤니티 ──
+
   @override
-  Future<List<AppNotification>> getNotifications() async {
-    final response = await _jsonRequest('GET', '/notifications');
+  Future<List<CommunityPostData>> getCommunityFeed({int? userId}) async {
+    final response = await _jsonRequest('GET', '/community/posts',
+        query: userId == null ? null : {'userId': userId});
+    return ((response['data'] as List<dynamic>?) ?? const [])
+        .map((e) => CommunityPostData.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<CommunityPostData> createCommunityPost({
+    required int userId,
+    required String type,
+    String? regionName,
+    String? title,
+    required String body,
+    List<String> photos = const [],
+    String? courseName,
+    String? courseMeta,
+    List<SavedCourseStop> courseStops = const [],
+    int? tripId,
+    required String visibility,
+  }) async {
+    final response = await _jsonRequest('POST', '/community/posts', body: {
+      'userId': userId,
+      'type': type,
+      if (regionName != null) 'regionName': regionName,
+      if (title != null) 'title': title,
+      'body': body,
+      'photos': photos,
+      if (courseName != null) 'courseName': courseName,
+      if (courseMeta != null) 'courseMeta': courseMeta,
+      if (courseStops.isNotEmpty)
+        'courseStops': courseStops.map((s) => s.toJson()).toList(),
+      if (tripId != null) 'tripId': tripId,
+      'visibility': visibility,
+    });
+    return CommunityPostData.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<void> toggleCommunityLike(int postId, int userId) async {
+    await _jsonRequest('POST', '/community/posts/$postId/like',
+        query: {'userId': userId}, body: const {});
+  }
+
+  @override
+  Future<void> toggleCommunityBookmark(int postId, int userId) async {
+    await _jsonRequest('POST', '/community/posts/$postId/bookmark',
+        query: {'userId': userId}, body: const {});
+  }
+
+  @override
+  Future<void> updateCommunityVisibility(
+      int postId, int userId, String visibility) async {
+    await _jsonRequest('PATCH', '/community/posts/$postId',
+        body: {'userId': userId, 'visibility': visibility});
+  }
+
+  @override
+  Future<CommunityPostData> updateCommunityPost({
+    required int postId,
+    required int userId,
+    String? type,
+    String? regionName,
+    String? title,
+    String? body,
+    List<String>? photos,
+    String? courseName,
+    String? courseMeta,
+    List<SavedCourseStop>? courseStops,
+    bool clearCourse = false,
+    String? visibility,
+  }) async {
+    final response = await _jsonRequest('PATCH', '/community/posts/$postId', body: {
+      'userId': userId,
+      if (type != null) 'type': type,
+      if (regionName != null) 'regionName': regionName,
+      if (title != null) 'title': title,
+      if (body != null) 'body': body,
+      if (photos != null) 'photos': photos,
+      if (courseName != null) 'courseName': courseName,
+      if (courseMeta != null) 'courseMeta': courseMeta,
+      if (courseStops != null && courseStops.isNotEmpty)
+        'courseStops': courseStops.map((s) => s.toJson()).toList(),
+      if (clearCourse) 'clearCourse': true,
+      if (visibility != null) 'visibility': visibility,
+    });
+    return CommunityPostData.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<void> deleteCommunityPost(int postId, int userId) async {
+    await _jsonRequest('DELETE', '/community/posts/$postId',
+        query: {'userId': userId});
+  }
+
+  @override
+  Future<List<CommunityCommentData>> getCommunityComments(int postId,
+      {int? userId}) async {
+    final response = await _jsonRequest('GET', '/community/posts/$postId/comments',
+        query: userId == null ? null : {'userId': userId});
+    return ((response['data'] as List<dynamic>?) ?? const [])
+        .map((e) => CommunityCommentData.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<CommunityCommentData> addCommunityComment(
+      int postId, int userId, String body,
+      {int? parentId, int? mentionUserId}) async {
+    final response = await _jsonRequest('POST', '/community/posts/$postId/comments',
+        body: {
+          'userId': userId,
+          'body': body,
+          if (parentId != null) 'parentId': parentId,
+          if (mentionUserId != null) 'mentionUserId': mentionUserId,
+        });
+    return CommunityCommentData.fromJson(
+        response['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<void> toggleCommunityCommentLike(int commentId, int userId) async {
+    await _jsonRequest('POST', '/community/comments/$commentId/like',
+        query: {'userId': userId}, body: const {});
+  }
+
+  @override
+  Future<void> deleteCommunityComment(int commentId, int userId) async {
+    await _jsonRequest('DELETE', '/community/comments/$commentId',
+        query: {'userId': userId});
+  }
+
+  @override
+  Future<void> reportCommunity({
+    required int userId,
+    required String targetType,
+    required int targetId,
+    String? reason,
+  }) async {
+    await _jsonRequest('POST', '/community/reports', body: {
+      'userId': userId,
+      'targetType': targetType,
+      'targetId': targetId,
+      if (reason != null) 'reason': reason,
+    });
+  }
+
+  @override
+  Future<CommunityMyPosts> getMyCommunityPosts(int userId) async {
+    final response = await _jsonRequest('GET', '/community/users/$userId/posts');
+    return CommunityMyPosts.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<List<CommunityPostData>> getMyCommunityBookmarks(int userId) async {
+    final response =
+        await _jsonRequest('GET', '/community/users/$userId/bookmarks');
+    return ((response['data'] as List<dynamic>?) ?? const [])
+        .map((e) => CommunityPostData.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<List<ChecklistItem>> getTripChecklist(int tripId) async {
+    final response = await _jsonRequest('GET', '/trips/$tripId/checklist');
+    return _parseChecklist(response['data']);
+  }
+
+  /// 서버 응답은 `{tripId, doneCount, total, items:[...]}` 래핑 — items만 꺼낸다.
+  List<ChecklistItem> _parseChecklist(dynamic data) {
+    final items = data is Map<String, dynamic>
+        ? (data['items'] as List<dynamic>? ?? const [])
+        : (data as List<dynamic>? ?? const []);
+    return items
+        .map((item) => ChecklistItem.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<List<ChecklistItem>> updateTripChecklist(
+    int tripId,
+    List<ChecklistItem> items,
+  ) async {
+    final response = await _jsonRequest(
+      'PUT',
+      '/trips/$tripId/checklist',
+      body: {'items': items.map((item) => item.toJson()).toList()},
+    );
+    return _parseChecklist(response['data']);
+  }
+
+  @override
+  Future<List<AppNotification>> getNotifications(int userId) async {
+    final response = await _jsonRequest('GET', '/notifications?userId=$userId');
     final items = response['data'] as List<dynamic>? ?? [];
     return items
         .map((item) => AppNotification.fromJson(item as Map<String, dynamic>))
@@ -634,7 +923,8 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
-  Future<void> markAllNotificationsRead() async {
-    await _jsonRequest('POST', '/notifications/read-all', body: const {});
+  Future<void> markAllNotificationsRead(int userId) async {
+    await _jsonRequest('POST', '/notifications/read-all?userId=$userId',
+        body: const {});
   }
 }

@@ -1,0 +1,66 @@
+[
+  {
+    "n": 1,
+    "brand": false,
+    "headline": "복잡한 반값여행,<br><em>하프트립 하나로</em>",
+    "sub": "정보 확인부터 인증·증빙·정산 관리까지",
+    "img": "cap-home.png"
+  },
+  {
+    "n": 2,
+    "headline": "신청 정보 확인하고<br><em>바로 신청까지</em>",
+    "sub": "지역별 조건·일정 보고 신청 사이트로 이동",
+    "img": "cap-region.png",
+    "brand": false,
+    "emoji": "📍",
+    "label": "지역 상세"
+  },
+  {
+    "n": 3,
+    "headline": "뭘 해야 할지<br><em>다 알려드려요</em>",
+    "sub": "여행 등록하면 체크리스트 자동 생성",
+    "img": "cap-trip.png",
+    "brand": false
+  },
+  {
+    "n": 4,
+    "headline": "사진만 찍으면<br><em>방문 인증 끝</em>",
+    "sub": "촬영 시간·위치를 자동 검증",
+    "img": "cap-authphoto.png",
+    "brand": false,
+    "emoji": "📸",
+    "label": "인증샷 업로드"
+  },
+  {
+    "n": 5,
+    "headline": "영수증·서류는<br><em>알아서 정리</em>",
+    "sub": "금액 자동 입력, 증빙 PDF 자동 완성",
+    "img": "cap-receipt.png",
+    "brand": false,
+    "emoji": "🧾",
+    "label": "영수증 OCR"
+  },
+  {
+    "n": 6,
+    "headline": "유튜브 영상이<br><em>내 코스로</em>",
+    "sub": "링크만 넣으면 동선을 자동 생성",
+    "img": "cap-youtube.png",
+    "brand": false,
+    "emoji": "▶️",
+    "label": "유튜브 코스"
+  },
+  {
+    "n": 7,
+    "headline": "진짜 다녀온 사람들의<br><em>후기</em>",
+    "sub": "여행 인증 배지가 붙은 커뮤니티",
+    "img": "cap-community.png",
+    "brand": false
+  },
+  {
+    "n": 8,
+    "headline": "환급금 쓸 곳까지<br><em>안내</em>",
+    "sub": "지역 온라인몰·가맹점 지도",
+    "img": "cap-mall.png",
+    "brand": false
+  }
+]
