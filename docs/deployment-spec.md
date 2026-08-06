@@ -40,7 +40,7 @@ Flutter 웹: **https://halftrip.vercel.app** (Vercel) — 정책 페이지 호�
    - 방식: DB·서버는 Render 그대로, **사용자 업로드 파일만** Supabase 버킷으로. DB에는 지금처럼 경로(URL)만 저장
    - 작업: Spring `StorageService` 저장/조회를 Supabase Storage API로 교체 (반나절~1일) + 기존 운영 파일 1회 이관
    - 버킷은 비공개(private) + 서버 경유 서명 URL — 증빙 파일 공개 노출 금지
-   - 프로젝트 생성·키 발급 = **하민** (소셜·FCM과 같은 패턴: 계정·키는 하민, 구현은 코드 담당) / StorageService 교체 담당은 회의 확정(정훈 소유 코드 — 정훈 or 규희)
+   - 프로젝트 생성·키 발급 = **하민, §5-1 가이드대로 (서울 리전 필수)** / StorageService 교체 담당은 회의 확정(정훈 소유 코드 — 정훈 or 규희)
 2. **콜드스타트 대응** — Render 무료는 15분 유휴 시 슬립(첫 요청 ~30초+). 심사위원이 앱 열었다 타임아웃 나면 심사 제외 리스크.
    - 유지 기간: 출시 8/25 → 1차 심사 10월 중 → 최종 심사 10/28 = **약 2개월 상시 가동 필요**
    - 규정: 프리티어 "권장"(지원 없음)일 뿐 유료 금지 아님. Render Starter 서비스당 월 $7
@@ -57,7 +57,35 @@ Flutter 웹: **https://halftrip.vercel.app** (Vercel) — 정책 페이지 호�
 - [ ] 스토어 리스팅: [store-listing.md](store-listing.md) + store-assets 이미지
 - [ ] 정책 페이지 호스팅 — **halftrip.vercel.app 활용 권장** (이미 있는 Vercel 웹 배포에 /privacy·/account-deletion 경로 추가, 무료)
 
-## 5. 운영 절차 (확정 필요)
+## 5. 🛠️ 하민 셋업 가이드
+
+### 5-1. Supabase 프로젝트 생성 (파일 스토리지용)
+
+1. supabase.com → New Project — **Region은 반드시 `Northeast Asia (Seoul)`** 선택
+   - ⚠️ 서울 리전이어야 개인정보처리방침에 "국외 이전"이 아닌 "처리 위탁"으로 기재 가능 (법적 부담 큰 차이)
+2. Storage → 버킷 생성: `evidence` — **Public 버킷 OFF (비공개 필수)**. 증빙 파일(인증샷·영수증)이 공개 URL로 노출되면 안 됨
+3. 규희에게 전달할 것: **Project URL + service_role 키** (단톡 말고 개인 DM — service_role은 전체 접근 키)
+4. 무료 플랜으로 충분 (Storage 1GB — 증빙 이미지 기준 수천 장)
+
+### 5-2. Render 유료 전환 (심사 기간)
+
+1. **9월 첫째 주에** Spring 서비스(halftrip-springboot) → **Starter 플랜($7/월)** 전환
+2. FastAPI는 일단 무료 유지 + 필요 시 같이 전환 (인증샷·OCR 사용 빈도 보고 회의 결정)
+3. **11월 초(최종 심사 10/28 이후)** 무료로 복귀 — 총 예상 비용 $14~28
+4. 전환 전까지는 keep-alive 핑으로 버팀 (10분 간격 헬스체크 크론 — 누가 걸지 회의에서)
+
+### 5-3. 키 발급 3종 
+
+| 키 | 어디서 | 규희에게 전달할 것 |
+| --- | --- | --- |
+| 카카오 로그인 | developers.kakao.com 앱 생성 → 플랫폼에 Android 등록 (패키지명 `com.tourism.travelmvp.travel_support_mvp` + 키해시) | **네이티브 앱 키 + JavaScript 키** |
+| 네이버 로그인 | developers.naver.com 앱 등록 (같은 패키지명) | **Client ID + Client Secret** |
+| FCM | Firebase `halftrip-f4335` → 프로젝트 설정 → 서비스 계정 → 새 비공개 키 생성 | **JSON 파일** (Render 환경변수에도 등록) |
+
+- 키는 전부 커밋 금지 — 앱은 `android/local.properties`·`--dart-define`, 서버는 Render 환경변수로 주입 (사용법: flutter_app/dart_defines.example.txt)
+- 카카오 웹(JS) 키에는 도메인 등록 필요: `halftrip.vercel.app` (웹 데모 소셜 로그인용)
+
+## 6. 운영 절차 (확정 필요)
 
 - 배포: dev → main 머지는 하민만, 배포 시점 팀 합의 (기존 규칙 유지)
 - ❓ 롤백 절차 (Render 이전 배포로 롤백 방법 공유)
