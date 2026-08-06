@@ -3,6 +3,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../core/app_scope.dart';
 import '../../models/app_models.dart';
+import '../../screens/mypage_screen.dart';
+import '../../screens/notification_center_screen.dart';
 import '../data/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_colors.dart';
@@ -87,20 +89,23 @@ class _HomeTabState extends State<HomeTab> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(22, 8, 22, 28),
             children: [
-              Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                const Expanded(
-                  child: Text.rich(
-                    TextSpan(children: [
-                      TextSpan(text: '지금 떠날 수 있는\n'),
-                      TextSpan(text: '반값여행', style: TextStyle(color: AppColors.p600)),
-                    ]),
-                    style: TextStyle(fontSize: 25, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -1.2, height: 1.25),
-                  ),
+              // 홈 헤더 개편(8/6 규희 확정): 로고 바는 홈 전용 + 리스트 안에 있어 스크롤 시 함께 사라짐.
+              // 로고 ─ 여백 ─ [타이틀+접수 현황] 한 덩어리, 거주지 칩은 현황 줄 오른쪽.
+              const _HomeTopBar(),
+              const SizedBox(height: 12),
+              const Text('어디로 떠날까요?',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -1.2, height: 1.05)),
+              const SizedBox(height: 1),
+              Row(children: [
+                Text(
+                  applying.isEmpty
+                      ? '곧 오픈하는 지역을 확인해보세요'
+                      : '지금 ${applying.length}개 지역이 접수 중이에요',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink5),
                 ),
-                const SizedBox(width: 10),
+                const Spacer(),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-                  margin: const EdgeInsets.only(bottom: 3),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(999),
@@ -114,7 +119,7 @@ class _HomeTabState extends State<HomeTab> {
                   ]),
                 ),
               ]),
-              const SizedBox(height: 22),
+              const SizedBox(height: 9),
               SegChips(
                 labels: ['전국지도', '접수중 ${applying.length}', '오픈예정 ${preparing.length}'],
                 selected: _pane,
@@ -566,4 +571,101 @@ String _regionEmoji(String regionName) {
     '완도': '🏝️',
   };
   return map[regionName] ?? '📍';
+}
+
+
+/// 홈 전용 상단 바 — 로고·알림(배지)·마이페이지. 스크롤에 함께 올라간다.
+class _HomeTopBar extends StatefulWidget {
+  const _HomeTopBar();
+
+  @override
+  State<_HomeTopBar> createState() => _HomeTopBarState();
+}
+
+class _HomeTopBarState extends State<_HomeTopBar> {
+  int _unread = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadUnread());
+  }
+
+  Future<void> _loadUnread() async {
+    try {
+      final controller = AppScope.of(context);
+      final userId = controller.currentUser?.id;
+      if (userId == null) return;
+      final notifications = await controller.repository.getNotifications(userId);
+      if (!mounted) return;
+      setState(() => _unread = notifications.where((n) => !n.read).length);
+    } catch (_) {
+      // 배지는 부가 정보 — 실패해도 조용히 넘어간다.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(children: [
+        Image.asset('assets/logo/logo-3d-header.png', height: 40),
+        const Spacer(),
+        _HeaderIconButton(
+          icon: Icons.notifications_none_rounded,
+          badge: _unread > 0,
+          onTap: () => Navigator.of(context)
+              .push(MaterialPageRoute(
+                  builder: (_) => const NotificationCenterScreen()))
+              .then((_) => _loadUnread()),
+        ),
+        const SizedBox(width: 10),
+        _HeaderIconButton(
+          icon: Icons.person_outline_rounded,
+          onTap: () => Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => const MyPageScreen())),
+        ),
+      ]),
+    );
+  }
+}
+
+class _HeaderIconButton extends StatelessWidget {
+  const _HeaderIconButton({required this.icon, required this.onTap, this.badge = false});
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool badge;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          boxShadow: AppShadows.soft,
+        ),
+        child: Stack(alignment: Alignment.center, children: [
+          Icon(icon, size: 22, color: AppColors.ink7),
+          if (badge)
+            Positioned(
+              top: 9,
+              right: 9,
+              child: Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: AppColors.danger,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.5),
+                ),
+              ),
+            ),
+        ]),
+      ),
+    );
+  }
 }

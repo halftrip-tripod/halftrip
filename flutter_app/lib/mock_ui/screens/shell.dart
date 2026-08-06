@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../core/app_scope.dart';
-import '../../screens/mypage_screen.dart';
-import '../../screens/notification_center_screen.dart';
 import '../state/app_state.dart';
 import '../theme/app_colors.dart';
 import 'community.dart';
@@ -10,7 +7,7 @@ import 'home_tab.dart';
 import 'mall_tab.dart';
 import 'my_trips_tab.dart';
 
-/// 메인 셸 — 상단바(로고·알림·마이페이지) + 하단 4탭.
+/// 메인 셸 — 하단 4탭. (상단바는 홈 탭 전용으로 이동, 8/6)
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
 
@@ -54,18 +51,15 @@ class _MainShellState extends State<MainShell> {
     return ListenableBuilder(
       listenable: AppState.I,
       builder: (context, _) => Scaffold(
+        // 상단바(로고·알림·마이페이지)는 홈 탭 전용으로 이동(8/6) —
+        // 다른 탭은 자체 타이틀이 있어 헤더 없이 콘텐츠부터 시작한다.
         body: SafeArea(
           bottom: false,
-          child: Column(children: [
-            _TopBar(),
-            Expanded(
-              child: IndexedStack(index: _tab, children: const [
-                HomeTab(),
-                MyTripsTab(),
-                MallTab(),
-                CommunityTab(),
-              ]),
-            ),
+          child: IndexedStack(index: _tab, children: const [
+            HomeTab(),
+            MyTripsTab(),
+            MallTab(),
+            CommunityTab(),
           ]),
         ),
         // 디자인 .bnav — 흰 배경, 상단 라운드 28, 아이콘+라벨 색만 전환.
@@ -103,99 +97,6 @@ class _MainShellState extends State<MainShell> {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _TopBar extends StatefulWidget {
-  @override
-  State<_TopBar> createState() => _TopBarState();
-}
-
-class _TopBarState extends State<_TopBar> {
-  int _unread = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadUnread());
-  }
-
-  Future<void> _loadUnread() async {
-    try {
-      final controller = AppScope.of(context);
-      final userId = controller.currentUser?.id;
-      if (userId == null) return;
-      final notifications = await controller.repository.getNotifications(userId);
-      if (!mounted) return;
-      setState(() => _unread = notifications.where((n) => !n.read).length);
-    } catch (_) {
-      // 배지는 부가 정보 — 실패해도 조용히 넘어간다.
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 14, 18, 6),
-      child: Row(children: [
-        Image.asset('assets/logo/logo-3d-header.png', height: 40),
-        const Spacer(),
-        _IconButton(
-          icon: Icons.notifications_none_rounded,
-          badge: _unread > 0,
-          onTap: () => Navigator.of(context)
-              .push(MaterialPageRoute(
-                  builder: (_) => const NotificationCenterScreen()))
-              .then((_) => _loadUnread()),
-        ),
-        const SizedBox(width: 10),
-        _IconButton(
-          icon: Icons.person_outline_rounded,
-          onTap: () => Navigator.of(context)
-              .push(MaterialPageRoute(builder: (_) => const MyPageScreen())),
-        ),
-      ]),
-    );
-  }
-}
-
-class _IconButton extends StatelessWidget {
-  const _IconButton({required this.icon, required this.onTap, this.badge = false});
-  final IconData icon;
-  final VoidCallback onTap;
-  final bool badge;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
-          boxShadow: AppShadows.soft,
-        ),
-        child: Stack(alignment: Alignment.center, children: [
-          Icon(icon, size: 22, color: AppColors.ink7),
-          if (badge)
-            Positioned(
-              top: 9,
-              right: 9,
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: AppColors.danger,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 1.5),
-                ),
-              ),
-            ),
-        ]),
       ),
     );
   }
