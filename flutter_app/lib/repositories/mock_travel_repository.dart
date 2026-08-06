@@ -1284,6 +1284,9 @@ class MockTravelRepository implements TravelRepository {
   String? getLodgingFormTemplatePreviewUrl(int tripId) => null;
 
   @override
+  String? getLodgingFormRenderedPdfUrl(int tripId) => null;
+
+  @override
   Future<String> downloadLodgingFormPdf(int tripId) async {
     final directory = await getApplicationDocumentsDirectory();
     final file = File('${directory.path}/trip-$tripId-lodging-form-mock.txt');

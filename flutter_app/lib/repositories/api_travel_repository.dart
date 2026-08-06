@@ -639,6 +639,11 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
+  String? getLodgingFormRenderedPdfUrl(int tripId) {
+    return _uri('/integrations/lodging-form/$tripId/pdf').toString();
+  }
+
+  @override
   Future<String> downloadLodgingFormPdf(int tripId) {
     return _downloadToDocuments(
       '/integrations/lodging-form/$tripId/pdf',
