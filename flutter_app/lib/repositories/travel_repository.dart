@@ -127,6 +127,7 @@ abstract class TravelRepository {
   );
   Future<LodgingFormData> analyzeLodgingFormTemplate(int tripId);
   String? getLodgingFormTemplatePreviewUrl(int tripId);
+  String? getLodgingFormRenderedPdfUrl(int tripId);
   Future<String> downloadLodgingFormPdf(int tripId);
   Future<SettlementSummary> getSettlementSummary(int tripId);
   /// 정산 신청 — 실명·전화번호는 정산 시점에만 수집(개인정보 최소화 계약 B).

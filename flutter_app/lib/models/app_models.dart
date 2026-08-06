@@ -1329,6 +1329,7 @@ class LodgingFormFieldItem {
 
   bool get isCheckbox => type.toLowerCase() == 'checkbox';
   bool get isSignature => type.toLowerCase() == 'signature';
+  bool get isDate => type.toLowerCase() == 'date';
 
   LodgingFormFieldItem copyWith({
     String? key,
