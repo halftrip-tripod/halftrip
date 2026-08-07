@@ -64,12 +64,16 @@
 - [ ] D-day·환급조건·지역화폐앱 링크 표시 (선행: 하민 ⑥)
 - [ ] 장소 상세 실데이터 (선행: 하민 ⑦)
 
-### 정훈 (백엔드 A) — 보안 보강 요청 (8/4 점검 결과)
+### 정훈 (백엔드 A) — 보안 보강 요청 (8/4 점검 + 8/7 QA 재현)
 - [x] 담당 백엔드 전부 완료 🎉
-- [ ] 🚨 **API 토큰 검증 도입** — 현재 전 API가 `?userId=`만으로 호출 가능해 번호만 바꾸면 타인 여행·인증샷·정산 열람됨(IDOR). 로그인 시 발급 토큰을 서버가 검증하는 최소 구조 필요 (클라 Authorization 헤더는 규희가 대응)
+- [ ] 🚨 **API 토큰 검증 도입 (IDOR 차단)** — 현재 전 API가 `?userId=`만으로 호출 가능해 번호만 바꾸면 타인 여행·인증샷·정산 열람됨. 8/7 QA에서 토큰 없이 `GET /api/users/5`가 이름·전화·거주지 반환 재현 완료. **지금은 최소 가드부터**(요청 토큰 `local-token-{id}`와 경로 userId 대조) → 정식 JWT는 소셜(카카오·네이버) 실연동 붙일 때 함께 승격. 클라 Authorization 헤더는 규희 대응
 - [ ] **비밀번호 BCrypt 전환** — 현재 무솔트 SHA-256. spring-security-crypto의 BCryptPasswordEncoder로 교체, 기존 로컬 계정 몇 개는 재설정
 - [ ] **탈퇴 시 업로드 파일 파기** — 익명화는 잘 되어 있으나 인증샷·영수증 파일은 남음. 보존기간 경과 파기 로직 추가
-- [ ] ⑯ 여행 삭제 `DELETE /api/trips/{tripId}` (minor)
+- [x] **숙박확인서 PDF 한글 깨짐 수정** (규희, 8/7, `fix/pdf-korean-font`) — `pdf_service.py`가 Windows 전용 폰트 경로만 찾아 PDF_PLACEHOLDER 지역(영월·제천·고흥, reportlab이 주경로)에서 한글이 ■로 깨지던 것 → 나눔고딕(SIL OFL) 레포 번들 + 크로스플랫폼 등록으로 수정. docx 지역 13곳은 원래 LibreOffice+Noto라 정상(12곳 공식 양식 대조 QA 통과). ⚠️ 라이브 docx→PDF 변환은 Render 배포본에서 한 장 실측 권장
+- [ ] **영월·제천·고흥 공식 숙박확인서 양식 소싱** — 현재 `source_format=PDF_PLACEHOLDER`(범용 임시 양식). 다른 13곳처럼 지자체 공식 HWP → docx 추가 필요. 이 3곳 정산 오픈 전까지. (폰트와 별개 콘텐츠 갭)
+- [ ] **정산 신청 서버 검증** — `POST /trips/{id}/settlement-apply`에 상태검사·`@Valid`·중복검사 없음. BEFORE/ONGOING 여행·빈 실명·중복 신청 모두 통과. ENDED만 허용 + 이미 신청분 거절
+- [ ] **예외 응답 500→400 매핑** — `GlobalExceptionHandler`의 `Exception.class` catch-all이 깨진 JSON·enum 오류·파라미터 누락(원래 400급)을 전부 500 + 내부 예외 원문으로 노출. 400 매핑 핸들러 추가 + 메시지 마스킹
+- [ ] ⑯ 여행 삭제 `DELETE /api/trips/{tripId}` (minor) — 정산 신청 취소 불가와 연결
 
 ### 하민 (코스·TourAPI 전담) — 8/5 재조정: 소셜·FCM·refType 구현은 규희가 가져감
 - [ ] **카카오·네이버 개발자 계정 생성 + 키 전달** (구현은 규희, 검수 리드타임 → 최우선) + FCM 서비스 키 전달
