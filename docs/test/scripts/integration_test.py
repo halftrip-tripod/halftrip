@@ -567,6 +567,79 @@ record(status == 400, "중복 아이디 가입 거부", status)
 status, payload = call("GET", f"/community/posts/{post_id}/comments?userId={user_id}", token=token)
 record(status == 200 and len(payload.get("data", [])) >= 1, "댓글 목록 조회", status)
 
+# ---------------------------------------------------------------- 신규 기능
+section("12. 신규 구현 — 지역/장소 상세 · 저장 코스 · AI 코스 · 오픈 알림")
+
+status, payload = call("GET", "/regions", token=token)
+first = payload.get("data", [{}])[0]
+record("applyDeadline" in first and "refundConditionText" in first,
+       "C. 지역 접수 일정·조건 필드", f'{first.get("applyDeadline")} / {first.get("refundConditionText")}')
+record(isinstance(first.get("paymentMethods"), list), "C. paymentMethods 리스트",
+       first.get("paymentMethods"))
+record(first.get("refundRate") is not None, "C. 환급율", first.get("refundRate"))
+
+status, payload = call("GET", f"/regions/{region_id}", token=token)
+places = (payload.get("data") or {}).get("halfPricePlaces") or []
+record(status == 200 and places, "D. 지역 상세 지정관광지", len(places))
+if places:
+    place = places[0]
+    record("openingHours" in place and "admissionFee" in place and "phone" in place,
+           "D. 장소 상세 필드", f'{place.get("openingHours")} / {place.get("admissionFee")}')
+    record(isinstance(place.get("paymentMethods"), list), "D. 장소 결제수단 리스트",
+           place.get("paymentMethods"))
+
+status, payload = call("POST", "/courses/generate", token=token, body={
+    "userId": user_id, "regionId": region_id, "days": 2,
+    "travelerCount": 2, "themePriority": ["자연", "맛집"]})
+record(status == 200, "H. AI 코스 생성", status)
+generated = payload.get("data", {}) if status == 200 else {}
+record(len(generated.get("days", [])) == 2, "H. 요청한 일수만큼 생성",
+       len(generated.get("days", [])))
+record(generated.get("refundConditionMet") is not None, "H. 환급 조건 충족 여부 계산",
+       generated.get("refundConditionMet"))
+gen_stops = generated.get("days", [{}])[0].get("stops", []) if generated.get("days") else []
+record(len(gen_stops) > 0, "H. 1일차 정차지", len(gen_stops))
+
+status, payload = call("POST", "/courses/saved", token=token, body={
+    "userId": user_id, "regionId": region_id, "title": "통합테스트 코스",
+    "summary": "1박 2일 · 3곳", "sourceType": "AI",
+    "stops": [{"referencePlaceId": None, "placeName": "테스트 정차지",
+               "address": "전남", "visitOrder": 1, "dayNumber": 1,
+               "latitude": 34.3, "longitude": 126.7, "sourceType": "HALF_PRICE"}]})
+record(status == 200, "I. 코스 저장", status)
+course_id = payload.get("data", {}).get("id") if status == 200 else None
+
+status, payload = call("GET", f"/courses/saved?userId={user_id}", token=token)
+record(status == 200 and any(c["id"] == course_id for c in payload.get("data", [])),
+       "I. 저장 코스 목록", status)
+record(call("GET", f"/courses/saved/{course_id}?userId={user_id}", token=token)[0] == 200,
+       "I. 저장 코스 상세")
+status, payload = call("PATCH", f"/courses/saved/{course_id}", token=token,
+                       body={"userId": user_id, "title": "이름 바꾼 코스"})
+record(status == 200 and payload["data"]["title"] == "이름 바꾼 코스", "I. 코스 수정", status)
+record(call("POST", "/courses/saved", token=token, body={
+    "userId": user_id, "title": "빈 코스", "stops": []})[0] == 400,
+    "I. 빈 코스 저장 거부")
+
+record(call("POST", f"/regions/3/preopen-alert?userId={user_id}", token=token, body={})[0] == 200,
+       "L. 오픈 예정 지역 알림 구독")
+status, payload = call("GET", f"/regions/preopen-alerts?userId={user_id}", token=token)
+record(status == 200 and 3 in payload.get("data", []), "L. 구독 목록 조회", payload.get("data"))
+record(call("POST", f"/regions/{region_id}/preopen-alert?userId={user_id}",
+            token=token, body={})[0] == 400, "L. 접수 중 지역은 구독 거부")
+record(call("DELETE", f"/regions/3/preopen-alert?userId={user_id}", token=token)[0] == 200,
+       "L. 구독 해제")
+if other_token:
+    record(call("GET", f"/courses/saved?userId={user_id}", token=other_token)[0] == 403,
+           "I. 남의 저장 코스 목록 차단")
+    record(call("GET", f"/courses/saved/{course_id}?userId={other_id}",
+                token=other_token)[0] == 403, "I. 남의 코스 상세 차단")
+record(call("GET", f"/regions/preopen-alerts?userId={user_id}")[0] == 401,
+       "L. 구독 API는 토큰 필요 (공개 경로 아님)")
+if course_id:
+    record(call("DELETE", f"/courses/saved/{course_id}?userId={user_id}", token=token)[0] == 200,
+           "I. 코스 삭제")
+
 # ---------------------------------------------------------------- 정리
 section("9. 정리 — 글 삭제 · 탈퇴")
 record(call("DELETE", f"/community/comments/{comment_id}?userId={user_id}", token=token)[0] == 200,
