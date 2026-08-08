@@ -17,6 +17,11 @@ class MockTravelRepository implements TravelRepository {
   String get modeName => 'Mock Mode';
 
   @override
+  void clearSession() {
+    // mock 모드는 서버 토큰을 들고 있지 않아 버릴 것이 없다.
+  }
+
+  @override
   Future<SocialLoginResult> socialLogin({
     required LoginProvider provider,
     required String accessToken,

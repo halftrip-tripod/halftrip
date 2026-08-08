@@ -182,6 +182,7 @@ class AppController extends ChangeNotifier {
 
   void logout() {
     mock.AppState.I.detachCommunityServer();
+    _repository.clearSession();
     currentUser = null;
     trips = const [];
     needsResidenceSetup = false;

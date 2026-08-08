@@ -16,8 +16,34 @@ class ApiTravelRepository implements TravelRepository {
 
   final AppConfig config;
 
+  /// 로그인 응답으로 받은 인증 토큰.
+  ///
+  /// 이게 없으면 서버는 `?userId=` 만 보고 요청을 처리할 수밖에 없어 번호만 바꾸면
+  /// 남의 자원이 열린다. 앱을 다시 켜면 로그인부터 다시 하므로 메모리에만 들고 있는다.
+  String? _authToken;
+
   @override
   String get modeName => 'API Mode';
+
+  @override
+  void clearSession() {
+    _authToken = null;
+  }
+
+  Map<String, String> _headers({bool json = true}) {
+    return {
+      if (json) 'Content-Type': 'application/json',
+      if (_authToken != null) 'Authorization': 'Bearer $_authToken',
+    };
+  }
+
+  /// 로그인·회원가입 응답에서 토큰을 꺼내 보관한다. 이후 모든 요청에 실려 나간다.
+  void _rememberToken(Map<String, dynamic> data) {
+    final token = data['token'] as String?;
+    if (token != null && token.isNotEmpty) {
+      _authToken = token;
+    }
+  }
 
   Uri _uri(String path, [Map<String, dynamic>? query]) {
     final base = Uri.parse(config.apiBaseUrl);
@@ -37,7 +63,7 @@ class ApiTravelRepository implements TravelRepository {
     Map<String, dynamic>? body,
     Map<String, dynamic>? query,
   }) async {
-    final headers = {'Content-Type': 'application/json'};
+    final headers = _headers();
     late http.Response response;
     final uri = _uri(path, query);
     switch (method) {
@@ -91,7 +117,7 @@ class ApiTravelRepository implements TravelRepository {
     String fileName, {
     Map<String, dynamic>? query,
   }) async {
-    final response = await http.get(_uri(path, query));
+    final response = await http.get(_uri(path, query), headers: _headers(json: false));
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('다운로드 실패: ${response.body}');
     }
@@ -142,6 +168,7 @@ class ApiTravelRepository implements TravelRepository {
       },
     );
     final data = response['data'] as Map<String, dynamic>;
+    _rememberToken(data);
     final user = await getUser(data['userId'] as int);
     return SocialLoginResult(
       user: user,
@@ -164,6 +191,7 @@ class ApiTravelRepository implements TravelRepository {
       },
     );
     final data = response['data'] as Map<String, dynamic>;
+    _rememberToken(data);
     return getUser(data['userId'] as int);
   }
 
@@ -181,6 +209,7 @@ class ApiTravelRepository implements TravelRepository {
       },
     );
     final data = response['data'] as Map<String, dynamic>;
+    _rememberToken(data);
     return getUser(data['userId'] as int);
   }
 
@@ -204,6 +233,7 @@ class ApiTravelRepository implements TravelRepository {
       },
     );
     final data = response['data'] as Map<String, dynamic>;
+    _rememberToken(data);
     return getUser(data['userId'] as int);
   }
 
@@ -491,6 +521,7 @@ class ApiTravelRepository implements TravelRepository {
       'POST',
       _uri('/trips/$tripId/uploaded-files', {'category': category.wireName}),
     );
+    request.headers.addAll(_headers(json: false));
     request.files.add(
       http.MultipartFile.fromBytes(
         'file',
@@ -915,7 +946,9 @@ class ApiTravelRepository implements TravelRepository {
 
   @override
   Future<List<AppNotification>> getNotifications(int userId) async {
-    final response = await _jsonRequest('GET', '/notifications?userId=$userId');
+    // 쿼리를 경로 문자열에 붙이면 '?'가 %3F로 인코딩돼 CORS preflight가 깨진다.
+    final response =
+        await _jsonRequest('GET', '/notifications', query: {'userId': userId});
     final items = response['data'] as List<dynamic>? ?? [];
     return items
         .map((item) => AppNotification.fromJson(item as Map<String, dynamic>))
@@ -924,7 +957,7 @@ class ApiTravelRepository implements TravelRepository {
 
   @override
   Future<void> markAllNotificationsRead(int userId) async {
-    await _jsonRequest('POST', '/notifications/read-all?userId=$userId',
-        body: const {});
+    await _jsonRequest('POST', '/notifications/read-all',
+        query: {'userId': userId}, body: const {});
   }
 }
