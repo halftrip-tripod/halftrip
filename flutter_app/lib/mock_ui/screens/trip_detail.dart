@@ -529,7 +529,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     ];
   }
 
-  // ───────────────────── 환급 대기
+  // ───────────────────── 정산 신청 완료 (환급은 외부에서 진행)
   List<Widget> _review(TripDetail detail) {
     return [
       _TripHeader(detail: detail, stage: TripStageView.review),
@@ -778,7 +778,7 @@ class _TripHeader extends StatelessWidget {
       TripStageView.before => ('여행 전', PillTone.sky),
       TripStageView.during => ('여행 중', PillTone.live),
       TripStageView.settle => ('정산 신청', PillTone.warn),
-      TripStageView.review => ('정산 완료', PillTone.gray),
+      TripStageView.review => ('정산 신청 완료', PillTone.gray),
     };
     final dday = switch (stage) {
       TripStageView.before => '출발 D-${start.difference(today).inDays}',
@@ -817,7 +817,9 @@ class _StageBar extends StatelessWidget {
   const _StageBar({required this.current});
   final int current;
 
-  static const _labels = ['여행 전', '여행 중', '정산', '환급'];
+  // 앱이 아는 마지막 상태는 '정산 신청 완료'다. 환급 완료는 외부(지자체)에서 일어나고
+  // 앱이 추적하지 않으므로, 마지막 단계를 '환급'으로 부르지 않는다.
+  static const _labels = ['여행 전', '여행 중', '정산', '신청 완료'];
 
   @override
   Widget build(BuildContext context) {
