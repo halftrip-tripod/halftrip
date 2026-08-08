@@ -268,6 +268,14 @@ if fastapi_up and auth_file_id:
     status, payload = call("POST", f"/trips/{trip_id}/auth-photos/analyze/{auth_file_id}",
                            token=token, body={})
     record(status == 200, "인증사진 판정 (FastAPI)", status)
+    review = payload.get("data", {}) if status == 200 else {}
+    record("detectedPeopleCount" in review and "requiredPeopleCount" in review,
+           "판정 응답에 인원수 포함",
+           f'{review.get("detectedPeopleCount")}/{review.get("requiredPeopleCount")}')
+    record("locationVerified" in review, "EXIF 위치검증 필드 포함",
+           review.get("locationVerified"))
+    record("withinTripPeriod" in review, "촬영시각 여행기간 검증 필드 포함",
+           review.get("withinTripPeriod"))
 else:
     skip("인증사진 판정", "FastAPI 미기동" if not fastapi_up else "업로드 실패")
 
@@ -277,6 +285,8 @@ if fastapi_up and receipt_file_id:
     record(status == 200, "영수증 OCR (FastAPI)", status)
     if status == 200:
         item = payload.get("data", {})
+        record(item.get("amount") is not None, "OCR 결과에 금액 필드", item.get("amount"))
+        record("usageScope" in item, "usageScope 반영", item.get("usageScope"))
         record(item.get("paymentType") in {
             "CREDIT_CARD", "CHECK_CARD", "ONLINE_PAYMENT", "BANK_TRANSFER",
             "CASH_RECEIPT", "SIMPLE_RECEIPT", "UNKNOWN"},
@@ -461,8 +471,13 @@ if form:
     record("templateKey" in json.dumps(form, ensure_ascii=False), "지역별 양식 스키마 포함")
 
 status, payload = call("PUT", f"/trips/{trip_id}/lodging-form", token=token,
-                       body={"values": {"lodgingName": "통합테스트 숙소"}})
-record(status in (200, 400), "숙박확인서 값 저장", status)
+                       body={"values": {"lodging_name": "통합테스트 숙소",
+                                        "representative_name": "홍길동",
+                                        "address": "전라남도 완도군 어딘가 1"}})
+record(status == 200, "숙박확인서 값 저장", status)
+if status == 200:
+    saved = json.dumps(payload.get("data"), ensure_ascii=False)
+    record("통합테스트 숙소" in saved, "저장한 값이 응답에 반영")
 
 if fastapi_up and receipt_file_id:
     status, payload = call("POST", f"/trips/{trip_id}/lodging-info/extract/{receipt_file_id}",
@@ -471,12 +486,22 @@ if fastapi_up and receipt_file_id:
 else:
     skip("숙박확인서 OCR 추출", "FastAPI 미기동")
 
-status, payload = call("GET", f"/integrations/lodging-form/{trip_id}/pdf", token=token)
-record(status in (200, 400, 404, 500), "숙박확인서 PDF 생성", status)
-status, payload = call("GET", f"/integrations/lodging-form/{trip_id}/template-pdf", token=token)
-record(status in (200, 400, 404, 500), "원본 양식 PDF", status)
-status, payload = call("GET", f"/integrations/pdf/merge/{trip_id}", token=token)
-record(status in (200, 400, 404, 500), "증빙 패키지 PDF 병합", status)
+def check_pdf(path, label):
+    """PDF는 200만으로 부족하다. 실제 PDF 바이트인지, 빈 파일이 아닌지 본다."""
+    status, payload = call("GET", path, token=token)
+    if status != 200:
+        record(False, label, f"HTTP {status}")
+        return
+    body = payload if isinstance(payload, bytes) else str(payload).encode("utf-8", "replace")
+    record(body[:4] == b"%PDF", label + " — PDF 시그니처", body[:8])
+    record(len(body) > 1000, label + " — 내용 있음", f"{len(body):,} bytes")
+
+
+check_pdf(f"/integrations/lodging-form/{trip_id}/pdf", "숙박확인서 PDF 생성")
+check_pdf(f"/integrations/lodging-form/{trip_id}/template-pdf", "원본 양식 PDF")
+merge_ids = ",".join(str(i) for i in [auth_file_id, receipt_file_id] if i)
+check_pdf(f"/integrations/pdf/merge/{trip_id}?uploadedFileIds={merge_ids}",
+          "증빙 패키지 PDF 병합")
 
 # ---------------------------------------------------------------- 유튜브 잡
 section("10. 유튜브 코스 잡 · FCM · 스케줄러")
@@ -516,9 +541,12 @@ if fastapi_up:
                         ("/api/v1/documents/ocr/receipt-amount", "금액·결제일시 추출"),
                         ("/api/v1/documents/ocr/lodging", "숙박정보 추출"),
                         ("/api/v1/documents/photos/auth-review", "인증사진 판정")]:
-        status, _ = call("POST", path, base=FASTAPI, raw_body=body,
-                         content_type=content_type)
-        record(status in (200, 400, 422), "FastAPI " + label, status)
+        status, payload = call("POST", path, base=FASTAPI, raw_body=body,
+                               content_type=content_type)
+        record(status in (200, 422), "FastAPI " + label, status)
+        if status == 200:
+            record(isinstance(payload, dict) and "data" in payload,
+                   "FastAPI " + label + " — 응답 래퍼")
     record(call("GET", "/health", base=FASTAPI)[0] == 200, "FastAPI 헬스체크")
 else:
     skip("FastAPI 직접 호출", "미기동")
