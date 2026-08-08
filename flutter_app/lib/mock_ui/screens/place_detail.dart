@@ -1,29 +1,46 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../models/app_models.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui.dart';
 
-/// S1-5 장소 정보 상세.
+/// S1-5 장소 정보 상세 — 실 API(PlaceItem) 연동.
 class PlaceDetailScreen extends StatelessWidget {
-  const PlaceDetailScreen({
-    super.key,
-    this.emoji = '🌉',
-    this.name = '가우도 출렁다리',
-    this.category = '관광지 · 전라남도 강진',
-  });
+  const PlaceDetailScreen({super.key, required this.place});
 
-  final String emoji;
-  final String name;
-  final String category;
+  final PlaceItem place;
+
+  Future<void> _openDirections(BuildContext context) async {
+    final uri = (place.latitude != null && place.longitude != null)
+        ? Uri.https('www.google.com', '/maps/search/', {
+            'api': '1',
+            'query': '${place.latitude},${place.longitude}',
+          })
+        : Uri.https('www.google.com', '/maps/search/', {
+            'api': '1',
+            'query': '${place.name} ${place.address}',
+          });
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('길찾기 화면을 열지 못했습니다.')));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final paymentLabel = place.paymentMethods.isNotEmpty
+        ? place.paymentMethods.map((code) => PaymentTypeWire.fromWire(code).label).join(' · ')
+        : '지역화폐, 카드 결제';
+    final hasDigitalDiscount = (place.digitalDiscountText ?? '').trim().isNotEmpty;
+
     return DetailScaffold(
       title: '장소 정보',
       cta: CtaBar(children: [
         PrimaryButton('코스에 추가', icon: Icons.add_rounded, onTap: () {
           Navigator.of(context).pop();
-          showMock(context, '$name을(를) 코스에 담았어요.');
+          showMock(context, '${place.name}을(를) 코스에 담았어요.');
         }),
       ]),
       children: [
@@ -31,46 +48,47 @@ class PlaceDetailScreen extends StatelessWidget {
           height: 220,
           alignment: Alignment.center,
           decoration: BoxDecoration(color: AppColors.p50, borderRadius: BorderRadius.circular(24)),
-          child: Text(emoji, style: const TextStyle(fontSize: 84)),
+          child: const Text('📍', style: TextStyle(fontSize: 84)),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 2),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(name,
+            Text(place.name,
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.8)),
             const SizedBox(height: 4),
-            Text(category,
+            Text(place.address,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink5)),
             const SizedBox(height: 12),
-            const Row(children: [
-              Pill('환급 인정 관광지', tone: PillTone.mint),
-              SizedBox(width: 6),
-              Pill('디민증 할인'),
+            Row(children: [
+              if (place.eligibleForRefund) const Pill('환급 인정 관광지', tone: PillTone.mint),
+              if (place.eligibleForRefund && hasDigitalDiscount) const SizedBox(width: 6),
+              if (hasDigitalDiscount) const Pill('디민증 할인'),
             ]),
           ]),
         ),
         AppCard(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
-            Text('정보',
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('정보',
                 style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.3)),
-            SizedBox(height: 13),
-            _InfoRow(Icons.place_outlined, '주소', '전라남도 강진군 대구면 저두리 940'),
-            SizedBox(height: 13),
-            _InfoRow(Icons.schedule_rounded, '운영시간', '09:00 ~ 18:00 · 연중무휴'),
-            SizedBox(height: 13),
-            _InfoRow(Icons.payments_outlined, '이용료', '무료 · 짚라인 별도 19,000원'),
-            SizedBox(height: 13),
-            _InfoRow(Icons.call_outlined, '문의', '061-430-3911'),
+            const SizedBox(height: 13),
+            _InfoRow(Icons.place_outlined, '주소', place.address),
+            const SizedBox(height: 13),
+            _InfoRow(Icons.schedule_rounded, '운영시간', place.openingHours ?? '운영시간 정보 준비중'),
+            const SizedBox(height: 13),
+            _InfoRow(Icons.payments_outlined, '이용료', place.admissionFee ?? '이용료 정보 준비중'),
+            const SizedBox(height: 13),
+            _InfoRow(Icons.call_outlined, '문의', place.phone ?? '문의처 정보 준비중'),
           ]),
         ),
         AppCard(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
-            Text('결제 · 혜택',
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('결제 · 혜택',
                 style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.3)),
-            SizedBox(height: 13),
-            _BenefitRow(Icons.credit_card_rounded, '지역화폐 결제 가능 · 강진사랑상품권(Chak) — 환급 인정 결제수단'),
-            SizedBox(height: 13),
-            _BenefitRow(Icons.badge_outlined, '디민증 제시 시 짚라인 10% 할인'),
+            const SizedBox(height: 13),
+            _BenefitRow(Icons.credit_card_rounded, '환급 인정 결제수단 — $paymentLabel'),
+            const SizedBox(height: 13),
+            _BenefitRow(Icons.badge_outlined,
+                hasDigitalDiscount ? place.digitalDiscountText! : '디민증 할인 정보가 아직 없어요.'),
           ]),
         ),
         AppCard(
@@ -88,9 +106,9 @@ class PlaceDetailScreen extends StatelessWidget {
             const SizedBox(height: 12),
             SurfRow(
               icon: Icons.place_outlined,
-              title: '강진군 대구면 저두리',
+              title: place.address,
               subtitle: '지도에서 길찾기',
-              onTap: () => showMock(context, '지도 앱으로 이동해요. (외부 링크 · 목업)'),
+              onTap: () => _openDirections(context),
             ),
           ]),
         ),

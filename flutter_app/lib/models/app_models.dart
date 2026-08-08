@@ -661,6 +661,11 @@ class PlaceItem {
     required this.latitude,
     required this.longitude,
     required this.eligibleForRefund,
+    required this.openingHours,
+    required this.admissionFee,
+    required this.phone,
+    required this.paymentMethods,
+    required this.digitalDiscountText,
   });
 
   final int id;
@@ -670,6 +675,11 @@ class PlaceItem {
   final double? latitude;
   final double? longitude;
   final bool eligibleForRefund;
+  final String? openingHours;
+  final String? admissionFee;
+  final String? phone;
+  final List<String> paymentMethods;
+  final String? digitalDiscountText;
 
   factory PlaceItem.fromJson(Map<String, dynamic> json) {
     return PlaceItem(
@@ -680,6 +690,13 @@ class PlaceItem {
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
       eligibleForRefund: json['eligibleForRefund'] as bool? ?? true,
+      openingHours: json['openingHours'] as String?,
+      admissionFee: json['admissionFee'] as String?,
+      phone: json['phone'] as String?,
+      paymentMethods: ((json['paymentMethods'] as List<dynamic>?) ?? [])
+          .map((e) => e as String)
+          .toList(),
+      digitalDiscountText: json['digitalDiscountText'] as String?,
     );
   }
 }

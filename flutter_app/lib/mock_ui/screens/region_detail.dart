@@ -22,14 +22,20 @@ class RegionDetailScreen extends StatefulWidget {
 
 class _RegionDetailScreenState extends State<RegionDetailScreen> {
   final _openAcc = {0};
+  Future<RegionDetail>? _placesFuture;
+  bool _placesInitialized = false;
 
-  // 환급 인정 관광지 — 장소 API 연동 전까지 쓰는 임시 목업 리스트.
-  static const _places = [
-    ('🏯', '다산초당', '역사·문화'),
-    ('🌉', '가우도 출렁다리', '자연·체험'),
-    ('🏺', '고려청자박물관', '문화'),
-    ('🌾', '강진만 생태공원', '자연'),
-  ];
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_placesInitialized) return;
+    final controller = AppScope.of(context);
+    _placesFuture = controller.repository.getRegionDetail(
+      widget.region.id,
+      residence: controller.currentUser?.residence,
+    );
+    _placesInitialized = true;
+  }
 
   bool get _isPreparing => widget.region.statusCode.toUpperCase() == 'PREPARING';
 
@@ -158,39 +164,55 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
                 : '${_formatWon(r.refundConditionAmount)}원',
           ),
         ]),
-        // 인정 관광지 — 장소 API 연동 전까지 목업.
+        // 인정 관광지 — 실 API(RegionDetail.halfPricePlaces) 연동.
         _DCard(title: '환급 인정 관광지', children: [
           SizedBox(
             height: 148,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: _places.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 12),
-              itemBuilder: (_, i) => GestureDetector(
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => PlaceDetailScreen(
-                        emoji: _places[i].$1, name: _places[i].$2, category: _places[i].$3))),
-                child: SizedBox(
-                  width: 128,
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Container(
+            child: FutureBuilder<RegionDetail>(
+              future: _placesFuture,
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final places = snapshot.data!.halfPricePlaces;
+                if (places.isEmpty) {
+                  return const Center(
+                    child: Text('등록된 관광지 정보가 아직 없어요.',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink4)),
+                  );
+                }
+                return ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: places.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 12),
+                  itemBuilder: (_, i) => GestureDetector(
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => PlaceDetailScreen(place: places[i]))),
+                    child: SizedBox(
                       width: 128,
-                      height: 90,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(color: AppColors.p50, borderRadius: BorderRadius.circular(16)),
-                      child: Text(_places[i].$1, style: const TextStyle(fontSize: 38)),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Container(
+                          width: 128,
+                          height: 90,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(color: AppColors.p50, borderRadius: BorderRadius.circular(16)),
+                          child: const Text('📍', style: TextStyle(fontSize: 38)),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(places[i].name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink9)),
+                        const SizedBox(height: 2),
+                        Text(places[i].address,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink5)),
+                      ]),
                     ),
-                    const SizedBox(height: 8),
-                    Text(_places[i].$2,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink9)),
-                    const SizedBox(height: 2),
-                    Text(_places[i].$3,
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink5)),
-                  ]),
-                ),
-              ),
+                  ),
+                );
+              },
             ),
           ),
         ]),
