@@ -141,7 +141,7 @@ class _MyTripsTabState extends State<MyTripsTab> {
                           style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink5)),
                     ]),
                   ),
-                  const Pill('정산 완료', tone: PillTone.gold),
+                  const Pill('정산 신청 완료', tone: PillTone.gold),
                 ]),
               ),
               const SizedBox(height: 12),
