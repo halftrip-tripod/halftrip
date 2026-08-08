@@ -49,7 +49,7 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
     final guideText = guide.sections.expand((s) => s.bullets).join(' ');
     final isFavorite =
         controller.currentUser?.favoriteRegions.any((f) => f.id == r.id) ?? false;
-    final dday = _mockDday[r.name];
+    final dday = regionDday(r);
 
     return DetailScaffold(
       title: r.name,
@@ -133,18 +133,30 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
           Container(
             padding: const EdgeInsets.symmetric(vertical: 15),
             decoration: BoxDecoration(color: AppColors.p50, borderRadius: BorderRadius.circular(15)),
-            child: const Row(mainAxisAlignment: MainAxisAlignment.center,
+            child: Row(mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text('50%', style: TextStyle(fontSize: 25, fontWeight: FontWeight.w900, color: AppColors.p600, letterSpacing: -1.2, height: 1)),
-              SizedBox(width: 9),
-              Text('여행경비 환급',
+              Text('${r.refundRate ?? 50}%', style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w900, color: AppColors.p600, letterSpacing: -1.2, height: 1)),
+              const SizedBox(width: 9),
+              const Text('여행경비 환급',
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink7)),
             ]),
           ),
-          _Kv('결제 수단', _paymentSummary(guideText)),
+          _Kv(
+            '결제 수단',
+            r.paymentMethods.isNotEmpty
+                ? r.paymentMethods
+                    .map((code) => PaymentTypeWire.fromWire(code).label)
+                    .join(' · ')
+                : _paymentSummary(guideText),
+          ),
           _Kv('인증 조건', _proofSummary(guideText)),
           _Kv('최소 소비', _minSpendSummary(guideText)),
-          _Kv('1인 최대 환급', '${_formatWon(r.refundConditionAmount)}원'),
+          _Kv(
+            '1인 최대 환급',
+            r.maxRefundPerPerson != null
+                ? '${_formatWon(r.maxRefundPerPerson!)}원'
+                : '${_formatWon(r.refundConditionAmount)}원',
+          ),
         ]),
         // 인정 관광지 — 장소 API 연동 전까지 목업.
         _DCard(title: '환급 인정 관광지', children: [
@@ -201,8 +213,12 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
                   const Text('정산 신청 기한',
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.p600)),
                   const SizedBox(height: 2),
-                  Text(guide.deadline,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink9)),
+                  Text(
+                    r.settlementDeadlineDays != null
+                        ? '여행 종료 후 ${r.settlementDeadlineDays}일 이내'
+                        : guide.deadline,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink9),
+                  ),
                 ]),
               ),
             ]),
@@ -237,6 +253,11 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.ink9)),
           Text(_localCurrencyDescription(r.name),
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.ink5, height: 1.45)),
+          if (r.localCurrencyAppUrl != null && r.localCurrencyAppUrl!.trim().isNotEmpty)
+            OutlineButton('지역화폐 앱 열기',
+                icon: Icons.smartphone_rounded,
+                trailingIcon: Icons.open_in_new_rounded,
+                onTap: () => _openUrl(r.localCurrencyAppUrl!)),
         ]),
         // 후기 — 커뮤니티 API 연동 전까지 목업 게시글 데이터 기반.
         if (regionPosts.isNotEmpty)
@@ -367,16 +388,6 @@ class _Kv extends StatelessWidget {
   }
 }
 
-/// 임시 D-day 목업값 — 백엔드에 마감일 필드가 생기면 이 테이블은 지우고 실 데이터로 교체.
-const _mockDday = <String, (int, bool)>{
-  '평창': (2, true),
-  '강진': (5, false),
-  '영월': (3, false),
-  '거창': (7, false),
-  '고창': (11, false),
-  '완도': (9, false),
-  '제천': (12, false),
-};
 
 class _ReviewRow extends StatelessWidget {
   const _ReviewRow({required this.post});

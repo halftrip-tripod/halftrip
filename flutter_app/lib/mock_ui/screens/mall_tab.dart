@@ -16,9 +16,10 @@ class MallTab extends StatefulWidget {
 }
 
 class _MallData {
-  const _MallData(this.settled, this.mallsByRegion);
+  const _MallData(this.settled, this.mallsByRegion, this.localCurrencyUrlByRegion);
   final List<TripSummary> settled;
   final Map<int, List<OnlineMallItem>> mallsByRegion;
+  final Map<int, String?> localCurrencyUrlByRegion;
 }
 
 class _MallTabState extends State<MallTab> {
@@ -29,8 +30,13 @@ class _MallTabState extends State<MallTab> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_initialized) return;
-    _future = _load();
     _initialized = true;
+    // 데이터 로딩(컨트롤러 notifyListeners 동반)을 첫 프레임 이후로 미뤄
+    // 빌드 도중 markNeedsBuild 예외를 방지한다.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() { _future = _load(); });
+    });
   }
 
   Future<_MallData> _load() async {
@@ -39,6 +45,7 @@ class _MallTabState extends State<MallTab> {
     final settled =
         controller.trips.where((t) => t.settlementApplied).toList();
     final mallsByRegion = <int, List<OnlineMallItem>>{};
+    final localCurrencyUrlByRegion = <int, String?>{};
     for (final trip in settled) {
       try {
         final detail = await controller.repository.getPlaceInfoDetail(
@@ -46,11 +53,12 @@ class _MallTabState extends State<MallTab> {
           residence: controller.currentUser?.residence,
         );
         mallsByRegion[trip.regionId] = detail.onlineMalls;
+        localCurrencyUrlByRegion[trip.regionId] = detail.region.localCurrencyAppUrl;
       } catch (_) {
         mallsByRegion[trip.regionId] = const [];
       }
     }
-    return _MallData(settled, mallsByRegion);
+    return _MallData(settled, mallsByRegion, localCurrencyUrlByRegion);
   }
 
   @override
@@ -88,6 +96,7 @@ class _MallTabState extends State<MallTab> {
                 _RegionUsageCard(
                   trip: trip,
                   malls: data.mallsByRegion[trip.regionId] ?? const [],
+                  localCurrencyUrl: data.localCurrencyUrlByRegion[trip.regionId],
                 ),
                 const SizedBox(height: 14),
               ],
@@ -189,9 +198,10 @@ class _EmptyUsage extends StatelessWidget {
 }
 
 class _RegionUsageCard extends StatelessWidget {
-  const _RegionUsageCard({required this.trip, required this.malls});
+  const _RegionUsageCard({required this.trip, required this.malls, this.localCurrencyUrl});
   final TripSummary trip;
   final List<OnlineMallItem> malls;
+  final String? localCurrencyUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -214,7 +224,8 @@ class _RegionUsageCard extends StatelessWidget {
           Expanded(
             child: OutlineButton('지역화폐 앱',
                 icon: Icons.account_balance_wallet_outlined,
-                onTap: () => showMock(context, '${trip.regionName} 지역화폐 앱으로 이동해요. (외부 링크 · 목업)')),
+                onTap: () => _openMallUrl(
+                    context, '${trip.regionName} 지역화폐 앱', localCurrencyUrl ?? '')),
           ),
           const SizedBox(width: 10),
           Expanded(

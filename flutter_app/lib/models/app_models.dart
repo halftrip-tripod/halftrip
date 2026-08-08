@@ -551,6 +551,17 @@ class RegionSummary {
     this.mapLeftPercent = 50,
     this.residenceRestrictionNote = '',
     required this.matchedByResidence,
+    this.applyStartDate,
+    this.applyDeadline,
+    this.openDate,
+    this.travelPeriodStart,
+    this.travelPeriodEnd,
+    this.settlementDeadlineDays,
+    this.refundConditionText,
+    this.refundRate,
+    this.maxRefundPerPerson,
+    this.paymentMethods = const [],
+    this.localCurrencyAppUrl,
   });
 
   final int id;
@@ -569,11 +580,28 @@ class RegionSummary {
   final String residenceRestrictionNote;
   final bool matchedByResidence;
 
+  // ── 접수·여행·정산 일정 및 환급 조건 (D-day, 지역 상세) ──
+  // 하민 데이터 백필 전까지는 null일 수 있음 — 화면에서 null이면 "정보 준비중" 폴백 처리.
+  final DateTime? applyStartDate;
+  final DateTime? applyDeadline;
+  final DateTime? openDate;
+  final DateTime? travelPeriodStart;
+  final DateTime? travelPeriodEnd;
+  final int? settlementDeadlineDays;
+  final String? refundConditionText;
+  final int? refundRate;
+  final int? maxRefundPerPerson;
+  final List<String> paymentMethods;
+  final String? localCurrencyAppUrl;
+
   String get statusLabel => switch (statusCode.toUpperCase()) {
         'APPLYING' => '접수중',
         'CLOSED' => '1차 마감',
         _ => '오픈 예정',
       };
+
+  static DateTime? _date(dynamic value) =>
+      value is String && value.isNotEmpty ? DateTime.tryParse(value) : null;
 
   factory RegionSummary.fromJson(Map<String, dynamic> json) {
     return RegionSummary(
@@ -594,8 +622,34 @@ class RegionSummary {
       residenceRestrictionNote:
           json['residenceRestrictionNote'] as String? ?? '',
       matchedByResidence: json['matchedByResidence'] as bool? ?? false,
+      applyStartDate: _date(json['applyStartDate']),
+      applyDeadline: _date(json['applyDeadline']),
+      openDate: _date(json['openDate']),
+      travelPeriodStart: _date(json['travelPeriodStart']),
+      travelPeriodEnd: _date(json['travelPeriodEnd']),
+      settlementDeadlineDays: json['settlementDeadlineDays'] as int?,
+      refundConditionText: json['refundConditionText'] as String?,
+      refundRate: json['refundRate'] as int?,
+      maxRefundPerPerson: json['maxRefundPerPerson'] as int?,
+      paymentMethods: ((json['paymentMethods'] as List<dynamic>?) ?? [])
+          .map((e) => e as String)
+          .toList(),
+      localCurrencyAppUrl: json['localCurrencyAppUrl'] as String?,
     );
   }
+}
+
+/// 접수 마감(접수중)·오픈 예정일(오픈예정)까지 남은 일수. 기준 날짜가 없으면 null.
+(int, bool)? regionDday(RegionSummary region) {
+  final target = region.statusCode.toUpperCase() == 'PREPARING'
+      ? region.openDate
+      : region.applyDeadline;
+  if (target == null) return null;
+  final today = DateTime.now();
+  final days = DateTime(target.year, target.month, target.day)
+      .difference(DateTime(today.year, today.month, today.day))
+      .inDays;
+  return (days, days <= 2);
 }
 
 class PlaceItem {

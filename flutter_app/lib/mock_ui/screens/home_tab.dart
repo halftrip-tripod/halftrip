@@ -328,7 +328,7 @@ class _UrgCard extends StatelessWidget {
     final controller = AppScope.of(context);
     final isFavorite =
         controller.currentUser?.favoriteRegions.any((f) => f.id == region.id) ?? false;
-    final dday = _mockDday[region.name];
+    final dday = regionDday(region);
 
     return AppCard(
       padding: const EdgeInsets.all(16),
@@ -539,16 +539,6 @@ Offset _projectLatLng(double lat, double lng) => Offset(
       189.7 - 182.1 * (lat - 37.567),
     );
 
-/// 임시 D-day 목업값 — 백엔드에 마감일 필드가 생기면 이 테이블은 지우고 실 데이터로 교체.
-const _mockDday = <String, (int, bool)>{
-  '평창': (2, true),
-  '강진': (5, false),
-  '영월': (3, false),
-  '거창': (7, false),
-  '고창': (11, false),
-  '완도': (9, false),
-  '제천': (12, false),
-};
 
 /// 지역별 이모지 — 백엔드에 없는 순수 장식용 값이라 클라이언트에서 고정 매핑.
 String _regionEmoji(String regionName) {
