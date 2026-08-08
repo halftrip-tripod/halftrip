@@ -384,21 +384,17 @@ class _UrgCard extends StatelessWidget {
   }
 }
 
-/// 오픈예정 "+관심" — 백엔드에 지역별 알림 신청 API가 없어서 세션 동안만 유지되는
-/// 임시 로컬 상태(재방문 시 초기화됨). API 생기면 이 맵은 지우고 컨트롤러로 교체.
-final Map<int, ValueNotifier<bool>> _preopenInterestNotifiers = {};
-
-ValueNotifier<bool> _preopenInterestFor(int regionId) =>
-    _preopenInterestNotifiers.putIfAbsent(regionId, () => ValueNotifier(false));
-
-/// 오픈예정 행 (+ 관심 = 오픈 알림).
+/// 오픈예정 행 (+ 관심 = 오픈 알림 — 접수중 별표시와 동일한 즐겨찾기).
 class _SoonRow extends StatelessWidget {
   const _SoonRow({required this.region});
   final RegionSummary region;
 
   @override
   Widget build(BuildContext context) {
-    final interest = _preopenInterestFor(region.id);
+    final controller = AppScope.of(context);
+    final on =
+        controller.currentUser?.favoriteRegions.any((f) => f.id == region.id) ??
+            false;
 
     return GestureDetector(
       onTap: () => _openRegion(context, region),
@@ -429,26 +425,25 @@ class _SoonRow extends StatelessWidget {
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.ink5)),
             ]),
           ),
-          ValueListenableBuilder(
-            valueListenable: interest,
-            builder: (_, on, __) => GestureDetector(
-              onTap: () {
-                interest.value = !on;
-                showMock(context,
-                    on ? '${region.name} 관심 등록을 해제했어요.' : '${region.name}을(를) 관심 지역에 담았어요. 오픈하면 알려드릴게요!');
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                decoration: BoxDecoration(
-                  color: on ? AppColors.p100 : AppColors.p500,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(on ? '관심 ✓' : '+ 관심',
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: on ? AppColors.p700 : Colors.white)),
+          GestureDetector(
+            onTap: () async {
+              final wasEnabled = on;
+              await controller.toggleFavoriteRegion(region);
+              if (!context.mounted) return;
+              showMock(context,
+                  wasEnabled ? '${region.name} 관심 등록을 해제했어요.' : '${region.name}을(를) 관심 지역에 담았어요. 오픈하면 알려드릴게요!');
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              decoration: BoxDecoration(
+                color: on ? AppColors.p100 : AppColors.p500,
+                borderRadius: BorderRadius.circular(12),
               ),
+              child: Text(on ? '관심 ✓' : '+ 관심',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: on ? AppColors.p700 : Colors.white)),
             ),
           ),
         ]),

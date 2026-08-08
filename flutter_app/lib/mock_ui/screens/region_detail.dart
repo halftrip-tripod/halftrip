@@ -64,11 +64,11 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
       cta: CtaBar(children: [
         if (_isPreparing)
           PrimaryButton(
-            controller.preopenAlertRegionIds.contains(r.id) ? '오픈 알림 신청됨 ✓' : '오픈 알림 받기',
-            icon: controller.preopenAlertRegionIds.contains(r.id) ? null : Icons.notifications_none_rounded,
+            isFavorite ? '오픈 알림 신청됨 ✓' : '오픈 알림 받기',
+            icon: isFavorite ? null : Icons.notifications_none_rounded,
             onTap: () async {
-              final wasEnabled = controller.preopenAlertRegionIds.contains(r.id);
-              await controller.togglePreopenAlertRegion(r.id);
+              final wasEnabled = isFavorite;
+              await controller.toggleFavoriteRegion(r);
               if (!context.mounted) return;
               showMock(context,
                   wasEnabled ? '${r.name} 오픈 알림을 해제했어요.' : '${r.name}을(를) 관심 지역에 담고 오픈 알림을 신청했어요!');
