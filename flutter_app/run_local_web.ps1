@@ -32,8 +32,7 @@ Get-Content $envFile | ForEach-Object {
 Set-Location $root
 
 & "C:\flutter\bin\flutter.bat" run `
-  -d web-server `
-  --web-hostname 0.0.0.0 `
+  -d chrome `
   --web-port 3000 `
   --dart-define=FLUTTER_WEB_CANVASKIT_URL=/canvaskit/ `
   @defines

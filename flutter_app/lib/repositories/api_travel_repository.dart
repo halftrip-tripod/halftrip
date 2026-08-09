@@ -920,7 +920,11 @@ class ApiTravelRepository implements TravelRepository {
 
   @override
   Future<List<AppNotification>> getNotifications(int userId) async {
-    final response = await _jsonRequest('GET', '/notifications?userId=$userId');
+    final response = await _jsonRequest(
+      'GET',
+      '/notifications',
+      query: {'userId': userId},
+    );
     final items = response['data'] as List<dynamic>? ?? [];
     return items
         .map((item) => AppNotification.fromJson(item as Map<String, dynamic>))
@@ -929,7 +933,11 @@ class ApiTravelRepository implements TravelRepository {
 
   @override
   Future<void> markAllNotificationsRead(int userId) async {
-    await _jsonRequest('POST', '/notifications/read-all?userId=$userId',
-        body: const {});
+    await _jsonRequest(
+      'POST',
+      '/notifications/read-all',
+      query: {'userId': userId},
+      body: const {},
+    );
   }
 }
