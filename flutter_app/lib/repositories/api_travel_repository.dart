@@ -652,6 +652,15 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<Uint8List> fetchLodgingFormPdfBytes(int tripId) async {
+    final response = await http.get(_uri('/integrations/lodging-form/$tripId/pdf'));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('숙박확인서 PDF 불러오기 실패: ${response.body}');
+    }
+    return response.bodyBytes;
+  }
+
+  @override
   Future<SettlementSummary> getSettlementSummary(int tripId) async {
     final response = await _jsonRequest(
       'GET',

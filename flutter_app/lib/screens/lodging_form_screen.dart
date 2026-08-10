@@ -1,6 +1,8 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 
 import '../core/app_scope.dart';
 import '../models/app_models.dart';
@@ -226,6 +228,62 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(path)));
   }
 
+  /// 지자체가 전자서명을 인정하는지. false면 출력→실물 서명→업로드로 유도한다.
+  bool get _electronicSignatureAllowed =>
+      _formData?.template.electronicSignatureAllowed ?? true;
+
+  /// 현재 입력을 저장한 뒤 서버가 렌더한 숙박확인서 PDF 바이트를 가져온다.
+  Future<Uint8List?> _saveThenLoadPdfBytes() async {
+    final controller = AppScope.of(context);
+    final saved = await controller.runTask(
+      () => controller.repository.saveLodgingForm(
+        widget.tripId,
+        LodgingFormSaveRequest(payload: _currentPayload(), status: 'DRAFT'),
+      ),
+    );
+    if (!mounted) return null;
+    setState(() {
+      _applyFormData(saved);
+      _future = Future.value(saved);
+    });
+    return controller.runTask(
+      () => controller.repository.fetchLodgingFormPdfBytes(widget.tripId),
+    );
+  }
+
+  Future<void> _printPdf() async {
+    try {
+      final bytes = await _saveThenLoadPdfBytes();
+      if (bytes == null || !mounted) return;
+      // 안드로이드/iOS 시스템 인쇄 대화상자 — 실제 프린터 전송 + "PDF로 저장" 포함.
+      await Printing.layoutPdf(
+        onLayout: (_) async => bytes,
+        name: 'trip-${widget.tripId}-lodging-form.pdf',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('인쇄를 시작하지 못했어요. 잠시 후 다시 시도해 주세요.')),
+      );
+    }
+  }
+
+  Future<void> _sharePdf() async {
+    try {
+      final bytes = await _saveThenLoadPdfBytes();
+      if (bytes == null || !mounted) return;
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: 'trip-${widget.tripId}-lodging-form.pdf',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('공유를 시작하지 못했어요. 잠시 후 다시 시도해 주세요.')),
+      );
+    }
+  }
+
   Future<void> _previewRenderedPdf() async {
     final controller = AppScope.of(context);
     final saved = await controller.runTask(
@@ -300,6 +358,14 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
   }
 
   Future<void> _editSignature([String? fieldKey]) async {
+    if (!_electronicSignatureAllowed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('이 지역은 전자서명을 인정하지 않아요. 출력해서 실물 서명을 받아 주세요.'),
+        ),
+      );
+      return;
+    }
     final resolvedFieldKey = fieldKey ?? _firstSignatureFieldKey();
     final signed = await showSignaturePadDialog(
       context,
@@ -627,6 +693,7 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
           ),
         ),
         const SizedBox(height: 18),
+        if (!_electronicSignatureAllowed) _buildPhysicalSignatureNotice(),
         ...fields.map(_buildDocxField),
         const SizedBox(height: 10),
         OutlinedButton.icon(
@@ -675,7 +742,77 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _sharePdf,
+                icon: const Icon(Icons.ios_share_rounded),
+                label: const Text('공유'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(54),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _printPdf,
+                icon: const Icon(Icons.print_outlined),
+                label: const Text('인쇄'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(54),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ],
+    );
+  }
+
+  Widget _buildPhysicalSignatureNotice() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFED7AA)),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.info_outline_rounded, color: Color(0xFFC2410C), size: 20),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '이 지역은 전자서명을 인정하지 않아요',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF9A3412),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8),
+          Text(
+            '내용을 채운 뒤 ①인쇄(또는 PDF 저장) → ②숙박업소에서 대표자 실물 서명·인장 → '
+            '③서명받은 서류를 촬영해 증빙으로 올려 주세요.',
+            style: TextStyle(height: 1.5, color: Color(0xFF9A3412)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -705,6 +842,40 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
     }
 
     if (field.isSignature) {
+      if (!_electronicSignatureAllowed) {
+        // 전자서명 불인정 지역 — 출력 후 실물 서명받아야 하는 칸임을 안내한다.
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF7ED),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFFED7AA)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.edit_document, color: Color(0xFFC2410C)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      field.label,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      '이 지역은 출력해서 실물 서명·인장을 받아야 해요.',
+                      style: TextStyle(color: Color(0xFF9A3412)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      }
       final hasSignature = (_signatureValues[field.key] ?? '').isNotEmpty;
       return Container(
         margin: const EdgeInsets.only(bottom: 12),

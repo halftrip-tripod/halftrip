@@ -71,6 +71,8 @@
 - [ ] **탈퇴 시 업로드 파일 파기** — 익명화는 잘 되어 있으나 인증샷·영수증 파일은 남음. 보존기간 경과 파기 로직 추가
 - [x] **숙박확인서 PDF 한글 깨짐 수정** (규희, 8/7, `fix/pdf-korean-font`) — `pdf_service.py`가 Windows 전용 폰트 경로만 찾아 PDF_PLACEHOLDER 지역(영월·제천·고흥, reportlab이 주경로)에서 한글이 ■로 깨지던 것 → 나눔고딕(SIL OFL) 레포 번들 + 크로스플랫폼 등록으로 수정. docx 지역 13곳은 원래 LibreOffice+Noto라 정상(12곳 공식 양식 대조 QA 통과). ⚠️ 라이브 docx→PDF 변환은 Render 배포본에서 한 장 실측 권장
 - [ ] **영월·제천·고흥 공식 숙박확인서 양식 소싱** — 현재 `source_format=PDF_PLACEHOLDER`(범용 임시 양식). 다른 13곳처럼 지자체 공식 HWP → docx 추가 필요. 이 3곳 정산 오픈 전까지. (폰트와 별개 콘텐츠 갭)
+- [x] **숙박확인서 전자서명 정책 분기 구현** (규희, 8/10, `feat/lodging-signature-policy` / 서버 `feat/lodging-esign-flag`) — 지자체가 전자서명을 인정하는지 여부(`electronicSignatureAllowed`)를 템플릿에 두고, 앱이 ①허용 지역=전자서명+저장·공유·인쇄 전부 / ②불인정 지역=전자서명 버튼 막고 "출력→실물 서명·인장→사진 업로드" 유도. `printing` 패키지로 인쇄·공유 추가. **완도는 공식 안내가 실물 요구라 false로 확정**, 나머지 기본 true. 로컬 검증 완료(완도 false·강진 true)
+- [ ] 🔎 **16개 지역 전자서명 인정 여부 조사** — 완도만 실물 확정. 나머지 15곳은 각 지자체 문의/공지 확인해 `electronic_signature_allowed` 개별 설정 필요. 미확인 지역은 기본 true(전자서명 허용)로 열려 있으므로, 실물만 인정하는 곳이 더 있으면 반려 위험 → 조사 담당 배정 필요 (하민/양식 담당 or 지자체 문의)
 - [ ] **정산 신청 서버 검증** — `POST /trips/{id}/settlement-apply`에 상태검사·`@Valid`·중복검사 없음. BEFORE/ONGOING 여행·빈 실명·중복 신청 모두 통과. ENDED만 허용 + 이미 신청분 거절
 - [ ] **예외 응답 500→400 매핑** — `GlobalExceptionHandler`의 `Exception.class` catch-all이 깨진 JSON·enum 오류·파라미터 누락(원래 400급)을 전부 500 + 내부 예외 원문으로 노출. 400 매핑 핸들러 추가 + 메시지 마스킹
 - [ ] ⑯ 여행 삭제 `DELETE /api/trips/{tripId}` (minor) — 정산 신청 취소 불가와 연결

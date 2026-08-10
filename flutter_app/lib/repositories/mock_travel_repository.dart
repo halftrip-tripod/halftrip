@@ -1298,6 +1298,12 @@ class MockTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<Uint8List> fetchLodgingFormPdfBytes(int tripId) async {
+    // 목 환경에는 실제 PDF 렌더러가 없어 인쇄·공유를 지원하지 않는다.
+    throw UnsupportedError('목 환경에서는 숙박확인서 PDF를 지원하지 않습니다.');
+  }
+
+  @override
   Future<SettlementSummary> getSettlementSummary(int tripId) async {
     return _buildSettlementSummary(_requireTrip(tripId));
   }
