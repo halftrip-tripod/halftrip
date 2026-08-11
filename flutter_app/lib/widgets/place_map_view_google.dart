@@ -153,33 +153,6 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
     return null;
   }
 
-  String? _infoSnippet(PlaceMapMarkerData? marker) {
-    if (marker == null) {
-      return null;
-    }
-    final googleFormattedAddress =
-        _googleDetailValue(marker.googlePlaceDetails['formattedAddress']);
-    final googleShortAddress =
-        _googleDetailValue(marker.googlePlaceDetails['shortFormattedAddress']);
-    final address = googleFormattedAddress.isNotEmpty
-        ? googleFormattedAddress
-        : (marker.roadAddress ?? '').trim().isNotEmpty
-        ? marker.roadAddress!.trim()
-        : googleShortAddress.isNotEmpty
-            ? googleShortAddress
-            : marker.address.trim();
-    final category = (marker.categoryName ?? marker.regionLabel ?? '').trim();
-    final phone = (marker.phoneNumber ?? '').trim();
-    final hasPlaceUrl = (marker.placeUrl ?? '').trim().isNotEmpty;
-    final lines = <String>[
-      if (address.isNotEmpty) address,
-      if (category.isNotEmpty) '분류: $category',
-      if (phone.isNotEmpty) '전화: $phone',
-      if (hasPlaceUrl) 'Google 장소 상세 링크 있음',
-    ];
-    return lines.isEmpty ? null : lines.join('\n');
-  }
-
   Future<void> _selectMarker(PlaceMapMarkerData marker) async {
     setState(() => _selectedMarker = marker);
     widget.onMarkerTap?.call(marker.id);
@@ -212,7 +185,8 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
             Marker(
               markerId: MarkerId('place-${m.id}'),
               position: LatLng(m.latitude, m.longitude),
-              infoWindow: InfoWindow(title: m.name, snippet: _infoSnippet(m)),
+              // 네이티브 InfoWindow 대신 커스텀 상세 카드만 사용 (닫기 시 잔여 말풍선 방지)
+              infoWindow: InfoWindow.noText,
               icon: (m.id == widget.highlightedMarkerId
                       ? _pinHighlight
                       : _pin) ??
@@ -230,10 +204,8 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
               return Marker(
                 markerId: MarkerId('route-${route.id}'),
                 position: LatLng(route.latitude, route.longitude),
-                infoWindow: InfoWindow(
-                  title: place?.name ?? '경유지 ${i + 1}',
-                  snippet: _infoSnippet(place),
-                ),
+                // 네이티브 InfoWindow 대신 커스텀 상세 카드만 사용 (닫기 시 잔여 말풍선 방지)
+                infoWindow: InfoWindow.noText,
                 icon: (i < _numberedPins.length ? _numberedPins[i] : _pin) ??
                     BitmapDescriptor.defaultMarker,
                 anchor: const Offset(0.5, 0.5),
