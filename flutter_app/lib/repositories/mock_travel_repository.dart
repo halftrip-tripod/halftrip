@@ -1068,7 +1068,8 @@ class MockTravelRepository implements TravelRepository {
         templateId: 1,
         templateKey: 'mock-regional-lodging-form',
         templateName: 'regional_lodging_confirmation_mock.pdf',
-        sourceFormat: 'PDF_PLACEHOLDER',
+        // 실서버(V61 이후)와 동일하게 DOCX 폼 입력 UI를 데모하도록 맞춘다.
+        sourceFormat: 'DOCX',
         previewTitle: '숙박확인서',
         previewSubtitle: 'Mock 모드 공통 템플릿',
         fields: [
@@ -1080,7 +1081,7 @@ class MockTravelRepository implements TravelRepository {
             y: 12,
             width: 24,
             height: 8,
-            editable: false,
+            editable: true,
             multiline: false,
             helperText: '',
           ),
@@ -1092,7 +1093,7 @@ class MockTravelRepository implements TravelRepository {
             y: 12,
             width: 24,
             height: 8,
-            editable: false,
+            editable: true,
             multiline: false,
             helperText: '',
           ),
@@ -1104,7 +1105,7 @@ class MockTravelRepository implements TravelRepository {
             y: 12,
             width: 28,
             height: 8,
-            editable: false,
+            editable: true,
             multiline: false,
             helperText: '',
           ),
@@ -1116,7 +1117,7 @@ class MockTravelRepository implements TravelRepository {
             y: 24,
             width: 40,
             height: 8,
-            editable: false,
+            editable: true,
             multiline: false,
             helperText: '',
           ),
@@ -1128,7 +1129,7 @@ class MockTravelRepository implements TravelRepository {
             y: 24,
             width: 40,
             height: 8,
-            editable: false,
+            editable: true,
             multiline: false,
             helperText: '',
           ),
@@ -1295,6 +1296,12 @@ class MockTravelRepository implements TravelRepository {
       const JsonEncoder.withIndent('  ').convert(formData.instance.payload),
     );
     return file.path;
+  }
+
+  @override
+  Future<Uint8List> fetchLodgingFormPdfBytes(int tripId) async {
+    // 목 환경에는 실제 PDF 렌더러가 없어 인쇄·공유를 지원하지 않는다.
+    throw UnsupportedError('목 환경에서는 숙박확인서 PDF를 지원하지 않습니다.');
   }
 
   @override

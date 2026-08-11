@@ -652,6 +652,15 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<Uint8List> fetchLodgingFormPdfBytes(int tripId) async {
+    final response = await http.get(_uri('/integrations/lodging-form/$tripId/pdf'));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('숙박확인서 PDF 불러오기 실패: ${response.body}');
+    }
+    return response.bodyBytes;
+  }
+
+  @override
   Future<SettlementSummary> getSettlementSummary(int tripId) async {
     final response = await _jsonRequest(
       'GET',
@@ -920,6 +929,7 @@ class ApiTravelRepository implements TravelRepository {
 
   @override
   Future<List<AppNotification>> getNotifications(int userId) async {
+    // 쿼리는 query 파라미터로 — 경로에 ?를 넣으면 _uri()가 %3F로 인코딩해 요청이 깨진다.
     final response = await _jsonRequest(
       'GET',
       '/notifications',
