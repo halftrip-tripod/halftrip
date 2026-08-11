@@ -131,7 +131,11 @@ abstract class TravelRepository {
   );
   Future<LodgingFormData> analyzeLodgingFormTemplate(int tripId);
   String? getLodgingFormTemplatePreviewUrl(int tripId);
+  String? getLodgingFormRenderedPdfUrl(int tripId);
   Future<String> downloadLodgingFormPdf(int tripId);
+
+  /// 숙박확인서 PDF 원본 바이트 — 인쇄·공유(printing 패키지)에 사용.
+  Future<Uint8List> fetchLodgingFormPdfBytes(int tripId);
   Future<SettlementSummary> getSettlementSummary(int tripId);
   /// 정산 신청 — 실명·전화번호는 정산 시점에만 수집(개인정보 최소화 계약 B).
   Future<void> applySettlement(
