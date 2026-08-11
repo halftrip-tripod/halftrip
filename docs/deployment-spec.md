@@ -55,9 +55,10 @@ Flutter 웹: **https://halftrip.vercel.app** (Vercel) — 정책 페이지 호�
 - [ ] appbundle 빌드 → Play Console 등록 → 비공개 트랙(8/18)
 - [ ] 콘솔 필수 입력: 개인정보처리방침 URL·계정삭제 URL(웹 호스팅 필요), 데이터 보안 설문, 콘텐츠 등급
 - [ ] 스토어 리스팅: [store-listing.md](store-listing.md) + store-assets 이미지
-- [x] 정책 페이지 제작 완료 (8/6) — `flutter_app/web/`에 terms·privacy·account-deletion.html (원문 수정 시 `tool/gen_policy_html.py` 재실행). **다음 Vercel 배포에 자동 포함** → Play Console 입력 URL:
-  - 개인정보처리방침: `https://halftrip.vercel.app/privacy.html`
-  - 계정 삭제: `https://halftrip.vercel.app/account-deletion.html`
+- [x] 정책 페이지 **별도 Vercel 프로젝트로 배포 완료** (8/12) — 앱 웹빌드와 분리한 정적 사이트 `halftrip-policy`(규희 Vercel). 원문 수정 시 `tool/gen_policy_html.py` 재실행 → 그 3장을 이 프로젝트에 재배포. Play Console 입력 URL:
+  - 개인정보처리방침: `https://halftrip-policy.vercel.app/privacy.html`
+  - 계정 삭제: `https://halftrip-policy.vercel.app/account-deletion.html`
+  - 이용약관: `https://halftrip-policy.vercel.app/terms.html`
 
 ## 5. 🛠️ 하민 셋업 가이드
 

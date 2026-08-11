@@ -20,16 +20,16 @@
 
 ---
 
-## 🔑 키 발급 3종 (출시 후 업데이트로 넣어도 OK — 첫 출시 블로커 아님)
-
-> 앱은 키 없으면 mock/폴백으로 열림. 키 오면 규희가 넣고 업데이트. **급하진 않지만 계정 생기면 바로 발급 걸어두면 좋음.**
+## 🔑 키 발급 3종 
 
 ### 3. 카카오 로그인
 - developers.kakao.com → 애플리케이션 추가 → **플랫폼 > Android 등록**
   - 패키지명: `com.tourism.travelmvp.travel_support_mvp`
-  - **키 해시(SHA-1 기반)**: 아래 지문 등록
-    - 릴리즈 SHA-1: `82:B8:DF:7B:9D:47:0A:03:66:DF:F8:08:57:78:10:A9:86:D1:1C:11`
-    - (참고: 카카오 콘솔은 이 SHA-1을 Base64 키해시로 변환해 등록 — 콘솔 안내대로)
+  - **키 해시(SHA-1) 3개 등록** — 빌드 방식마다 서명 키가 달라서 다 등록해야 그 앱에서 로그인됨 (카카오는 여러 개 허용):
+    - ① 디버그: `C6:56:7F:44:A3:83:6E:91:98:20:FE:23:A0:74:EC:8A:48:12:3B:10` ← `flutter run`/디버그 설치 테스트용
+    - ② 릴리즈(업로드): `82:B8:DF:7B:9D:47:0A:03:66:DF:F8:08:57:78:10:A9:86:D1:1C:11` ← `flutter build apk --release` 테스트용 (규희 keystore)
+    - ③ Play 앱 서명: **스토어 업로드 후 추가** — Play가 자체 키로 최종 서명하므로 실배포 앱 지문이 또 다름. Play Console → 앱 무결성/앱 서명 페이지의 SHA-1을 카카오에 하나 더 등록. (안 하면 스토어 배포 앱에서 카카오 로그인 실패)
+    - (참고: 카카오 콘솔은 SHA-1을 Base64 키해시로 변환해 등록 — 콘솔 안내대로)
 - **규희에게 전달**: 네이티브 앱 키 + JavaScript 키
 - 도메인 등록 불필요(앱). 웹 데모용으로만 `halftrip.vercel.app` 등록(선택)
 
@@ -38,11 +38,8 @@
 - **규희에게 전달**: Client ID + Client Secret
 - 도메인 불필요(앱)
 
-### 5. ~~FCM (푸시)~~ — ✅ 하민 몫 아님 (키 이미 전달됨, 규희가 넣음)
-- 앱 `google-services.json` 이미 반영됨. 서버 키(service account JSON)도 이미 수령.
-- 남은 것: **규희가 Render 환경변수에 넣기** — `APP_FCM_SERVICE_ACCOUNT_JSON`(JSON 통째로) + `APP_FIREBASE_PROJECT_ID=halftrip-f4335`
 
-### 6. Supabase Storage (증빙 파일 저장)
+### 5. Supabase Storage (증빙 파일 저장)
 - supabase.com → New Project — **Region 반드시 `Northeast Asia (Seoul)`** (서울리전이어야 방침상 "국외이전" 아님)
 - Storage → 버킷 `evidence` 생성, **Public OFF(비공개 필수)**
 - **규희에게 전달**: Project URL + **service_role 키**
