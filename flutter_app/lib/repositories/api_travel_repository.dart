@@ -929,6 +929,7 @@ class ApiTravelRepository implements TravelRepository {
 
   @override
   Future<List<AppNotification>> getNotifications(int userId) async {
+    // 쿼리는 query 파라미터로 — 경로에 ?를 넣으면 _uri()가 %3F로 인코딩해 요청이 깨진다.
     final response = await _jsonRequest(
       'GET',
       '/notifications',
