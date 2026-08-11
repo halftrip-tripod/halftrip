@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../core/app_config.dart';
 import '../core/app_scope.dart';
 import '../models/app_models.dart';
+import '../services/course_ai_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui/app_card.dart';
 
@@ -136,16 +138,56 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
     );
 
     final controller = AppScope.of(context);
-    final detail = await controller.repository.getRegionDetail(
-      widget.tripDetail.trip.regionId,
-      residence: controller.currentUser?.residence,
-    );
-    await Future<void>.delayed(const Duration(milliseconds: 1800));
+    final preferences = _themes.map((t) => t.$2).toList();
+    List<PlaceItem> places;
+    try {
+      final detail = await controller.repository.getRegionDetail(
+        widget.tripDetail.trip.regionId,
+        residence: controller.currentUser?.residence,
+      );
+      final candidates = detail.halfPricePlaces;
+      try {
+        // FastAPI LLM으로 실제 코스 생성(테마·환급조건 반영, 후보 중에서만 선정).
+        final aiService = CourseAiService(AppConfig.fromEnvironment());
+        final result = await aiService.generate(
+          regionName: widget.tripDetail.trip.regionName,
+          nights: _nights,
+          people: _people,
+          themePriority: preferences,
+          candidates: candidates
+              .map((place) => {
+                    'name': place.name,
+                    'category': '',
+                    'address': place.address,
+                    'description': place.description,
+                    'eligibleForRefund': place.eligibleForRefund,
+                  })
+              .toList(),
+        );
+        final byName = {for (final place in candidates) place.name: place};
+        places = result.stops
+            .map((stop) => byName[stop.name])
+            .whereType<PlaceItem>()
+            .toList();
+        if (places.isEmpty) {
+          // LLM이 후보 밖 이름을 반환했거나 빈 결과 — 규칙 기반으로 안전하게 대체.
+          places = _rankPlaces(candidates, preferences);
+        }
+      } catch (_) {
+        // FastAPI 호출 실패(네트워크/키 미설정 등) — 클라이언트 규칙 기반으로 대체.
+        places = _rankPlaces(candidates, preferences);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      Navigator.of(context).pop(); // 로딩 다이얼로그 닫기
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('코스를 생성하지 못했습니다: $error')),
+      );
+      return;
+    }
     if (!mounted) return;
     Navigator.of(context).pop(); // 다이얼로그 닫기
 
-    final preferences = _themes.map((t) => t.$2).toList();
-    final places = _rankPlaces(detail.halfPricePlaces, preferences);
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => CourseSimScreen(
