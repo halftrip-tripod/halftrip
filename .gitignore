@@ -21,3 +21,10 @@ flutter_app/ios/Pods/
 
 # Firebase 설정 (키 포함 — 커밋 금지, 팀원 각자 단톡 공유본 사용)
 flutter_app/android/app/google-services.json
+
+# 로컬 환경값 (지도 API 키 포함 — 커밋 금지, .env.example만 공유)
+flutter_app/.env.local
+flutter_app/.env.*.local
+
+# 로컬 실행용 임시 AppData (flutter 텔레메트리)
+flutter_app/.tmp-appdata/

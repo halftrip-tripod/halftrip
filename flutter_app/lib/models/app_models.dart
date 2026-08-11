@@ -1329,6 +1329,7 @@ class LodgingFormFieldItem {
 
   bool get isCheckbox => type.toLowerCase() == 'checkbox';
   bool get isSignature => type.toLowerCase() == 'signature';
+  bool get isDate => type.toLowerCase() == 'date';
 
   LodgingFormFieldItem copyWith({
     String? key,
@@ -1395,6 +1396,7 @@ class LodgingFormTemplateItem {
     required this.previewSubtitle,
     required this.fields,
     required this.notes,
+    this.electronicSignatureAllowed = true,
   });
 
   final int templateId;
@@ -1406,6 +1408,11 @@ class LodgingFormTemplateItem {
   final List<LodgingFormFieldItem> fields;
   final List<String> notes;
 
+  /// 지자체가 전자서명(앱 화면 서명)을 정산 증빙으로 인정하는지.
+  /// false면 출력 → 숙박업소 실물 서명/인장 → 사진 업로드로 유도한다.
+  /// 서버가 값을 안 내려주면 true(기존 동작 유지) — 실물만 인정되는 지역만 명시적으로 false.
+  final bool electronicSignatureAllowed;
+
   LodgingFormTemplateItem copyWith({
     int? templateId,
     String? templateKey,
@@ -1415,6 +1422,7 @@ class LodgingFormTemplateItem {
     String? previewSubtitle,
     List<LodgingFormFieldItem>? fields,
     List<String>? notes,
+    bool? electronicSignatureAllowed,
   }) {
     return LodgingFormTemplateItem(
       templateId: templateId ?? this.templateId,
@@ -1425,6 +1433,8 @@ class LodgingFormTemplateItem {
       previewSubtitle: previewSubtitle ?? this.previewSubtitle,
       fields: fields ?? this.fields,
       notes: notes ?? this.notes,
+      electronicSignatureAllowed:
+          electronicSignatureAllowed ?? this.electronicSignatureAllowed,
     );
   }
 
@@ -1436,6 +1446,8 @@ class LodgingFormTemplateItem {
       sourceFormat: json['sourceFormat'] as String? ?? '',
       previewTitle: json['previewTitle'] as String? ?? '',
       previewSubtitle: json['previewSubtitle'] as String? ?? '',
+      electronicSignatureAllowed:
+          json['electronicSignatureAllowed'] as bool? ?? true,
       fields: ((json['fields'] as List<dynamic>?) ?? [])
           .map(
             (item) =>

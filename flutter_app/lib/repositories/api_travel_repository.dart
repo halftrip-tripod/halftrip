@@ -670,11 +670,25 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
+  String? getLodgingFormRenderedPdfUrl(int tripId) {
+    return _uri('/integrations/lodging-form/$tripId/pdf').toString();
+  }
+
+  @override
   Future<String> downloadLodgingFormPdf(int tripId) {
     return _downloadToDocuments(
       '/integrations/lodging-form/$tripId/pdf',
       'trip-$tripId-lodging-form.pdf',
     );
+  }
+
+  @override
+  Future<Uint8List> fetchLodgingFormPdfBytes(int tripId) async {
+    final response = await http.get(_uri('/integrations/lodging-form/$tripId/pdf'));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('숙박확인서 PDF 불러오기 실패: ${response.body}');
+    }
+    return response.bodyBytes;
   }
 
   @override
@@ -946,9 +960,12 @@ class ApiTravelRepository implements TravelRepository {
 
   @override
   Future<List<AppNotification>> getNotifications(int userId) async {
-    // 쿼리를 경로 문자열에 붙이면 '?'가 %3F로 인코딩돼 CORS preflight가 깨진다.
-    final response =
-        await _jsonRequest('GET', '/notifications', query: {'userId': userId});
+    // 쿼리는 query 파라미터로 — 경로에 ?를 넣으면 _uri()가 %3F로 인코딩해 CORS preflight가 깨진다.
+    final response = await _jsonRequest(
+      'GET',
+      '/notifications',
+      query: {'userId': userId},
+    );
     final items = response['data'] as List<dynamic>? ?? [];
     return items
         .map((item) => AppNotification.fromJson(item as Map<String, dynamic>))
@@ -957,7 +974,11 @@ class ApiTravelRepository implements TravelRepository {
 
   @override
   Future<void> markAllNotificationsRead(int userId) async {
-    await _jsonRequest('POST', '/notifications/read-all',
-        query: {'userId': userId}, body: const {});
+    await _jsonRequest(
+      'POST',
+      '/notifications/read-all',
+      query: {'userId': userId},
+      body: const {},
+    );
   }
 }
