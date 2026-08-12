@@ -5,6 +5,7 @@ import '../core/app_scope.dart';
 import '../models/app_models.dart';
 import '../services/course_ai_service.dart';
 import '../theme/app_colors.dart';
+import '../widgets/place_map_view.dart';
 import '../widgets/ui/app_card.dart';
 
 /// 코스 플로우 (목업 halftrip-mockup/lib/screens/course_flow.dart 1:1 이식).
@@ -569,10 +570,7 @@ class CourseSimScreen extends StatelessWidget {
             subtitle: '지정관광지 $refundCount곳 · ${nights > 0 ? '1박 숙박 · ' : ''}인정 결제 포함',
           ),
           const SizedBox(height: 16),
-          CourseMapCard(
-            day1: stops.where((s) => s.day == 1).length,
-            day2: stops.where((s) => s.day == 2).length,
-          ),
+          _buildCourseMap(),
           const SizedBox(height: 16),
           CourseTimeline(stops: stops),
         ],
@@ -625,6 +623,45 @@ class CourseSimScreen extends StatelessWidget {
             ),
           ]),
         ]),
+      ),
+    );
+  }
+
+  /// 코스 장소를 실제 지도(구글/카카오, MAP_PROVIDER 설정에 따름)에 순서대로 표시.
+  Widget _buildCourseMap() {
+    final geoPlaces =
+        places.where((p) => p.latitude != null && p.longitude != null).toList();
+    final markers = geoPlaces
+        .map(
+          (place) => PlaceMapMarkerData(
+            id: place.id,
+            name: place.name,
+            address: place.address,
+            latitude: place.latitude!,
+            longitude: place.longitude!,
+            selected: false,
+          ),
+        )
+        .toList();
+    final routeMarkers = geoPlaces
+        .map(
+          (place) => PlaceMapRoutePoint(
+            id: place.id,
+            latitude: place.latitude!,
+            longitude: place.longitude!,
+          ),
+        )
+        .toList();
+    final config = AppConfig.fromEnvironment();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: PlaceMapView(
+        markers: markers,
+        emptyMessage: '표시할 장소 좌표가 없습니다.',
+        kakaoEnabled: config.canUseKakaoMap,
+        routeMarkers: routeMarkers,
+        connectSequentially: true,
+        height: 240,
       ),
     );
   }
