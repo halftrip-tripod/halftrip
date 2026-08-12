@@ -570,7 +570,7 @@ class CourseSimScreen extends StatelessWidget {
             subtitle: '지정관광지 $refundCount곳 · ${nights > 0 ? '1박 숙박 · ' : ''}인정 결제 포함',
           ),
           const SizedBox(height: 16),
-          _buildCourseMap(),
+          _buildCourseMap(context),
           const SizedBox(height: 16),
           CourseTimeline(stops: stops),
         ],
@@ -628,7 +628,9 @@ class CourseSimScreen extends StatelessWidget {
   }
 
   /// 코스 장소를 실제 지도(구글/카카오, MAP_PROVIDER 설정에 따름)에 순서대로 표시.
-  Widget _buildCourseMap() {
+  /// 마커를 탭하면 구글 상세정보(평점·전화·영업시간 등)를 조회해 카드에 보여준다.
+  /// TourAPI 기반 설명(description)은 구글 상세가 비어있을 때의 대체 정보로 함께 넘긴다.
+  Widget _buildCourseMap(BuildContext context) {
     final geoPlaces =
         places.where((p) => p.latitude != null && p.longitude != null).toList();
     final markers = geoPlaces
@@ -640,6 +642,7 @@ class CourseSimScreen extends StatelessWidget {
             latitude: place.latitude!,
             longitude: place.longitude!,
             selected: false,
+            editorialSummary: place.description.isEmpty ? null : place.description,
           ),
         )
         .toList();
@@ -662,8 +665,60 @@ class CourseSimScreen extends StatelessWidget {
         routeMarkers: routeMarkers,
         connectSequentially: true,
         height: 240,
+        onMarkerDetailsRequested: (marker) => _loadGoogleMarkerDetails(context, marker),
       ),
     );
+  }
+
+  /// 지도 마커 탭 시 구글 Places 상세정보를 조회해 병합. 실패하면 기존(TourAPI 기반) 값 유지.
+  Future<PlaceMapMarkerData?> _loadGoogleMarkerDetails(
+    BuildContext context,
+    PlaceMapMarkerData marker,
+  ) async {
+    try {
+      final controller = AppScope.of(context);
+      final detail = await controller.repository.searchGooglePlaceDetail(
+        placeName: marker.name,
+        address: marker.address,
+        latitude: marker.latitude,
+        longitude: marker.longitude,
+      );
+      if (detail == null) {
+        return null;
+      }
+      return PlaceMapMarkerData(
+        id: marker.id,
+        name: detail.placeName.isNotEmpty ? detail.placeName : marker.name,
+        address: detail.address.isNotEmpty ? detail.address : marker.address,
+        latitude: detail.latitude == 0 ? marker.latitude : detail.latitude,
+        longitude: detail.longitude == 0 ? marker.longitude : detail.longitude,
+        selected: marker.selected,
+        regionLabel: detail.category.isNotEmpty ? detail.category : marker.regionLabel,
+        phoneNumber: detail.phoneNumber.isNotEmpty ? detail.phoneNumber : marker.phoneNumber,
+        roadAddress: detail.address.isNotEmpty ? detail.address : marker.roadAddress,
+        categoryName: detail.category.isNotEmpty ? detail.category : marker.categoryName,
+        placeUrl: detail.placeUrl.isNotEmpty ? detail.placeUrl : marker.placeUrl,
+        websiteUri: detail.websiteUri.isNotEmpty ? detail.websiteUri : marker.websiteUri,
+        internationalPhoneNumber: detail.internationalPhoneNumber.isNotEmpty
+            ? detail.internationalPhoneNumber
+            : marker.internationalPhoneNumber,
+        rating: detail.rating ?? marker.rating,
+        userRatingCount:
+            detail.userRatingCount == 0 ? marker.userRatingCount : detail.userRatingCount,
+        businessStatus:
+            detail.businessStatus.isNotEmpty ? detail.businessStatus : marker.businessStatus,
+        priceLevel: detail.priceLevel.isNotEmpty ? detail.priceLevel : marker.priceLevel,
+        types: detail.types.isNotEmpty ? detail.types : marker.types,
+        openingHours: detail.openingHours.isNotEmpty ? detail.openingHours : marker.openingHours,
+        // TourAPI 설명을 기본값으로 이미 채워뒀으므로, 구글 상세가 비어있으면 그대로 유지.
+        editorialSummary:
+            detail.editorialSummary.isNotEmpty ? detail.editorialSummary : marker.editorialSummary,
+        googlePlaceDetails:
+            detail.googlePlaceDetails.isNotEmpty ? detail.googlePlaceDetails : marker.googlePlaceDetails,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 }
 
