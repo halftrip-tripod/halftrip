@@ -16,10 +16,12 @@ class MallTab extends StatefulWidget {
 }
 
 class _MallData {
-  const _MallData(this.settled, this.mallsByRegion, this.localCurrencyUrlByRegion);
+  const _MallData(this.settled, this.mallsByRegion, this.localCurrencyUrlByRegion,
+      this.allRegionMallEntries);
   final List<TripSummary> settled;
   final Map<int, List<OnlineMallItem>> mallsByRegion;
   final Map<int, String?> localCurrencyUrlByRegion;
+  final List<(String, OnlineMallItem)> allRegionMallEntries;
 }
 
 class _MallTabState extends State<MallTab> {
@@ -58,7 +60,32 @@ class _MallTabState extends State<MallTab> {
         mallsByRegion[trip.regionId] = const [];
       }
     }
-    return _MallData(settled, mallsByRegion, localCurrencyUrlByRegion);
+
+    final allRegionMallEntries = <(String, OnlineMallItem)>[];
+    try {
+      final regions = await controller.repository.getRegions(
+        residence: controller.currentUser?.residence,
+      );
+      final details = await Future.wait(regions.map((region) async {
+        try {
+          return await controller.repository.getPlaceInfoDetail(
+            region.id,
+            residence: controller.currentUser?.residence,
+          );
+        } catch (_) {
+          return null;
+        }
+      }));
+      for (var i = 0; i < regions.length; i++) {
+        final detail = details[i];
+        if (detail == null) continue;
+        for (final mall in detail.onlineMalls) {
+          allRegionMallEntries.add((_regionEmoji(regions[i].name), mall));
+        }
+      }
+    } catch (_) {}
+
+    return _MallData(settled, mallsByRegion, localCurrencyUrlByRegion, allRegionMallEntries);
   }
 
   @override
@@ -68,11 +95,7 @@ class _MallTabState extends State<MallTab> {
       builder: (context, snapshot) {
         final data = snapshot.data;
         final settled = data?.settled ?? const <TripSummary>[];
-        final mallEntries = <(String, OnlineMallItem)>[
-          for (final trip in settled)
-            for (final mall in data?.mallsByRegion[trip.regionId] ?? const <OnlineMallItem>[])
-              (_regionEmoji(trip.regionName), mall),
-        ];
+        final mallEntries = data?.allRegionMallEntries ?? const <(String, OnlineMallItem)>[];
 
         return ListView(
           padding: const EdgeInsets.fromLTRB(22, 8, 22, 28),
@@ -104,7 +127,7 @@ class _MallTabState extends State<MallTab> {
             const SectionTitle('지역별 온라인몰'),
             const SizedBox(height: 12),
             if (data != null && mallEntries.isEmpty)
-              const NoteRow('정산 신청한 지역의 온라인몰이 아직 없어요.')
+              const NoteRow('등록된 온라인몰이 아직 없어요.')
             else if (mallEntries.isNotEmpty)
               AppCard(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
