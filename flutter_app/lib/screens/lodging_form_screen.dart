@@ -413,6 +413,20 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
     return '${m.group(1)}${m.group(2) ?? ''}';
   }
 
+  /// 분리형(mid/last) 전화 그룹에 대응하는 "전체 번호" 렌더 키. 렌더러는 이 키가
+  /// 있으면 010을 붙이지 않고 값을 그대로 찍으므로, 유선번호(061-…)가 010으로
+  /// 둔갑하는 문제를 막는다. 대응 키가 없으면 null(기존 010 분할 유지 — 휴대전화용).
+  String? _phoneFullFieldKey(String base) {
+    switch (base) {
+      case 'phone_number':
+        return 'phone_number';
+      case 'traveler_phone':
+        return 'traveler_phone_number';
+      default:
+        return null;
+    }
+  }
+
   /// 필드 목록을 위젯으로 그리되, 날짜(연/월/일)·분리 전화번호(가운데/끝자리)는
   /// 각각 캘린더·단일 입력 하나로 묶는다.
   List<Widget> _fieldWidgets(List<LodgingFormFieldItem> fields) {
@@ -458,11 +472,21 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
         _textControllers.putIfAbsent('${base}_mid$suffix', TextEditingController.new);
     final lastCtl =
         _textControllers.putIfAbsent('${base}_last$suffix', TextEditingController.new);
+    final fullKey = _phoneFullFieldKey(base);
     final combined = _phoneCombined.putIfAbsent(groupKey, () {
       final c = TextEditingController();
-      final mid = midCtl.text.trim(), last = lastCtl.text.trim();
-      if (mid.isNotEmpty || last.isNotEmpty) {
-        c.text = _formatKoreanPhone('010$mid$last');
+      // 저장된 전체 번호가 있으면 그걸 우선(유선번호 보존). 없을 때만 mid/last에
+      // 010을 붙여 복원(휴대전화 양식 기존 동작).
+      final savedFull = fullKey == null
+          ? ''
+          : (_formData?.instance.payload[fullKey]?.toString().trim() ?? '');
+      if (savedFull.isNotEmpty) {
+        c.text = _formatKoreanPhone(savedFull);
+      } else {
+        final mid = midCtl.text.trim(), last = lastCtl.text.trim();
+        if (mid.isNotEmpty || last.isNotEmpty) {
+          c.text = _formatKoreanPhone('010$mid$last');
+        }
       }
       return c;
     });
@@ -487,6 +511,13 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
               : (digits.length > 4 ? digits.substring(0, digits.length - 4) : '');
           midCtl.text = mid;
           lastCtl.text = last;
+          // 렌더러가 우선 읽는 전체 번호 키에 입력값을 그대로 저장(지역번호 보존).
+          // 양식에 010이 인쇄돼 있어도 이 값이 있으면 렌더러가 010을 덧붙이지 않는다.
+          if (fullKey != null) {
+            _textControllers
+                .putIfAbsent(fullKey, TextEditingController.new)
+                .text = _formatKoreanPhone(digits);
+          }
         },
         style: const TextStyle(
             fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink9),

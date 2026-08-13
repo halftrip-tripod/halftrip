@@ -54,8 +54,8 @@ class Pill extends StatelessWidget {
       PillTone.red => (AppColors.dangerTint, AppColors.danger),
       PillTone.mint => (AppColors.mintTint, AppColors.mintDeep),
       PillTone.yt => (AppColors.coralTint, const Color(0xFFE0322B)),
-      PillTone.gold => (const Color(0xFFFFF1D6), const Color(0xFFB8860B)),
-      PillTone.live => (AppColors.successTint, const Color(0xFF177D43)),
+      PillTone.gold => (const Color(0xFFFBF1D5), const Color(0xFFA9790C)),
+      PillTone.live => (const Color(0xFFE7F7EE), const Color(0xFF1B8E4B)),
       PillTone.warn => (AppColors.warningTint, const Color(0xFFB8731B)),
       PillTone.success => (AppColors.successTint, const Color(0xFF177D43)),
     };

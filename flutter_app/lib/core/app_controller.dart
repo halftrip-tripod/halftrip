@@ -422,6 +422,23 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 여행의 확정 코스 등록을 취소한다 (코스 자체는 코스함에 남는다).
+  Future<void> unselectCourseForTrip(int tripId) async {
+    final next = {...selectedCourseIdsByTrip}..remove(tripId);
+    selectedCourseIdsByTrip = next;
+    await _persistLocalDashboardData();
+    notifyListeners();
+  }
+
+  /// 코스함에서 코스를 삭제한다. 이 코스를 확정 코스로 쓰던 여행의 연결도 함께 해제.
+  Future<void> deleteSavedCourse(String courseId) async {
+    savedCourses = [...savedCourses]..removeWhere((item) => item.id == courseId);
+    selectedCourseIdsByTrip = {...selectedCourseIdsByTrip}
+      ..removeWhere((_, id) => id == courseId);
+    await _persistLocalDashboardData();
+    notifyListeners();
+  }
+
   Future<void> trackPendingYoutubeCourseJob(PendingYoutubeCourseJob job) async {
     final next = [...pendingYoutubeCourseJobs];
     next.removeWhere((item) => item.jobId == job.jobId);

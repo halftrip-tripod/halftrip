@@ -1,5 +1,8 @@
+import 'package:flutter/cupertino.dart' show CupertinoDatePicker, CupertinoDatePickerMode;
 import 'package:flutter/material.dart';
 
+import '../../mock_ui/widgets/trip_calendar_sheet.dart';
+import '../../theme/app_colors.dart';
 import 'travel_plan_models.dart';
 
 Future<TravelPlanItem?> showTravelPlanItemEditor(
@@ -36,6 +39,63 @@ Future<TravelPlanItem?> showTravelPlanItemEditor(
         ),
   );
 }
+
+
+/// 계획표 편집 폼 공용 테마 — 디자인 시스템 입력 스타일(연회색 필 + 라운드 14).
+ThemeData travelPlanFormTheme(BuildContext context) {
+  final base = Theme.of(context);
+  OutlineInputBorder line(Color color, double width) => OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: width == 0
+            ? BorderSide.none
+            : BorderSide(color: color, width: width),
+      );
+  return base.copyWith(
+    textTheme: base.textTheme
+        .apply(fontFamily: 'Pretendard')
+        .copyWith(
+          bodyLarge: const TextStyle(
+              fontFamily: 'Pretendard',
+              fontSize: 14.5,
+              fontWeight: FontWeight.w700,
+              color: AppColors.ink9),
+        ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: AppColors.surf,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      labelStyle: const TextStyle(
+          fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.ink5),
+      floatingLabelStyle: const TextStyle(
+          fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.p600),
+      hintStyle: const TextStyle(
+          fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.ink4),
+      suffixIconColor: AppColors.ink4,
+      border: line(Colors.transparent, 0),
+      enabledBorder: line(Colors.transparent, 0),
+      focusedBorder: line(AppColors.p500, 1.4),
+    ),
+  );
+}
+
+
+/// 라벨을 입력칸 "위"에 분리해 그리는 우리 폼 스타일 (플로팅 라벨 겹침 방지).
+Widget travelPlanLabeledField(String label, Widget field) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 6),
+          child: Text(label,
+              style: const TextStyle(
+                  fontFamily: 'Pretendard',
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.p600)),
+        ),
+        field,
+      ],
+    );
 
 class _TravelPlanItemEditor extends StatefulWidget {
   const _TravelPlanItemEditor({
@@ -130,7 +190,7 @@ class _TravelPlanItemEditorState extends State<_TravelPlanItemEditor> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Material(
-      color: theme.colorScheme.surface,
+      color: Colors.white,
       borderRadius:
           widget.compact
               ? const BorderRadius.vertical(top: Radius.circular(28))
@@ -145,9 +205,10 @@ class _TravelPlanItemEditorState extends State<_TravelPlanItemEditor> {
                 Expanded(
                   child: Text(
                     '행 편집',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                    style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.ink9),
                   ),
                 ),
                 IconButton(
@@ -160,7 +221,9 @@ class _TravelPlanItemEditorState extends State<_TravelPlanItemEditor> {
           ),
           const Divider(height: 1),
           Expanded(
-            child: ListView(
+            child: Theme(
+              data: travelPlanFormTheme(context),
+              child: ListView(
               padding: EdgeInsets.fromLTRB(
                 22,
                 18,
@@ -173,9 +236,11 @@ class _TravelPlanItemEditorState extends State<_TravelPlanItemEditor> {
                   children: [
                     _TextField(controller: _placeName, label: '장소명'),
                     _TextField(controller: _address, label: '주소'),
-                    DropdownButtonFormField<TravelCategory>(
+                    travelPlanLabeledField('일정 유형', DropdownButtonFormField<TravelCategory>(
+                      borderRadius: BorderRadius.circular(14),
+                      dropdownColor: Colors.white,
                       initialValue: _category,
-                      decoration: const InputDecoration(labelText: '일정 유형'),
+                      decoration: const InputDecoration(),
                       items: [
                         for (final value in TravelCategory.values)
                           DropdownMenuItem(
@@ -188,7 +253,7 @@ class _TravelPlanItemEditorState extends State<_TravelPlanItemEditor> {
                           setState(() => _category = value);
                         }
                       },
-                    ),
+                    )),
                     _TextField(
                       controller: _activity,
                       label: '할 일',
@@ -250,9 +315,11 @@ class _TravelPlanItemEditorState extends State<_TravelPlanItemEditor> {
                       label: '음식 설명 또는 근거',
                       maxLines: 2,
                     ),
-                    DropdownButtonFormField<FoodVerificationStatus>(
+                    travelPlanLabeledField('음식 확인 상태', DropdownButtonFormField<FoodVerificationStatus>(
+                      borderRadius: BorderRadius.circular(14),
+                      dropdownColor: Colors.white,
                       initialValue: _foodStatus,
-                      decoration: const InputDecoration(labelText: '음식 확인 상태'),
+                      decoration: const InputDecoration(),
                       items: [
                         for (final value in FoodVerificationStatus.values)
                           DropdownMenuItem(
@@ -265,7 +332,7 @@ class _TravelPlanItemEditorState extends State<_TravelPlanItemEditor> {
                           setState(() => _foodStatus = value);
                         }
                       },
-                    ),
+                    )),
                     Row(
                       children: [
                         Expanded(
@@ -315,10 +382,12 @@ class _TravelPlanItemEditorState extends State<_TravelPlanItemEditor> {
                     Row(
                       children: [
                         Expanded(
-                          child: DropdownButtonFormField<TransportType?>(
+                          child: travelPlanLabeledField('이동 방법', DropdownButtonFormField<TransportType?>(
+                      borderRadius: BorderRadius.circular(14),
+                      dropdownColor: Colors.white,
                             initialValue: _transportType,
                             decoration: const InputDecoration(
-                              labelText: '이동 방법',
+                              
                             ),
                             items: [
                               const DropdownMenuItem(
@@ -334,7 +403,7 @@ class _TravelPlanItemEditorState extends State<_TravelPlanItemEditor> {
                             onChanged:
                                 (value) =>
                                     setState(() => _transportType = value),
-                          ),
+                          )),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -346,9 +415,11 @@ class _TravelPlanItemEditorState extends State<_TravelPlanItemEditor> {
                         ),
                       ],
                     ),
-                    DropdownButtonFormField<ReservationStatus>(
+                    travelPlanLabeledField('예약 여부', DropdownButtonFormField<ReservationStatus>(
+                      borderRadius: BorderRadius.circular(14),
+                      dropdownColor: Colors.white,
                       initialValue: _reservationStatus,
-                      decoration: const InputDecoration(labelText: '예약 여부'),
+                      decoration: const InputDecoration(),
                       items: [
                         for (final value in ReservationStatus.values)
                           DropdownMenuItem(
@@ -361,10 +432,12 @@ class _TravelPlanItemEditorState extends State<_TravelPlanItemEditor> {
                           setState(() => _reservationStatus = value);
                         }
                       },
-                    ),
-                    DropdownButtonFormField<TravelPlanVerificationStatus>(
+                    )),
+                    travelPlanLabeledField('일정 상태', DropdownButtonFormField<TravelPlanVerificationStatus>(
+                      borderRadius: BorderRadius.circular(14),
+                      dropdownColor: Colors.white,
                       initialValue: _verificationStatus,
-                      decoration: const InputDecoration(labelText: '일정 상태'),
+                      decoration: const InputDecoration(),
                       items: const [
                         DropdownMenuItem(
                           value: TravelPlanVerificationStatus.unconfirmed,
@@ -384,17 +457,28 @@ class _TravelPlanItemEditorState extends State<_TravelPlanItemEditor> {
                           setState(() => _verificationStatus = value);
                         }
                       },
-                    ),
-                    SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('일정 완료'),
-                      value: _completed,
-                      onChanged: (value) => setState(() => _completed = value),
-                    ),
+                    )),
+                    Row(children: [
+                      const Expanded(
+                        child: Text('일정 완료',
+                            style: TextStyle(
+                                fontFamily: 'Pretendard',
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.ink9)),
+                      ),
+                      Switch(
+                        value: _completed,
+                        activeTrackColor: AppColors.p500,
+                        onChanged: (value) =>
+                            setState(() => _completed = value),
+                      ),
+                    ]),
                     _TextField(controller: _memo, label: '메모', maxLines: 4),
                   ],
                 ),
               ],
+              ),
             ),
           ),
           SafeArea(
@@ -411,6 +495,10 @@ class _TravelPlanItemEditorState extends State<_TravelPlanItemEditor> {
                           style: OutlinedButton.styleFrom(
                             foregroundColor: const Color(0xFFD94747),
                             side: const BorderSide(color: Color(0xFFE8A4A4)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14)),
+                            textStyle:
+                                const TextStyle(fontWeight: FontWeight.w800),
                           ),
                           onPressed: () {
                             widget.onDelete?.call();
@@ -427,8 +515,12 @@ class _TravelPlanItemEditorState extends State<_TravelPlanItemEditor> {
                       height: 50,
                       child: FilledButton(
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF5B3FE4),
+                          backgroundColor: AppColors.p500,
                           foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
+                          textStyle:
+                              const TextStyle(fontWeight: FontWeight.w900),
                         ),
                         onPressed: _submit,
                         child: const Text('저장'),
@@ -445,32 +537,75 @@ class _TravelPlanItemEditorState extends State<_TravelPlanItemEditor> {
   }
 
   Future<void> _pickDate() async {
+    // 우리 디자인 캘린더(여행 추가와 동일) — 하루만 고르는 모드.
     final initial = DateTime.tryParse(_date.text) ?? DateTime.now();
-    final selected = await showDatePicker(
-      context: context,
-      initialDate: initial,
+    final selected = await showTripCalendarSheet(
+      context,
+      initial: DateTimeRange(start: initial, end: initial),
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
+      singleDay: true,
     );
     if (selected != null) {
-      _date.text = _dateText(selected);
+      _date.text = _dateText(selected.start);
     }
   }
 
   Future<void> _pickTime(TextEditingController controller) async {
+    // 아이폰 스타일 휠 픽커 — 시계 다이얼 대신 스크롤 휠로.
     final parts = controller.text.split(':');
-    final initial =
-        parts.length == 2
-            ? TimeOfDay(
-              hour: int.tryParse(parts[0]) ?? 9,
-              minute: int.tryParse(parts[1]) ?? 0,
-            )
-            : TimeOfDay.now();
-    final selected = await showTimePicker(
+    final initialHour =
+        parts.isNotEmpty ? (int.tryParse(parts[0]) ?? 9) : 9;
+    final initialMinute =
+        parts.length == 2 ? (int.tryParse(parts[1]) ?? 0) : 0;
+    var selected = DateTime(2026, 1, 1, initialHour,
+        initialMinute - initialMinute % 5); // 휠 간격(5분)에 맞춤
+    final confirmed = await showModalBottomSheet<bool>(
       context: context,
-      initialTime: initial,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 18, 12, 4),
+            child: Row(children: [
+              const Expanded(
+                child: Text('시간 선택',
+                    style: TextStyle(
+                        fontFamily: 'Pretendard',
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.ink9)),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(sheetContext, true),
+                style: TextButton.styleFrom(
+                    foregroundColor: AppColors.p600,
+                    textStyle: const TextStyle(
+                        fontFamily: 'Pretendard',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800)),
+                child: const Text('완료'),
+              ),
+            ]),
+          ),
+          SizedBox(
+            height: 200,
+            child: CupertinoDatePicker(
+              mode: CupertinoDatePickerMode.time,
+              use24hFormat: true,
+              minuteInterval: 5,
+              initialDateTime: selected,
+              onDateTimeChanged: (value) => selected = value,
+            ),
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
     );
-    if (selected != null) {
+    if (confirmed == true) {
       controller.text =
           '${selected.hour.toString().padLeft(2, '0')}:${selected.minute.toString().padLeft(2, '0')}';
     }
@@ -569,11 +704,14 @@ class _TextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      maxLines: maxLines,
-      decoration: InputDecoration(labelText: label, hintText: hintText),
+    return travelPlanLabeledField(
+      label,
+      TextFormField(
+        controller: controller,
+        keyboardType: keyboardType,
+        maxLines: maxLines,
+        decoration: InputDecoration(hintText: hintText),
+      ),
     );
   }
 }
@@ -593,13 +731,13 @@ class _PickerField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      readOnly: true,
-      onTap: onTap,
-      decoration: InputDecoration(
-        labelText: label,
-        suffixIcon: Icon(icon, size: 18),
+    return travelPlanLabeledField(
+      label,
+      TextFormField(
+        controller: controller,
+        readOnly: true,
+        onTap: onTap,
+        decoration: InputDecoration(suffixIcon: Icon(icon, size: 18)),
       ),
     );
   }

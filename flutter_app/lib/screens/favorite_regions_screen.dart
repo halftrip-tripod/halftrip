@@ -35,7 +35,7 @@ class _FavoriteRegionsScreenState extends State<FavoriteRegionsScreen> {
 
   PillTone _statusTone(String statusCode) =>
       switch (statusCode.toUpperCase()) {
-        'APPLYING' => PillTone.success,
+        'APPLYING' => PillTone.sky,
         'CLOSED' => PillTone.gray,
         _ => PillTone.gold,
       };

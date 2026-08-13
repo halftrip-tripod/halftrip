@@ -594,7 +594,7 @@ class _RegionPickRow extends StatelessWidget {
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink9)),
                   ),
                   const SizedBox(width: 8),
-                  const Pill('접수중', tone: PillTone.success),
+                  const Pill('접수중', tone: PillTone.sky),
                 ]),
                 const SizedBox(height: 3),
                 Text(

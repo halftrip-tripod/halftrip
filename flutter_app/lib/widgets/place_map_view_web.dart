@@ -188,10 +188,8 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     }
 
     if (!widget.kakaoEnabled) {
-      _showMessage(
-        '카카오맵 키가 연결되지 않았습니다. '
-        'MAP_PROVIDER=kakao 와 KAKAO_MAP_APP_KEY 값을 확인해 주세요.',
-      );
+      // 데모/키 미설정 환경 — 개발자용 에러 대신 부드러운 안내로.
+      _showMessage('지도 미리보기를 준비 중이에요. 장소 목록에서 코스를 확인해 주세요.');
       return;
     }
 

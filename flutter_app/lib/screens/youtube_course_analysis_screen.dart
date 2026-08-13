@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../core/app_config.dart';
 import '../core/app_scope.dart';
@@ -36,7 +35,6 @@ class _YoutubeCourseAnalysisScreenState
   bool _creating = true;
   Timer? _pollingTimer;
   bool _saving = false;
-  bool _customOrder = false;
   int? _selectedStopOrder;
   final TextEditingController _titleController = TextEditingController();
 
@@ -218,297 +216,7 @@ class _YoutubeCourseAnalysisScreenState
         .toList();
   }
 
-  YoutubeCourseJobStop _copyStopWithOrder(
-    YoutubeCourseJobStop stop,
-    int order,
-  ) {
-    return YoutubeCourseJobStop(
-      order: order,
-      placeName: stop.placeName,
-      address: stop.address,
-      latitude: stop.latitude,
-      longitude: stop.longitude,
-      category: stop.category,
-      phoneNumber: stop.phoneNumber,
-      placeUrl: stop.placeUrl,
-      websiteUri: stop.websiteUri,
-      internationalPhoneNumber: stop.internationalPhoneNumber,
-      rating: stop.rating,
-      userRatingCount: stop.userRatingCount,
-      businessStatus: stop.businessStatus,
-      priceLevel: stop.priceLevel,
-      types: stop.types,
-      openingHours: stop.openingHours,
-      editorialSummary: stop.editorialSummary,
-      googlePlaceDetails: stop.googlePlaceDetails,
-      source: stop.source,
-      reason: stop.reason,
-    );
-  }
 
-  YoutubeCourseJobItem _copyJobWithStops(
-    YoutubeCourseJobItem job,
-    List<YoutubeCourseJobStop> stops,
-  ) {
-    final result = job.result!;
-    return YoutubeCourseJobItem(
-      jobId: job.jobId,
-      userId: job.userId,
-      tripId: job.tripId,
-      regionId: job.regionId,
-      regionName: job.regionName,
-      youtubeUrl: job.youtubeUrl,
-      status: job.status,
-      result: YoutubeCourseJobResult(
-        title: result.title,
-        summary: result.summary,
-        stops: stops,
-      ),
-      errorMessage: job.errorMessage,
-      createdAt: job.createdAt,
-      updatedAt: job.updatedAt,
-    );
-  }
-
-  Future<void> _openStopReorderSheet() async {
-    final job = _job;
-    final result = job?.result;
-    if (job == null || result == null || result.stops.length < 2) return;
-
-    final draftStops = List<YoutubeCourseJobStop>.from(result.stops);
-    final reorderedStops = await showModalBottomSheet<
-      List<YoutubeCourseJobStop>
-    >(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return FractionallySizedBox(
-              heightFactor: 0.78,
-              child: Material(
-                color: Colors.white,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(28),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: Column(
-                  children: [
-                    const SizedBox(height: 10),
-                    Container(
-                      width: 42,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFD9DCE5),
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 18, 12, 12),
-                      child: Row(
-                        children: [
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '장소 순서 재배열',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w900,
-                                    color: AppColors.ink9,
-                                  ),
-                                ),
-                                SizedBox(height: 4),
-                                Text(
-                                  '오른쪽 손잡이를 끌어 방문 순서를 바꿔보세요.',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: AppColors.ink5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: () => Navigator.of(sheetContext).pop(),
-                            icon: const Icon(Icons.close_rounded),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    Expanded(
-                      child: ReorderableListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                        buildDefaultDragHandles: false,
-                        itemCount: draftStops.length,
-                        onReorder: (oldIndex, newIndex) {
-                          setSheetState(() {
-                            if (newIndex > oldIndex) newIndex -= 1;
-                            final item = draftStops.removeAt(oldIndex);
-                            draftStops.insert(newIndex, item);
-                          });
-                        },
-                        itemBuilder: (context, index) {
-                          final stop = draftStops[index];
-                          return Container(
-                            key: ValueKey(
-                              '${stop.order}-${stop.placeName}-${stop.latitude}-${stop.longitude}',
-                            ),
-                            margin: const EdgeInsets.only(bottom: 10),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF8F8FC),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: const Color(0xFFE2E4EC),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 34,
-                                  height: 34,
-                                  alignment: Alignment.center,
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFF5146E5),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Text(
-                                    '${index + 1}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        stop.placeName,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: AppColors.ink9,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                      if (stop.category.isNotEmpty ||
-                                          stop.address.isNotEmpty) ...[
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          stop.category.isNotEmpty
-                                              ? stop.category
-                                              : stop.address,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            color: AppColors.ink5,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                                ReorderableDragStartListener(
-                                  index: index,
-                                  child: const Padding(
-                                    padding: EdgeInsets.all(8),
-                                    child: Icon(
-                                      Icons.drag_handle_rounded,
-                                      color: AppColors.ink5,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    SafeArea(
-                      top: false,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed:
-                                    () => Navigator.of(sheetContext).pop(),
-                                child: const Text('취소'),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: FilledButton(
-                                onPressed:
-                                    () => Navigator.of(sheetContext).pop([
-                                      for (
-                                        var index = 0;
-                                        index < draftStops.length;
-                                        index++
-                                      )
-                                        _copyStopWithOrder(
-                                          draftStops[index],
-                                          index + 1,
-                                        ),
-                                    ]),
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: const Color(0xFF5146E5),
-                                ),
-                                child: const Text('순서 적용'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    if (!mounted || reorderedStops == null) return;
-    final updatedJob = _copyJobWithStops(job, reorderedStops);
-    setState(() {
-      _job = updatedJob;
-      _customOrder = true;
-      _selectedStopOrder = reorderedStops.first.order;
-    });
-
-    try {
-      await AppScope.of(context).saveCompletedYoutubeCourse(
-        updatedJob,
-        preferredTitle: _titleController.text.trim(),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('순서는 적용됐지만 코스함 저장에 실패했습니다.')),
-      );
-      return;
-    }
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('방문 순서를 변경했습니다.')));
-  }
 
   Future<PlaceMapMarkerData?> _loadGoogleMarkerDetails(
     PlaceMapMarkerData marker,
@@ -685,27 +393,6 @@ class _YoutubeCourseAnalysisScreenState
     );
   }
 
-  Future<void> _openDirections(YoutubeCourseJobStop stop) async {
-    final placeUrl = stop.placeUrl.trim();
-    final uri =
-        placeUrl.isNotEmpty
-            ? Uri.tryParse(placeUrl)
-            : Uri.https('www.google.com', '/maps/search/', {
-              'api': '1',
-              'query':
-                  stop.latitude != 0 && stop.longitude != 0
-                      ? '${stop.latitude},${stop.longitude}'
-                      : '${stop.placeName} ${stop.address}',
-            });
-    if (uri == null ||
-        !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('길찾기 화면을 열지 못했습니다.')));
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final job = _job;
@@ -719,8 +406,9 @@ class _YoutubeCourseAnalysisScreenState
     final pending =
         _creating || job == null || job.isPending || job.isProcessing;
 
+    // 처음엔 아무것도 선택하지 않는다 — 일정·핀을 탭했을 때만 포커스.
     final selectedStop =
-        result == null || result.stops.isEmpty
+        result == null || result.stops.isEmpty || _selectedStopOrder == null
             ? null
             : result.stops.firstWhere(
               (stop) => stop.order == _selectedStopOrder,
@@ -730,7 +418,11 @@ class _YoutubeCourseAnalysisScreenState
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
-        title: Text(result == null ? '유튜브로 코스 만들기' : '일정 + 지도'),
+        title: Text(
+          result == null
+              ? '유튜브로 코스 만들기'
+              : '${job?.regionName ?? ''} 유튜브 코스'.trim(),
+        ),
         actions: [
           if (result != null)
             Padding(
@@ -742,13 +434,13 @@ class _YoutubeCourseAnalysisScreenState
                     vertical: 7,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF0EEFF),
+                    color: AppColors.p50,
                     borderRadius: BorderRadius.circular(18),
                   ),
                   child: Text(
                     '${result.stops.length}개 장소',
                     style: const TextStyle(
-                      color: Color(0xFF5146E5),
+                      color: AppColors.p500,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -757,6 +449,86 @@ class _YoutubeCourseAnalysisScreenState
             ),
         ],
       ),
+      // AI 코스 결과와 동일한 CTA 구성 — 상세 계획표 / 저장.
+      // (다시 생성은 유튜브 분석에선 의미가 없어 두지 않는다. 8/14 규희)
+      bottomNavigationBar: result == null
+          ? null
+          : Container(
+              // AI 결과 CtaBar와 동일한 페이드 배경 — 콘텐츠가 버튼 뒤로
+              // 자연스럽게 사라지는 그라데이션.
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0x00F7FAFD), AppColors.bg],
+                  stops: [0, .4],
+                ),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 22, 20, 14),
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.info_outline_rounded,
+                            size: 14, color: AppColors.p500),
+                        SizedBox(width: 5),
+                        Text(
+                          '저장하면 내 코스함에서 자유롭게 수정할 수 있어요',
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.ink5),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Row(children: [
+                  Expanded(
+                    // AI 결과의 "다시 생성"과 같은 톤 — 흰 배경 + 파란 글씨.
+                    child: FilledButton.icon(
+                      onPressed: _openTravelPlan,
+                      icon: const Icon(Icons.table_chart_outlined, size: 18),
+                      label: const Text('상세 계획표'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: AppColors.p600,
+                        elevation: 0,
+                        shadowColor: Colors.transparent,
+                        minimumSize: const Size.fromHeight(52),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                        textStyle:
+                            const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _saving ? null : _saveToPlanner,
+                      icon: const Icon(Icons.bookmark_rounded, size: 18),
+                      label: Text(_saving ? '저장 중...' : '내 코스함에 저장'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.p500,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size.fromHeight(52),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                        textStyle:
+                            const TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                  ),
+                    ]),
+                  ]),
+                ),
+              ),
+            ),
       body:
           result != null
               ? _CompletedItineraryView(
@@ -764,22 +536,13 @@ class _YoutubeCourseAnalysisScreenState
                 markers: markers,
                 routePoints: routePoints,
                 selectedStop: selectedStop,
-                saving: _saving,
-                customOrder: _customOrder,
                 onSelectStop: (stop) {
                   setState(() => _selectedStopOrder = stop.order);
                 },
                 onMarkerDetailsRequested: _loadGoogleMarkerDetails,
-                onReorder: _openStopReorderSheet,
-                onRecompose: _saving ? null : _saveToPlanner,
-                onEdit: _openTravelPlan,
-                onDirections:
-                    selectedStop == null
-                        ? null
-                        : () => _openDirections(selectedStop),
               )
               : ListView(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
+                padding: const EdgeInsets.fromLTRB(14, 4, 14, 32),
                 children: [
                   _VideoCard(
                     youtubeUrl:
@@ -802,283 +565,78 @@ class _YoutubeCourseAnalysisScreenState
   }
 }
 
+/// 완료 화면 — AI 코스 결과와 동일한 구성: 지도(탭한 장소 포커스) + 상세 일정.
 class _CompletedItineraryView extends StatelessWidget {
   const _CompletedItineraryView({
     required this.result,
     required this.markers,
     required this.routePoints,
     required this.selectedStop,
-    required this.saving,
-    required this.customOrder,
     required this.onSelectStop,
     required this.onMarkerDetailsRequested,
-    required this.onReorder,
-    required this.onRecompose,
-    required this.onEdit,
-    required this.onDirections,
   });
 
   final YoutubeCourseJobResult result;
   final List<PlaceMapMarkerData> markers;
   final List<PlaceMapRoutePoint> routePoints;
   final YoutubeCourseJobStop? selectedStop;
-  final bool saving;
-  final bool customOrder;
   final ValueChanged<YoutubeCourseJobStop> onSelectStop;
   final Future<PlaceMapMarkerData?> Function(PlaceMapMarkerData marker)
   onMarkerDetailsRequested;
-  final VoidCallback onReorder;
-  final VoidCallback? onRecompose;
-  final VoidCallback onEdit;
-  final VoidCallback? onDirections;
-
-  static const _primary = Color(0xFF5146E5);
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final horizontalPadding = constraints.maxWidth >= 760 ? 28.0 : 20.0;
-        return ListView(
-          clipBehavior: Clip.none,
-          padding: EdgeInsets.fromLTRB(
-            horizontalPadding,
-            8,
-            horizontalPadding,
-            28,
-          ),
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _ModeButton(
-                    icon: Icons.swap_vert_rounded,
-                    label: '순서 재배열',
-                    active: false,
-                    onTap: onReorder,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _ModeButton(
-                    icon: Icons.edit_rounded,
-                    label: saving ? '적용 중...' : '내 일정으로 재구성',
-                    active: true,
-                    onTap: onRecompose,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(26),
-              child: PlaceMapView(
-                markers: markers,
-                routeMarkers: routePoints,
-                connectSequentially: true,
-                highlightedMarkerId: selectedStop?.order,
-                emptyMessage: '생성된 지도 마커가 없습니다.',
-                kakaoEnabled: AppConfig.fromEnvironment().canUseKakaoMap,
-                onMarkerTap: (markerId) {
-                  for (final stop in result.stops) {
-                    if (stop.order == markerId) {
-                      onSelectStop(stop);
-                      break;
-                    }
-                  }
-                },
-                onMarkerDetailsRequested: onMarkerDetailsRequested,
-                height: constraints.maxWidth >= 760 ? 460 : 340,
-              ),
-            ),
-            Transform.translate(
-              offset: const Offset(0, -18),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(28),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x120F172A),
-                      blurRadius: 18,
-                      offset: Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 9,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _primary,
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: const Text(
-                            '영상 코스',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            '총 ${result.stops.length}개 장소 · ${customOrder ? '사용자 지정 순서' : '영상 등장 순서 기준'}',
-                            style: const TextStyle(
-                              color: AppColors.ink5,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                            ),
-                            textAlign: TextAlign.right,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    if (constraints.maxWidth >= 700)
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SizedBox(
-                            width: 280,
-                            child: _RouteTimeline(
-                              stops: result.stops,
-                              selectedOrder: selectedStop?.order,
-                              onSelect: onSelectStop,
-                            ),
-                          ),
-                          const SizedBox(width: 18),
-                          Expanded(
-                            child: _SelectedPlaceCard(stop: selectedStop),
-                          ),
-                        ],
-                      )
-                    else
-                      Column(
-                        children: [
-                          _RouteTimeline(
-                            stops: result.stops,
-                            selectedOrder: selectedStop?.order,
-                            onSelect: onSelectStop,
-                          ),
-                          const SizedBox(height: 14),
-                          _SelectedPlaceCard(stop: selectedStop),
-                        ],
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onDirections,
-                    icon: const Icon(Icons.near_me_outlined),
-                    label: const Text('길찾기'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: _primary,
-                      side: const BorderSide(color: _primary, width: 1.4),
-                      minimumSize: const Size.fromHeight(56),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF6556F4), Color(0xFF4338CA)],
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: TextButton.icon(
-                      onPressed: onEdit,
-                      icon: const Icon(Icons.edit_rounded),
-                      label: const Text('계획표 작성하기'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size.fromHeight(56),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _ModeButton extends StatelessWidget {
-  const _ModeButton({
-    required this.icon,
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final foreground = active ? Colors.white : AppColors.ink7;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Ink(
-          height: 52,
-          decoration: BoxDecoration(
-            color: active ? null : const Color(0xFFF4F4F8),
-            gradient:
-                active
-                    ? const LinearGradient(
-                      colors: [Color(0xFF6556F4), Color(0xFF4338CA)],
-                    )
-                    : null,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 20, color: foreground),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: foreground,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
+    final focus = selectedStop;
+    final hasFocusGeo =
+        focus != null && focus.latitude != 0 && focus.longitude != 0;
+    return ListView(
+      clipBehavior: Clip.none,
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: PlaceMapView(
+            // 일정 탭으로 포커스가 바뀌면 지도를 그 핀 중심으로 다시 그린다.
+            key: ValueKey('yt-course-map-${focus?.order}'),
+            markers: markers,
+            routeMarkers: routePoints,
+            connectSequentially: true,
+            highlightedMarkerId: focus?.order,
+            initialCenterLatitude: hasFocusGeo ? focus.latitude : null,
+            initialCenterLongitude: hasFocusGeo ? focus.longitude : null,
+            emptyMessage: '생성된 지도 마커가 없습니다.',
+            kakaoEnabled: AppConfig.fromEnvironment().canUseKakaoMap,
+            onMarkerTap: (markerId) {
+              for (final stop in result.stops) {
+                if (stop.order == markerId) {
+                  onSelectStop(stop);
+                  break;
+                }
+              }
+            },
+            onMarkerDetailsRequested: onMarkerDetailsRequested,
+            height: 280,
           ),
         ),
-      ),
+        const SizedBox(height: 14),
+        const Padding(
+          padding: EdgeInsets.only(left: 2, bottom: 10),
+          child: Text(
+            '상세 일정',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+              color: AppColors.ink9,
+              letterSpacing: -.3,
+            ),
+          ),
+        ),
+        _RouteTimeline(
+          stops: result.stops,
+          selectedOrder: selectedStop?.order,
+          onSelect: onSelectStop,
+        ),
+      ],
     );
   }
 }
@@ -1131,7 +689,7 @@ class _TimelineStopTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primary = Color(0xFF5146E5);
+    const primary = AppColors.p500;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -1151,7 +709,7 @@ class _TimelineStopTile extends StatelessWidget {
                       child: VerticalDivider(
                         width: 2,
                         thickness: 2,
-                        color: Color(0xFFCBC7FF),
+                        color: AppColors.p200,
                       ),
                     ),
                   if (!last)
@@ -1161,7 +719,7 @@ class _TimelineStopTile extends StatelessWidget {
                       child: VerticalDivider(
                         width: 2,
                         thickness: 2,
-                        color: Color(0xFFCBC7FF),
+                        color: AppColors.p200,
                       ),
                     ),
                   Container(
@@ -1195,7 +753,7 @@ class _TimelineStopTile extends StatelessWidget {
                   vertical: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: selected ? const Color(0xFFF5F3FF) : Colors.white,
+                  color: selected ? AppColors.p50 : Colors.white,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
                     color: selected ? primary : const Color(0xFFE8EAF0),
@@ -1214,16 +772,25 @@ class _TimelineStopTile extends StatelessWidget {
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      stop.category.isEmpty ? '장소' : stop.category,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.ink4,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    const SizedBox(height: 5),
+                    // AI 코스 타임라인과 동일한 뱃지 — 카테고리 + 환급 인정.
+                    Wrap(
+                      spacing: 5,
+                      runSpacing: 4,
+                      children: [
+                        _badge(
+                          stop.category.isEmpty ? '관광지' : stop.category,
+                          _isFoodCategory(stop.category)
+                              ? const Color(0xFFFFF1E0)
+                              : AppColors.p100,
+                          _isFoodCategory(stop.category)
+                              ? const Color(0xFFB8731B)
+                              : AppColors.p700,
+                        ),
+                        if (!_isFoodCategory(stop.category))
+                          _badge('환급 인정', AppColors.mintTint,
+                              AppColors.mintDeep),
+                      ],
                     ),
                   ],
                 ),
@@ -1234,182 +801,27 @@ class _TimelineStopTile extends StatelessWidget {
       ),
     );
   }
-}
 
-class _SelectedPlaceCard extends StatelessWidget {
-  const _SelectedPlaceCard({required this.stop});
-
-  final YoutubeCourseJobStop? stop;
-
-  String _businessStatus(String value) {
-    return switch (value.trim().toUpperCase()) {
-      'OPERATIONAL' => '영업 중',
-      'CLOSED_TEMPORARILY' => '임시 휴업',
-      'CLOSED_PERMANENTLY' => '폐업',
-      _ => '',
-    };
+  /// 저장 규칙(app_controller)과 동일 — 식당·카페 계열은 가맹점, 나머지는 환급 인정.
+  static bool _isFoodCategory(String category) {
+    final c = category.toLowerCase();
+    return c.contains('식당') ||
+        c.contains('카페') ||
+        c.contains('음식') ||
+        c.contains('주점') ||
+        c.contains('미용');
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final item = stop;
-    if (item == null) {
-      return const SizedBox.shrink();
-    }
-    final status = _businessStatus(item.businessStatus);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE8EAF0)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0A0F172A),
-            blurRadius: 16,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  item.placeName,
-                  style: const TextStyle(
-                    color: AppColors.ink9,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.6,
-                  ),
-                ),
-              ),
-              if (item.category.trim().isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0EEFF),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    item.category,
-                    style: const TextStyle(
-                      color: Color(0xFF5146E5),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          if (item.address.trim().isNotEmpty)
-            _PlaceDetailLine(
-              icon: Icons.location_on_outlined,
-              text: item.address,
-            ),
-          if (item.phoneNumber.trim().isNotEmpty)
-            _PlaceDetailLine(
-              icon: Icons.phone_outlined,
-              text: item.phoneNumber,
-            ),
-          if (item.rating != null)
-            _PlaceDetailLine(
-              icon: Icons.star_rounded,
-              text:
-                  '${item.rating!.toStringAsFixed(1)}점'
-                  '${item.userRatingCount > 0 ? ' · 리뷰 ${item.userRatingCount}개' : ''}',
-            ),
-          if (status.isNotEmpty)
-            _PlaceDetailLine(
-              icon: Icons.storefront_outlined,
-              text: status,
-              accent: status == '영업 중',
-            ),
-          if (item.editorialSummary.trim().isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              item.editorialSummary,
-              style: const TextStyle(
-                color: AppColors.ink5,
-                height: 1.5,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-          const SizedBox(height: 16),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF4F2FF),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.auto_awesome_rounded, color: Color(0xFF5146E5)),
-                SizedBox(width: 9),
-                Expanded(
-                  child: Text(
-                    '유튜브 영상에서 확인한 추천 방문 장소예요.',
-                    style: TextStyle(
-                      color: Color(0xFF5146E5),
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _badge(String label, Color bg, Color fg) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+            color: bg, borderRadius: BorderRadius.circular(999)),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 10.5, fontWeight: FontWeight.w800, color: fg)),
+      );
 }
 
-class _PlaceDetailLine extends StatelessWidget {
-  const _PlaceDetailLine({
-    required this.icon,
-    required this.text,
-    this.accent = false,
-  });
-
-  final IconData icon;
-  final String text;
-  final bool accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 19, color: const Color(0xFF5146E5)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                color: accent ? const Color(0xFF16A34A) : AppColors.ink5,
-                height: 1.4,
-                fontWeight: accent ? FontWeight.w800 : FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 /// 영상 링크 카드 (디자인 ytinput).
 class _VideoCard extends StatelessWidget {
