@@ -12,6 +12,7 @@ import '../../screens/submission_package_screen.dart';
 import '../data/models.dart' as mock;
 import '../state/app_state.dart' as mock;
 import '../theme/app_colors.dart';
+import 'community.dart';
 import 'course_flow.dart';
 import '../widgets/region_art.dart';
 import '../widgets/ui.dart';
@@ -600,9 +601,14 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           _NextLink(
             '후기 올리기',
             onTap: () {
-              Navigator.of(context).popUntil((r) => r.isFirst);
-              mock.AppState.I.communityRegion.value = detail.trip.regionName;
-              mock.AppState.I.tabRequest.value = 3;
+              // 이 여행을 명시적으로 실어 후기 작성 화면을 연다. 지역만 넘기면
+              // 같은 지역 여행이 여러 개일 때 인증 배지가 엉뚱한 여행을 가리킨다.
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => CommunityWriteScreen(
+                  tripId: detail.trip.id,
+                  regionName: detail.trip.regionName,
+                ),
+              ));
             },
           ),
         ],

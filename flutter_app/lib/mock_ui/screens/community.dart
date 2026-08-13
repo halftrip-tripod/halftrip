@@ -1026,8 +1026,13 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
 
 /// 글쓰기.
 class CommunityWriteScreen extends StatefulWidget {
-  const CommunityWriteScreen({super.key, this.regionName, this.editPost});
+  const CommunityWriteScreen(
+      {super.key, this.regionName, this.tripId, this.editPost});
   final String? regionName;
+
+  /// 특정 여행에서 후기로 진입한 경우의 그 여행 id. 같은 지역에 여행이 여러 개일 때
+  /// 인증 배지를 실제 후기 대상 여행으로 특정하기 위해 사용(null이면 지역 기준).
+  final int? tripId;
 
   /// 수정 모드 — 기존 글을 넘기면 프리필·수정 저장.
   final Post? editPost;
@@ -1204,13 +1209,23 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
   /// 다녀온 여행 인증 — 이 지역의 실제 내 여행이 있어야 켤 수 있다 (최종 검증은 서버).
   Widget _buildVerifySection(BuildContext context) {
     final controller = AppScope.of(context);
-    final trips =
+    // 후기 진입 시 넘어온 tripId가 있으면 그 여행으로 특정한다. 지역만 맞춰 첫 여행을
+    // 잡던 기존 로직은 같은 지역에 여행이 여러 개면 엉뚱한 여행을 인증 대상으로 잡았다.
+    final regionTrips =
         controller.trips.where((t) => t.regionName == _region).toList();
-    if (trips.isEmpty) {
+    var trip = regionTrips.isEmpty ? null : regionTrips.first;
+    if (widget.tripId != null) {
+      for (final t in controller.trips) {
+        if (t.id == widget.tripId) {
+          trip = t;
+          break;
+        }
+      }
+    }
+    if (trip == null) {
       if (_verify) _verify = false;
       return const NoteRow('이 지역에 다녀온 여행이 없어 인증 배지를 붙일 수 없어요.');
     }
-    final trip = trips.first;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       MenuGroup(children: [
         ToggleRow(
