@@ -145,8 +145,7 @@ class _YoutubeCourseStartScreenState extends State<YoutubeCourseStartScreen> {
                               const SizedBox(width: 7),
                               Expanded(
                                 child: Text(
-                                  '영상 속 장소로 코스를 자동 생성해요. 자막·화면에 '
-                                  '장소 정보가 없으면 추출되지 않을 수 있어요.',
+                                  '자막·화면에 장소 정보가 없으면 추출되지 않을 수 있어요.',
                                   style: const TextStyle(
                                     color: AppColors.ink5,
                                     fontSize: 12.5,
