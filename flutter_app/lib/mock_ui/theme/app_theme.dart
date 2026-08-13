@@ -14,6 +14,11 @@ ThemeData buildAppTheme() {
       primary: AppColors.p500,
       surface: AppColors.bg,
     ),
+    // 뒤로가기 아이콘 전역 통일 — ← 대신 < (DetailScaffold와 동일).
+    actionIconTheme: ActionIconThemeData(
+      backButtonIconBuilder: (_) =>
+          const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+    ),
     appBarTheme: const AppBarTheme(
       backgroundColor: AppColors.bg,
       surfaceTintColor: Colors.transparent,

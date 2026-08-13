@@ -377,7 +377,7 @@ class _YoutubeCourseAnalysisScreenState
                                   height: 34,
                                   alignment: Alignment.center,
                                   decoration: const BoxDecoration(
-                                    color: Color(0xFF5146E5),
+                                    color: AppColors.p500,
                                     shape: BoxShape.circle,
                                   ),
                                   child: Text(
@@ -466,7 +466,7 @@ class _YoutubeCourseAnalysisScreenState
                                         ),
                                     ]),
                                 style: FilledButton.styleFrom(
-                                  backgroundColor: const Color(0xFF5146E5),
+                                  backgroundColor: AppColors.p500,
                                 ),
                                 child: const Text('순서 적용'),
                               ),
@@ -742,13 +742,13 @@ class _YoutubeCourseAnalysisScreenState
                     vertical: 7,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF0EEFF),
+                    color: AppColors.p50,
                     borderRadius: BorderRadius.circular(18),
                   ),
                   child: Text(
                     '${result.stops.length}개 장소',
                     style: const TextStyle(
-                      color: Color(0xFF5146E5),
+                      color: AppColors.p500,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -779,7 +779,7 @@ class _YoutubeCourseAnalysisScreenState
                         : () => _openDirections(selectedStop),
               )
               : ListView(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
+                padding: const EdgeInsets.fromLTRB(14, 4, 14, 32),
                 children: [
                   _VideoCard(
                     youtubeUrl:
@@ -832,7 +832,7 @@ class _CompletedItineraryView extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback? onDirections;
 
-  static const _primary = Color(0xFF5146E5);
+  static const _primary = AppColors.p500;
 
   @override
   Widget build(BuildContext context) {
@@ -892,7 +892,8 @@ class _CompletedItineraryView extends StatelessWidget {
               ),
             ),
             Transform.translate(
-              offset: const Offset(0, -18),
+              // 구글 로고·저작자 표시가 가려지면 약관 위반이라 지도 위 오버랩 금지.
+              offset: Offset.zero,
               child: Container(
                 padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
                 decoration: BoxDecoration(
@@ -998,9 +999,7 @@ class _CompletedItineraryView extends StatelessWidget {
                 Expanded(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF6556F4), Color(0xFF4338CA)],
-                      ),
+                      color: AppColors.p500,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: TextButton.icon(
@@ -1050,13 +1049,7 @@ class _ModeButton extends StatelessWidget {
         child: Ink(
           height: 52,
           decoration: BoxDecoration(
-            color: active ? null : const Color(0xFFF4F4F8),
-            gradient:
-                active
-                    ? const LinearGradient(
-                      colors: [Color(0xFF6556F4), Color(0xFF4338CA)],
-                    )
-                    : null,
+            color: active ? AppColors.p500 : const Color(0xFFF4F4F8),
             borderRadius: BorderRadius.circular(18),
           ),
           child: Row(
@@ -1131,7 +1124,7 @@ class _TimelineStopTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primary = Color(0xFF5146E5);
+    const primary = AppColors.p500;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -1151,7 +1144,7 @@ class _TimelineStopTile extends StatelessWidget {
                       child: VerticalDivider(
                         width: 2,
                         thickness: 2,
-                        color: Color(0xFFCBC7FF),
+                        color: AppColors.p200,
                       ),
                     ),
                   if (!last)
@@ -1161,7 +1154,7 @@ class _TimelineStopTile extends StatelessWidget {
                       child: VerticalDivider(
                         width: 2,
                         thickness: 2,
-                        color: Color(0xFFCBC7FF),
+                        color: AppColors.p200,
                       ),
                     ),
                   Container(
@@ -1195,7 +1188,7 @@ class _TimelineStopTile extends StatelessWidget {
                   vertical: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: selected ? const Color(0xFFF5F3FF) : Colors.white,
+                  color: selected ? AppColors.p50 : Colors.white,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
                     color: selected ? primary : const Color(0xFFE8EAF0),
@@ -1296,13 +1289,13 @@ class _SelectedPlaceCard extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF0EEFF),
+                    color: AppColors.p50,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     item.category,
                     style: const TextStyle(
-                      color: Color(0xFF5146E5),
+                      color: AppColors.p500,
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
                     ),
@@ -1350,18 +1343,18 @@ class _SelectedPlaceCard extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              color: const Color(0xFFF4F2FF),
+              color: AppColors.p50,
               borderRadius: BorderRadius.circular(14),
             ),
             child: const Row(
               children: [
-                Icon(Icons.auto_awesome_rounded, color: Color(0xFF5146E5)),
+                Icon(Icons.auto_awesome_rounded, color: AppColors.p500),
                 SizedBox(width: 9),
                 Expanded(
                   child: Text(
                     '유튜브 영상에서 확인한 추천 방문 장소예요.',
                     style: TextStyle(
-                      color: Color(0xFF5146E5),
+                      color: AppColors.p500,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -1393,7 +1386,7 @@ class _PlaceDetailLine extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 19, color: const Color(0xFF5146E5)),
+          Icon(icon, size: 19, color: AppColors.p500),
           const SizedBox(width: 10),
           Expanded(
             child: Text(

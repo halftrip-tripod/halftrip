@@ -70,46 +70,46 @@ class MockTravelRepository implements TravelRepository {
         PlaceItem(
           id: 1001,
           name: '완도해양치유센터',
-          address: '상세주소 확인 예정',
+          address: '전라남도 완도군 완도읍 장보고대로 335',
           description: '완도반값여행 대상 관광지. TODO: Kakao Places API로 주소/좌표 검증 후 저장.',
-          latitude: null,
-          longitude: null,
+          latitude: 34.3100,
+          longitude: 126.7470,
           eligibleForRefund: true,
         ),
         PlaceItem(
           id: 1002,
           name: '완도타워',
-          address: '상세주소 확인 예정',
+          address: '전라남도 완도군 완도읍 장보고대로 330',
           description: '완도반값여행 대상 관광지. TODO: Kakao Places API로 주소/좌표 검증 후 저장.',
-          latitude: null,
-          longitude: null,
+          latitude: 34.3240,
+          longitude: 126.7400,
           eligibleForRefund: true,
         ),
         PlaceItem(
           id: 1003,
           name: '완도청해진유적지',
-          address: '상세주소 확인 예정',
+          address: '전라남도 완도군 완도읍 청해진로 1455',
           description: '완도반값여행 대상 관광지. TODO: Kakao Places API로 주소/좌표 검증 후 저장.',
-          latitude: null,
-          longitude: null,
+          latitude: 34.3380,
+          longitude: 126.7180,
           eligibleForRefund: true,
         ),
         PlaceItem(
           id: 1004,
           name: '국립완도난대수목원',
-          address: '상세주소 확인 예정',
+          address: '전라남도 완도군 군외면 초평1길 156',
           description: '완도반값여행 대상 관광지. TODO: Kakao Places API로 주소/좌표 검증 후 저장.',
-          latitude: null,
-          longitude: null,
+          latitude: 34.3520,
+          longitude: 126.7080,
           eligibleForRefund: true,
         ),
         PlaceItem(
           id: 1005,
           name: '보길도 윤선도 원림',
-          address: '상세주소 확인 예정',
+          address: '전라남도 완도군 보길면 부황길 57',
           description: '완도반값여행 대상 관광지. TODO: Kakao Places API로 주소/좌표 검증 후 저장.',
-          latitude: null,
-          longitude: null,
+          latitude: 34.3680,
+          longitude: 126.7000,
           eligibleForRefund: true,
         ),
         PlaceItem(
@@ -326,10 +326,10 @@ class MockTravelRepository implements TravelRepository {
         statusCode: 'APPLYING',
         digitalBenefitAvailable: true,
         displayOrder: 3,
-        mapTopPercent: 18,
-        mapLeftPercent: 74,
+        mapTopPercent: 13,
+        mapLeftPercent: 70,
         residenceRestrictionNote: 'sample adjacency rule',
-        matchedByResidence: false,
+        matchedByResidence: true,
       ),
       halfPricePlaces: const [
         PlaceItem(
@@ -381,12 +381,77 @@ class MockTravelRepository implements TravelRepository {
     _regionDetails[2] = gangjin;
     _regionDetails[3] = pyeongchang;
 
+    // 홈 지도·온라인몰 데모용 추가 지역 (목업 전용 가짜 데이터 — 실서버와 무관).
+    RegionDetail simpleRegion({
+      required int id,
+      required String name,
+      required String province,
+      required String statusCode,
+      required double top,
+      required double left,
+      required int refundAmount,
+      required String mallName,
+    }) {
+      return RegionDetail(
+        region: RegionSummary(
+          id: id,
+          name: name,
+          province: province,
+          refundConditionAmount: refundAmount,
+          mockBudgetRemaining: 50,
+          halfPriceApplyUrl: 'https://example.com/apply',
+          digitalTourCardApplyUrl: 'https://example.com/apply',
+          dataSourceNote: 'SAMPLE_SEED',
+          statusCode: statusCode,
+          digitalBenefitAvailable: true,
+          displayOrder: id,
+          mapTopPercent: top,
+          mapLeftPercent: left,
+          residenceRestrictionNote: 'sample adjacency rule',
+          matchedByResidence: true,
+        ),
+        halfPricePlaces: [
+          PlaceItem(
+            id: id * 1000,
+            name: '$name 대표 관광지',
+            address: '$province $name 관광로 1',
+            description: '반값여행 인정 관광지 샘플',
+            latitude: null,
+            longitude: null,
+            eligibleForRefund: true,
+          ),
+        ],
+        digitalTourCardPlaces: const [],
+        merchants: const [],
+        onlineMalls: [
+          OnlineMallItem(
+            id: id,
+            name: mallName,
+            mallUrl: 'https://example.com/mall$id',
+            description: '$name 특산물 온라인몰',
+          ),
+        ],
+      );
+    }
+
+    final extraRegions = [
+      simpleRegion(id: 4, name: '영월', province: '강원특별자치도', statusCode: 'PREPARING', top: 28, left: 77, refundAmount: 200000, mallName: '영월몰'),
+      simpleRegion(id: 5, name: '하동', province: '경상남도', statusCode: 'APPLYING', top: 68, left: 62, refundAmount: 200000, mallName: '하동녹차몰'),
+      simpleRegion(id: 6, name: '제천', province: '충청북도', statusCode: 'APPLYING', top: 33, left: 57, refundAmount: 180000, mallName: '제천몰'),
+      simpleRegion(id: 7, name: '고창', province: '전라북도', statusCode: 'PREPARING', top: 60, left: 28, refundAmount: 200000, mallName: '고창황토배기몰'),
+      simpleRegion(id: 8, name: '영광', province: '전라남도', statusCode: 'APPLYING', top: 52, left: 22, refundAmount: 250000, mallName: '영광굴비몰'),
+      simpleRegion(id: 9, name: '거창', province: '경상남도', statusCode: 'PREPARING', top: 62, left: 56, refundAmount: 200000, mallName: '거창몰'),
+    ];
+    for (final extra in extraRegions) {
+      _regionDetails[extra.region.id] = extra;
+    }
+
     _user = AppUser(
       id: 1,
       name: '샘플 사용자',
       email: 'sample@travel-mvp.local',
       phoneNumber: '010-1234-5678',
-      residence: '전라남도 완도군',
+      residence: '서울특별시 강남구',
       authProvider: 'GUEST',
       nickname: randomNickname(),
       avatarPreset: randomAvatar(),
@@ -434,8 +499,64 @@ class MockTravelRepository implements TravelRepository {
         checked: true,
       ),
     ];
-    _tripFiles[1] = <UploadedFileItem>[];
-    _tripReceipts[1] = <ReceiptItem>[];
+    // 스토어 데모용 증빙 채움 (목업 전용): 인증샷 2장 + 숙박확인서 + 영수증 12만원.
+    _tripFiles[1] = <UploadedFileItem>[
+      UploadedFileItem(
+        id: 9001,
+        fileCategory: FileCategory.authPhoto,
+        originalFileName: 'wando_auth_1.jpg',
+        storagePath: 'mock/wando_auth_1.jpg',
+        fileSize: 812345,
+        mimeType: 'image/jpeg',
+        createdAt: DateTime(2026, 4, 21, 11, 20),
+      ),
+      UploadedFileItem(
+        id: 9003,
+        fileCategory: FileCategory.lodgingConfirmation,
+        originalFileName: 'wando_lodging_form.pdf',
+        storagePath: 'mock/wando_lodging_form.pdf',
+        fileSize: 182034,
+        mimeType: 'application/pdf',
+        createdAt: DateTime(2026, 4, 22, 18, 5),
+      ),
+    ];
+    _tripReceipts[1] = <ReceiptItem>[
+      ReceiptItem(
+        id: 8001,
+        uploadedFileId: 9101,
+        paymentType: PaymentType.creditCard,
+        usageScope: ReceiptUsageScope.lodging,
+        reviewStatus: ReceiptReviewStatus.approved,
+        amount: 80000,
+        paymentDateTime: DateTime(2026, 4, 21, 15, 2),
+        eligibleAmount: 80000,
+        reviewReason: '',
+        rawText: '청산도 한옥스테이 80,000원',
+      ),
+      ReceiptItem(
+        id: 8002,
+        uploadedFileId: 9102,
+        paymentType: PaymentType.creditCard,
+        usageScope: ReceiptUsageScope.general,
+        reviewStatus: ReceiptReviewStatus.approved,
+        amount: 40000,
+        paymentDateTime: DateTime(2026, 4, 21, 19, 30),
+        eligibleAmount: 40000,
+        reviewReason: '',
+        rawText: '완도 전복의집 40,000원',
+      ),
+    ];
+    _tripLodging[1] = const LodgingInfo(
+      id: 1,
+      lodgingName: '청산도 한옥스테이',
+      representativeName: '김완도',
+      phoneNumber: '061-552-1234',
+      address: '전라남도 완도군 청산면 슬로시티길 12',
+      signatureSvgPath: '[{"x":20,"y":60},{"x":46,"y":30},null]',
+      agreedPersonalInfo: true,
+      agreedStayProof: true,
+      uploadedFileId: 9003,
+    );
 
     _trips[2] = TripSummary(
       id: 2,
@@ -453,6 +574,41 @@ class MockTravelRepository implements TravelRepository {
     _tripPlaces[2] = <TripPlaceItem>[];
     _tripFiles[2] = <UploadedFileItem>[];
     _tripReceipts[2] = <ReceiptItem>[];
+
+    // 온라인몰 '내 환급금 사용처' 데모용 정산 완료 여행 (목업 전용).
+    _trips[3] = TripSummary(
+      id: 3,
+      regionId: 3,
+      regionName: pyeongchang.region.name,
+      applicantName: _user.name,
+      startDate: DateTime(2026, 3, 14),
+      endDate: DateTime(2026, 3, 15),
+      travelerCount: 2,
+      status: '정산 신청 완료',
+      totalSpentAmount: 240000,
+      refundConditionAmount: pyeongchang.region.refundConditionAmount,
+      settlementApplied: true,
+    );
+    _tripPlaces[3] = <TripPlaceItem>[];
+    _tripFiles[3] = <UploadedFileItem>[];
+    _tripReceipts[3] = <ReceiptItem>[];
+
+    _trips[4] = TripSummary(
+      id: 4,
+      regionId: 6,
+      regionName: '제천',
+      applicantName: _user.name,
+      startDate: DateTime(2026, 2, 21),
+      endDate: DateTime(2026, 2, 22),
+      travelerCount: 4,
+      status: '정산 신청 완료',
+      totalSpentAmount: 310000,
+      refundConditionAmount: 180000,
+      settlementApplied: true,
+    );
+    _tripPlaces[4] = <TripPlaceItem>[];
+    _tripFiles[4] = <UploadedFileItem>[];
+    _tripReceipts[4] = <ReceiptItem>[];
   }
 
   @override
@@ -540,9 +696,8 @@ class MockTravelRepository implements TravelRepository {
     final normalizedResidence = (residence ?? '').trim();
     final regions = _regionDetails.values
         .map((item) {
-          final matched = normalizedResidence.isEmpty ||
-              item.region.province.contains(normalizedResidence) ||
-              normalizedResidence.contains(item.region.province);
+          // 목업: 데모용으로 전 지역 노출 (실서버가 거주지 인접 제외를 계산).
+          const matched = true;
           return RegionSummary(
             id: item.region.id,
             name: item.region.name,
@@ -740,7 +895,7 @@ class MockTravelRepository implements TravelRepository {
     final jobId = 'mock-job-${DateTime.now().millisecondsSinceEpoch}';
     final stops = detail.halfPricePlaces
         .where((item) => item.latitude != null && item.longitude != null)
-        .take(4)
+        .take(5)
         .toList()
         .asMap()
         .entries

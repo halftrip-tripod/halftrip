@@ -8,8 +8,8 @@ import 'saved_course_list_screen.dart';
 import 'youtube_course_analysis_screen.dart';
 
 /// 시안 색. 스포이드로 뽑은 값이라 AppColors 토큰과 별개로 둔다.
-const _brandBlue = Color(0xFF048DE7);
-const _pageBg = Color(0xFFF7F9FC);
+const _brandBlue = AppColors.p500;
+const _pageBg = AppColors.bg;
 const _fieldLine = Color(0xFFE6EAF0);
 const _rowLine = Color(0xFFF1F4F8);
 
@@ -63,8 +63,6 @@ class YoutubeCourseStartScreen extends StatefulWidget {
 }
 
 class _YoutubeCourseStartScreenState extends State<YoutubeCourseStartScreen> {
-  static const _sampleUrl = 'https://www.youtube.com/watch?v=-c_KCDjGOe0';
-
   final _urlController = TextEditingController();
   String? _errorMessage;
 
@@ -103,16 +101,6 @@ class _YoutubeCourseStartScreenState extends State<YoutubeCourseStartScreen> {
     if (mounted) setState(() {});
   }
 
-  void _useSample() {
-    setState(() {
-      _urlController.text = _sampleUrl;
-      _urlController.selection = const TextSelection.collapsed(
-        offset: _sampleUrl.length,
-      );
-      _errorMessage = null;
-    });
-  }
-
   void _openPending(PendingYoutubeCourseJob job) {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -143,22 +131,9 @@ class _YoutubeCourseStartScreenState extends State<YoutubeCourseStartScreen> {
         backgroundColor: _pageBg,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        titleSpacing: 0,
         foregroundColor: AppColors.ink7,
-        title: Image.asset(
-          'assets/brand/logo.png',
-          height: 26,
-          fit: BoxFit.contain,
-          alignment: Alignment.centerLeft,
-        ),
-        actions: [
-          _RoundIconButton(
-            icon: Icons.notifications_none_rounded,
-            tooltip: '알림',
-            onPressed: () {},
-          ),
-          const SizedBox(width: 14),
-        ],
+        title: const Text('코스 생성',
+            style: TextStyle(fontWeight: FontWeight.w800)),
       ),
       body: AnimatedBuilder(
         animation: controller,
@@ -181,7 +156,7 @@ class _YoutubeCourseStartScreenState extends State<YoutubeCourseStartScreen> {
               final contentWidth =
                   constraints.maxWidth > 640 ? 560.0 : constraints.maxWidth;
               return ListView(
-                padding: const EdgeInsets.fromLTRB(18, 4, 18, 36),
+                padding: const EdgeInsets.fromLTRB(14, 4, 14, 36),
                 children: [
                   Align(
                     alignment: Alignment.topCenter,
@@ -201,7 +176,6 @@ class _YoutubeCourseStartScreenState extends State<YoutubeCourseStartScreen> {
                             },
                             onPaste: _paste,
                             onAnalyze: _analyze,
-                            onSample: _useSample,
                           ),
                           const SizedBox(height: 16),
                           _RecentCard(
@@ -220,41 +194,6 @@ class _YoutubeCourseStartScreenState extends State<YoutubeCourseStartScreen> {
             },
           );
         },
-      ),
-    );
-  }
-}
-
-class _RoundIconButton extends StatelessWidget {
-  const _RoundIconButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 38,
-      height: 38,
-      child: Material(
-        color: Colors.white,
-        shape: const CircleBorder(
-          side: BorderSide(color: Color(0xFFEDF1F6)),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: IconButton(
-          onPressed: onPressed,
-          tooltip: tooltip,
-          iconSize: 19,
-          padding: EdgeInsets.zero,
-          color: AppColors.ink7,
-          icon: Icon(icon),
-        ),
       ),
     );
   }
@@ -296,7 +235,7 @@ class _Hero extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  '영상 속 장소와 동선을 찾아\n$regionName 여행 코스로 정리해드려요.',
+                  '영상 속 장소와 동선을 찾아\n여행 코스로 정리해드려요.',
                   style: const TextStyle(
                     color: AppColors.ink5,
                     fontSize: 12.5,
@@ -395,7 +334,6 @@ class _LinkInputCard extends StatelessWidget {
     required this.onChanged,
     required this.onPaste,
     required this.onAnalyze,
-    required this.onSample,
   });
 
   final TextEditingController controller;
@@ -404,7 +342,6 @@ class _LinkInputCard extends StatelessWidget {
   final VoidCallback onChanged;
   final VoidCallback onPaste;
   final VoidCallback onAnalyze;
-  final VoidCallback onSample;
 
   @override
   Widget build(BuildContext context) {
@@ -505,21 +442,6 @@ class _LinkInputCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-            ),
-          ),
-          Center(
-            child: TextButton(
-              onPressed: onSample,
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.ink4,
-                minimumSize: const Size(0, 36),
-                textStyle: const TextStyle(
-                  fontFamily: 'Pretendard',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              child: const Text('샘플 영상으로 먼저 볼게요'),
             ),
           ),
         ],

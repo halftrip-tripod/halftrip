@@ -142,6 +142,7 @@ List<Post> buildPosts() => [
         title: '평창 한우 맛집 정리',
         text: '평창 양떼목장 근처 한우 맛집 3곳 가성비 순으로 정리했어요 🐮 환급 결제 되는 곳만 골랐음!',
         photos: ['🍖', '🥩'],
+        courseName: '평창 목장 먹방 코스', courseMeta: '1박 2일 · 6곳 · 환급 조건 충족',
         likes: 30, comments: 5, saves: 15, savedByMe: true,
       ),
     ];
