@@ -1,17 +1,18 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 
 import '../core/app_scope.dart';
 import '../models/app_models.dart';
 import '../theme/app_colors.dart';
-import 'saved_course_list_screen.dart';
 import 'youtube_course_analysis_screen.dart';
 
 /// 시안 색. 스포이드로 뽑은 값이라 AppColors 토큰과 별개로 둔다.
 const _brandBlue = AppColors.p500;
 const _pageBg = AppColors.bg;
-const _fieldLine = Color(0xFFE6EAF0);
-const _rowLine = Color(0xFFF1F4F8);
+const _rowDivider = Color(0xFFF1F4F8);
 
 const List<BoxShadow> _cardShadow = [
   BoxShadow(color: Color(0x0F1B3A5B), blurRadius: 18, offset: Offset(0, 5)),
@@ -38,18 +39,6 @@ String? youtubeVideoId(String raw) {
     }
   }
   return null;
-}
-
-String _relativeTime(DateTime time) {
-  final diff = DateTime.now().difference(time);
-  if (diff.inMinutes < 1) return '방금 전';
-  if (diff.inMinutes < 60) return '${diff.inMinutes}분 전';
-  if (diff.inHours < 24) return '${diff.inHours}시간 전';
-  if (diff.inDays == 1) return '어제';
-  if (diff.inDays < 7) return '${diff.inDays}일 전';
-  final month = time.month.toString().padLeft(2, '0');
-  final day = time.day.toString().padLeft(2, '0');
-  return '${time.year}.$month.$day';
 }
 
 class YoutubeCourseStartScreen extends StatefulWidget {
@@ -101,30 +90,9 @@ class _YoutubeCourseStartScreenState extends State<YoutubeCourseStartScreen> {
     if (mounted) setState(() {});
   }
 
-  void _openPending(PendingYoutubeCourseJob job) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder:
-            (_) => YoutubeCourseAnalysisScreen(
-              tripDetail: widget.tripDetail,
-              jobId: job.jobId,
-            ),
-      ),
-    );
-  }
-
-  void _openSavedCourses() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => SavedCourseListScreen(tripDetail: widget.tripDetail),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final controller = AppScope.of(context);
-    final regionName = widget.tripDetail.trip.regionName;
     return Scaffold(
       backgroundColor: _pageBg,
       appBar: AppBar(
@@ -132,25 +100,12 @@ class _YoutubeCourseStartScreenState extends State<YoutubeCourseStartScreen> {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         foregroundColor: AppColors.ink7,
-        title: const Text('코스 생성',
+        title: const Text('유튜브 코스 생성',
             style: TextStyle(fontWeight: FontWeight.w800)),
       ),
       body: AnimatedBuilder(
         animation: controller,
         builder: (context, _) {
-          final pending =
-              controller
-                  .pendingYoutubeJobsForTrip(widget.tripDetail.trip.id)
-                  .take(2)
-                  .toList();
-          final saved =
-              controller.savedCourses
-                  .where(
-                    (course) =>
-                        course.regionId == widget.tripDetail.trip.regionId,
-                  )
-                  .take(3 - pending.length)
-                  .toList();
           return LayoutBuilder(
             builder: (context, constraints) {
               final contentWidth =
@@ -165,12 +120,11 @@ class _YoutubeCourseStartScreenState extends State<YoutubeCourseStartScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _Hero(regionName: regionName),
+                          const _Hero(),
                           const SizedBox(height: 20),
                           _LinkInputCard(
                             controller: _urlController,
                             errorMessage: _errorMessage,
-                            regionName: regionName,
                             onChanged: () {
                               setState(() => _errorMessage = null);
                             },
@@ -178,12 +132,30 @@ class _YoutubeCourseStartScreenState extends State<YoutubeCourseStartScreen> {
                             onAnalyze: _analyze,
                           ),
                           const SizedBox(height: 16),
-                          _RecentCard(
-                            pending: pending,
-                            saved: saved,
-                            onAll: _openSavedCourses,
-                            onOpenPending: _openPending,
-                            onOpenSaved: (_) => _openSavedCourses(),
+                          // 시안의 하단 안내 — 분석 결과는 코스함에 쌓이므로
+                          // 별도 "최근 분석" 목록은 두지 않는다(코스함과 중복).
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Padding(
+                                padding: EdgeInsets.only(top: 1),
+                                child: Icon(Icons.info_outline_rounded,
+                                    size: 16, color: _brandBlue),
+                              ),
+                              const SizedBox(width: 7),
+                              Expanded(
+                                child: Text(
+                                  '영상 속 장소로 코스를 자동 생성해 코스함에 저장해요. '
+                                  '저장 후 자유롭게 수정할 수 있어요.',
+                                  style: const TextStyle(
+                                    color: AppColors.ink5,
+                                    fontSize: 12.5,
+                                    height: 1.55,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -200,9 +172,7 @@ class _YoutubeCourseStartScreenState extends State<YoutubeCourseStartScreen> {
 }
 
 class _Hero extends StatelessWidget {
-  const _Hero({required this.regionName});
-
-  final String regionName;
+  const _Hero();
 
   @override
   Widget build(BuildContext context) {
@@ -218,9 +188,9 @@ class _Hero extends StatelessWidget {
                 const Text.rich(
                   TextSpan(
                     children: [
-                      TextSpan(text: '유튜브 영상을\n'),
+                      TextSpan(text: '유튜브 링크를 넣으면\n'),
                       TextSpan(
-                        text: '코스로 만들어요',
+                        text: '코스로 만들어드려요',
                         style: TextStyle(color: _brandBlue),
                       ),
                     ],
@@ -235,7 +205,7 @@ class _Hero extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  '영상 속 장소와 동선을 찾아\n여행 코스로 정리해드려요.',
+                  '영상 속 장소와 동선을 찾아 코스와 계획표로 정리해드려요.',
                   style: const TextStyle(
                     color: AppColors.ink5,
                     fontSize: 12.5,
@@ -261,39 +231,39 @@ class _PlayBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 116,
-      height: 112,
+      width: 84,
+      height: 82,
       child: Stack(
         alignment: Alignment.center,
         children: [
           Positioned(
-            left: 4,
-            top: 6,
+            left: 3,
+            top: 4,
             child: Transform.rotate(
               angle: -0.20,
-              child: _card(const Color(0xFFD9E7F7), 78, 74),
+              child: _card(const Color(0xFFD9E7F7), 56, 53),
             ),
           ),
           Positioned(
-            right: 2,
-            bottom: 4,
+            right: 1,
+            bottom: 3,
             child: Transform.rotate(
               angle: 0.24,
-              child: _card(const Color(0xFFEFE6F6), 78, 74),
+              child: _card(const Color(0xFFEFE6F6), 56, 53),
             ),
           ),
           Transform.rotate(
             angle: 0.05,
             child: Container(
-              width: 78,
-              height: 72,
+              width: 56,
+              height: 52,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [Color(0xFFFF6B6B), Color(0xFFF01A1A)],
                 ),
-                borderRadius: BorderRadius.circular(22),
+                borderRadius: BorderRadius.circular(16),
                 boxShadow: const [
                   BoxShadow(
                     color: Color(0x4DF01A1A),
@@ -305,7 +275,7 @@ class _PlayBadge extends StatelessWidget {
               child: const Icon(
                 Icons.play_arrow_rounded,
                 color: Colors.white,
-                size: 42,
+                size: 30,
               ),
             ),
           ),
@@ -320,7 +290,7 @@ class _PlayBadge extends StatelessWidget {
       height: height,
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(16),
       ),
     );
   }
@@ -330,7 +300,6 @@ class _LinkInputCard extends StatelessWidget {
   const _LinkInputCard({
     required this.controller,
     required this.errorMessage,
-    required this.regionName,
     required this.onChanged,
     required this.onPaste,
     required this.onAnalyze,
@@ -338,7 +307,6 @@ class _LinkInputCard extends StatelessWidget {
 
   final TextEditingController controller;
   final String? errorMessage;
-  final String regionName;
   final VoidCallback onChanged;
   final VoidCallback onPaste;
   final VoidCallback onAnalyze;
@@ -356,13 +324,30 @@ class _LinkInputCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '유튜브 링크를 입력하세요',
-            style: TextStyle(
-              color: AppColors.ink9,
-              fontSize: 15,
-              fontWeight: FontWeight.w900,
-            ),
+          // 시안의 카드 헤더 — 빨간 유튜브 점 + 타이틀.
+          Row(
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF01A1A),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.play_arrow_rounded,
+                    color: Colors.white, size: 16),
+              ),
+              const SizedBox(width: 9),
+              const Text(
+                '유튜브 영상 링크',
+                style: TextStyle(
+                  color: AppColors.ink9,
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.3,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 14),
           TextField(
@@ -372,8 +357,8 @@ class _LinkInputCard extends StatelessWidget {
             onChanged: (_) => onChanged(),
             onSubmitted: (_) => onAnalyze(),
             style: const TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w700,
               color: AppColors.ink9,
             ),
             decoration: InputDecoration(
@@ -386,20 +371,34 @@ class _LinkInputCard extends StatelessWidget {
               ),
               errorText: errorMessage,
               errorStyle: const TextStyle(fontSize: 11.5),
-              // 시안의 고리 아이콘 자리를 붙여넣기 버튼으로 쓴다.
-              // 모바일에서 링크를 손으로 치게 두면 안 된다.
-              suffixIcon: IconButton(
-                onPressed: onPaste,
-                icon: const Icon(Icons.link_rounded, size: 20),
-                color: AppColors.ink4,
-                tooltip: '클립보드에서 붙여넣기',
-              ),
+              // 시안처럼 고리 아이콘은 왼쪽. 오른쪽은 상태에 따라
+              // 붙여넣기(비어 있을 때) / 지우기(링크 있을 때) 버튼.
+              prefixIcon: const Icon(Icons.link_rounded,
+                  size: 19, color: AppColors.ink4),
+              prefixIconConstraints:
+                  const BoxConstraints(minWidth: 42, minHeight: 40),
+              suffixIcon: controller.text.trim().isEmpty
+                  ? IconButton(
+                      onPressed: onPaste,
+                      icon: const Icon(Icons.content_paste_rounded, size: 17),
+                      color: AppColors.ink4,
+                      tooltip: '클립보드에서 붙여넣기',
+                    )
+                  : IconButton(
+                      onPressed: () {
+                        controller.clear();
+                        onChanged();
+                      },
+                      icon: const Icon(Icons.close_rounded, size: 19),
+                      color: AppColors.ink4,
+                      tooltip: '지우기',
+                    ),
               suffixIconConstraints: const BoxConstraints(minWidth: 44),
               filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.fromLTRB(14, 15, 4, 15),
-              border: _fieldBorder(_fieldLine),
-              enabledBorder: _fieldBorder(_fieldLine),
+              fillColor: const Color(0xFFF4F6F9),
+              contentPadding: const EdgeInsets.fromLTRB(0, 14, 4, 14),
+              border: _fieldBorder(Colors.transparent),
+              enabledBorder: _fieldBorder(Colors.transparent),
               focusedBorder: _fieldBorder(_brandBlue, width: 1.3),
               errorBorder: _fieldBorder(AppColors.danger),
               focusedErrorBorder: _fieldBorder(AppColors.danger, width: 1.3),
@@ -413,13 +412,14 @@ class _LinkInputCard extends StatelessWidget {
             child:
                 videoId == null
                     ? const SizedBox(width: double.infinity)
-                    : Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: _VideoPreview(
-                        videoId: videoId,
-                        regionName: regionName,
+                    : Column(
+                        children: [
+                          const SizedBox(height: 14),
+                          Container(height: 1, color: _rowDivider),
+                          const SizedBox(height: 14),
+                          _VideoPreview(videoId: videoId),
+                        ],
                       ),
-                    ),
           ),
           const SizedBox(height: 14),
           SizedBox(
@@ -457,62 +457,113 @@ class _LinkInputCard extends StatelessWidget {
   }
 }
 
-class _VideoPreview extends StatelessWidget {
-  const _VideoPreview({required this.videoId, required this.regionName});
+/// 링크 미리보기 — 시안처럼 큰 썸네일 + 제목 + 채널명.
+/// 제목·채널명은 유튜브 oEmbed(키 불필요)로 가져온다. 영상 길이·조회수는
+/// YouTube Data API(서버 키)가 필요해 서버 엔드포인트가 열리면 채운다.
+class _VideoPreview extends StatefulWidget {
+  const _VideoPreview({required this.videoId});
 
   final String videoId;
-  final String regionName;
+
+  @override
+  State<_VideoPreview> createState() => _VideoPreviewState();
+}
+
+class _VideoPreviewState extends State<_VideoPreview> {
+  /// oEmbed 결과 캐시 — 같은 영상 재입력 시 재조회하지 않는다.
+  static final Map<String, (String, String)> _metaCache = {};
+
+  String? _title;
+  String? _channel;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMeta();
+  }
+
+  @override
+  void didUpdateWidget(covariant _VideoPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.videoId != widget.videoId) {
+      _title = null;
+      _channel = null;
+      _loadMeta();
+    }
+  }
+
+  Future<void> _loadMeta() async {
+    final id = widget.videoId;
+    final cached = _metaCache[id];
+    if (cached != null) {
+      setState(() {
+        _title = cached.$1;
+        _channel = cached.$2;
+      });
+      return;
+    }
+    try {
+      final uri = Uri.parse(
+          'https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=$id&format=json');
+      final response =
+          await http.get(uri).timeout(const Duration(seconds: 4));
+      if (response.statusCode != 200) return;
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      final title = json['title'] as String? ?? '';
+      final channel = json['author_name'] as String? ?? '';
+      if (title.isEmpty) return;
+      _metaCache[id] = (title, channel);
+      if (!mounted || widget.videoId != id) return;
+      setState(() {
+        _title = title;
+        _channel = channel;
+      });
+    } catch (_) {
+      // 조회 실패(웹 CORS·네트워크) — 기본 문구로 폴백.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(9),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF4F8FC),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          _Thumbnail(videoId: videoId, width: 78, height: 52),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Row(
-                  children: [
-                    Icon(
-                      Icons.check_circle_rounded,
-                      color: Color(0xFF16A34A),
-                      size: 15,
-                    ),
-                    SizedBox(width: 5),
-                    Text(
-                      '영상을 찾았어요',
-                      style: TextStyle(
-                        color: AppColors.ink9,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ],
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _Thumbnail(videoId: widget.videoId, width: 118, height: 78),
+        const SizedBox(width: 13),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _title ?? '영상을 찾았어요',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.ink9,
+                  fontSize: 14,
+                  height: 1.4,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.3,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '$regionName 코스로 정리할 준비가 됐어요.',
-                  style: const TextStyle(
-                    color: AppColors.ink5,
-                    fontSize: 11.5,
-                    height: 1.35,
-                    fontWeight: FontWeight.w600,
-                  ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                _channel?.isNotEmpty == true
+                    ? _channel!
+                    : '코스로 정리할 준비가 됐어요.',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.ink5,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -522,13 +573,11 @@ class _Thumbnail extends StatelessWidget {
     required this.videoId,
     required this.width,
     required this.height,
-    this.fallbackIcon = Icons.route_rounded,
   });
 
   final String? videoId;
   final double width;
   final double height;
-  final IconData fallbackIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -541,7 +590,7 @@ class _Thumbnail extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(11),
       ),
-      child: Icon(fallbackIcon, color: _brandBlue, size: 22),
+      child: const Icon(Icons.route_rounded, color: _brandBlue, size: 22),
     );
     final id = videoId;
     if (id == null) return placeholder;
@@ -553,259 +602,6 @@ class _Thumbnail extends StatelessWidget {
         height: height,
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => placeholder,
-      ),
-    );
-  }
-}
-
-class _RecentCard extends StatelessWidget {
-  const _RecentCard({
-    required this.pending,
-    required this.saved,
-    required this.onAll,
-    required this.onOpenPending,
-    required this.onOpenSaved,
-  });
-
-  final List<PendingYoutubeCourseJob> pending;
-  final List<SavedCourse> saved;
-  final VoidCallback onAll;
-  final ValueChanged<PendingYoutubeCourseJob> onOpenPending;
-  final ValueChanged<SavedCourse> onOpenSaved;
-
-  @override
-  Widget build(BuildContext context) {
-    final rows = <Widget>[
-      for (final job in pending)
-        _RecentRow(
-          videoId: youtubeVideoId(job.youtubeUrl),
-          fallbackIcon: Icons.hourglass_top_rounded,
-          title: '${job.regionName} 영상 코스',
-          time: _relativeTime(job.createdAt),
-          detailIcon: Icons.autorenew_rounded,
-          detail: '분석 중',
-          onTap: () => onOpenPending(job),
-        ),
-      for (final course in saved)
-        _RecentRow(
-          videoId: null,
-          fallbackIcon: Icons.route_rounded,
-          title:
-              course.title.trim().isEmpty
-                  ? '${course.regionName} 여행 코스'
-                  : course.title,
-          time: _relativeTime(course.createdAt),
-          detailIcon: Icons.place_rounded,
-          detail: '장소 ${course.stops.length}개',
-          onTap: () => onOpenSaved(course),
-        ),
-    ];
-
-    return Container(
-      padding: EdgeInsets.fromLTRB(18, 16, 12, rows.isEmpty ? 18 : 6),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: _cardShadow,
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  '최근 분석',
-                  style: TextStyle(
-                    color: AppColors.ink9,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              // 볼 이력이 없으면 빈 목록으로 보내지 않는다.
-              if (rows.isNotEmpty)
-                TextButton.icon(
-                  onPressed: onAll,
-                  iconAlignment: IconAlignment.end,
-                  icon: const Icon(Icons.chevron_right_rounded, size: 17),
-                  label: const Text('전체 보기'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: _brandBlue,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    textStyle: const TextStyle(
-                      fontFamily: 'Pretendard',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                )
-              else
-                const SizedBox(height: 36),
-            ],
-          ),
-          if (rows.isEmpty)
-            const _RecentEmpty()
-          else
-            for (var index = 0; index < rows.length; index++) ...[
-              if (index > 0)
-                const Divider(height: 1, thickness: 1, color: _rowLine),
-              rows[index],
-            ],
-        ],
-      ),
-    );
-  }
-}
-
-class _RecentEmpty extends StatelessWidget {
-  const _RecentEmpty();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 6, top: 2),
-      child: Row(
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF2F6FB),
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: const Icon(
-              Icons.ondemand_video_rounded,
-              color: AppColors.ink4,
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '아직 분석한 영상이 없어요',
-                  style: TextStyle(
-                    color: AppColors.ink7,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                SizedBox(height: 5),
-                Text(
-                  '위에 유튜브 링크를 넣으면 여기에 쌓여요.',
-                  style: TextStyle(
-                    color: AppColors.ink4,
-                    fontSize: 11.5,
-                    height: 1.35,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RecentRow extends StatelessWidget {
-  const _RecentRow({
-    required this.videoId,
-    required this.fallbackIcon,
-    required this.title,
-    required this.time,
-    required this.detailIcon,
-    required this.detail,
-    required this.onTap,
-  });
-
-  final String? videoId;
-  final IconData fallbackIcon;
-  final String title;
-  final String time;
-  final IconData detailIcon;
-  final String detail;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
-        child: Row(
-          children: [
-            _Thumbnail(
-              videoId: videoId,
-              width: 52,
-              height: 52,
-              fallbackIcon: fallbackIcon,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.ink9,
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Text(
-                        time,
-                        style: const TextStyle(
-                          color: AppColors.ink4,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const Text(
-                        '  ·  ',
-                        style: TextStyle(
-                          color: AppColors.ink4,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Icon(detailIcon, size: 12, color: AppColors.ink4),
-                      const SizedBox(width: 3),
-                      Flexible(
-                        child: Text(
-                          detail,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.ink4,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 6),
-            const Icon(
-              Icons.chevron_right_rounded,
-              color: AppColors.ink4,
-              size: 20,
-            ),
-          ],
-        ),
       ),
     );
   }
