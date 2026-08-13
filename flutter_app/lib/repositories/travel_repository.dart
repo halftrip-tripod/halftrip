@@ -5,6 +5,10 @@ import '../models/app_models.dart';
 abstract class TravelRepository {
   String get modeName;
 
+  /// 로그아웃 시 호출 — 보관 중인 인증 토큰을 버린다.
+  /// mock 구현은 들고 있는 토큰이 없으므로 아무것도 하지 않는다.
+  void clearSession() {}
+
   Future<AppUser> mockLogin(LoginProvider provider);
   /// 소셜 로그인 — SDK가 받은 액세스 토큰을 서버가 제공자 API로 검증.
   Future<SocialLoginResult> socialLogin({

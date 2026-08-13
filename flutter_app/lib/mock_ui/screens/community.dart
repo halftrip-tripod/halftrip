@@ -157,10 +157,13 @@ class _CommunityTabState extends State<CommunityTab> {
             ),
           ]),
           const SizedBox(height: 16),
-          for (final p in _list) ...[
-            PostCard(post: p, onChanged: () => setState(() {})),
-            const SizedBox(height: 14),
-          ],
+          if (_list.isEmpty)
+            const _EmptyFeed()
+          else
+            for (final p in _list) ...[
+              PostCard(post: p, onChanged: () => setState(() {})),
+              const SizedBox(height: 14),
+            ],
         ],
       ),
       // 글쓰기 FAB
@@ -247,8 +250,58 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
       title: widget.region == null ? '커뮤니티' : '${widget.region} 여행 후기',
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 40),
       children: [
-        for (final p in posts) PostCard(post: p, onChanged: () => setState(() {})),
+        if (posts.isEmpty)
+          const _EmptyFeed()
+        else
+          for (final p in posts) PostCard(post: p, onChanged: () => setState(() {})),
       ],
+    );
+  }
+}
+
+/// 피드에 글이 하나도 없을 때. 안내가 없으면 백지라 로딩 실패로 오해한다.
+/// 알림 센터의 빈 상태와 같은 톤으로 맞췄다.
+class _EmptyFeed extends StatelessWidget {
+  const _EmptyFeed();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 72),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: const BoxDecoration(
+                color: AppColors.surf,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.forum_outlined,
+                size: 30,
+                color: AppColors.ink4,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('아직 올라온 글이 없어요',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 6),
+            const Text(
+              '첫 글을 남겨보세요. 다녀온 여행 후기나 궁금한 점 모두 좋아요.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Pretendard',
+                fontSize: 13,
+                height: 1.5,
+                color: AppColors.ink5,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
