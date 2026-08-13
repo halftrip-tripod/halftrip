@@ -48,6 +48,19 @@ class GooglePlaceMapView extends StatefulWidget {
 class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
   late final Future<bool> _ready = _prepare();
 
+  @override
+  void initState() {
+    super.initState();
+    // 하이라이트 마커가 지정돼 들어오면 정보창을 처음부터 연다
+    // (상세 일정 탭 → 지도 이동·장소 정보 연동용).
+    for (final marker in widget.markers) {
+      if (marker.id == widget.highlightedMarkerId) {
+        _selectedMarker = marker;
+        break;
+      }
+    }
+  }
+
   BitmapDescriptor? _pin;
   BitmapDescriptor? _pinHighlight;
   List<BitmapDescriptor> _numberedPins = const [];
@@ -256,11 +269,16 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
                     left: 16,
                     right: 16,
                     top: 16,
-                    bottom: 16,
-                    child: _GooglePlaceInfoCard(
-                      marker: _selectedMarker!,
-                      onClose: () => setState(() => _selectedMarker = null),
-                      onOpenPlaceUrl: _openPlaceUrl,
+                    // 내용 높이만큼만 차지하고 뒤 지도가 보이게 bottom은 고정하지
+                    // 않는다. 내용이 길면 카드 안에서 스크롤된다.
+                    child: ConstrainedBox(
+                      constraints:
+                          BoxConstraints(maxHeight: widget.height - 48),
+                      child: _GooglePlaceInfoCard(
+                        marker: _selectedMarker!,
+                        onClose: () => setState(() => _selectedMarker = null),
+                        onOpenPlaceUrl: _openPlaceUrl,
+                      ),
                     ),
                   ),
               ],
