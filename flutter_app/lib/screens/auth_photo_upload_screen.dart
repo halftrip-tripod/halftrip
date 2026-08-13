@@ -356,7 +356,8 @@ class _PhotoArea extends StatelessWidget {
                         Icon(Icons.add_a_photo_outlined,
                             size: 36, color: AppColors.ink4),
                         SizedBox(height: 10),
-                        Text('기본 카메라 사진 올리기',
+                        // 하단 CTA와 같은 문구를 쓰면 버튼이 두 개인 것처럼 보인다.
+                        Text('눌러서 사진 선택',
                             style: TextStyle(
                                 fontFamily: 'Pretendard',
                                 fontSize: 14,

@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../core/app_scope.dart';
 import '../models/app_models.dart';
+import '../repositories/travel_repository.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui/app_card.dart';
 
@@ -31,6 +32,10 @@ class _ReceiptEvidenceScreenState extends State<ReceiptEvidenceScreen> {
 
   final Map<int, Uint8List> _savedPreviewBytesByFileId = {};
 
+  /// 이 지역이 인정하는 결제수단. 지역마다 달라서 화면에 고정 문구를 쓰면
+  /// 지역 상세("결제 수단")와 어긋난다.
+  List<String> _acceptedPaymentMethods = const [];
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -42,8 +47,21 @@ class _ReceiptEvidenceScreenState extends State<ReceiptEvidenceScreen> {
   Future<TripDetail> _load() async {
     final repository = AppScope.of(context).repository;
     final detail = await repository.getTripDetail(widget.tripId);
+    await _loadAcceptedPaymentMethods(repository, detail.trip.regionId);
     await _hydratePreviews(detail);
     return detail;
+  }
+
+  Future<void> _loadAcceptedPaymentMethods(
+      TravelRepository repository, int regionId) async {
+    try {
+      final region = await repository.getRegionDetail(regionId,
+          includeMerchants: false);
+      _acceptedPaymentMethods = region.region.paymentMethods;
+    } catch (_) {
+      // 결제수단을 못 받아도 영수증 업로드 자체는 막지 않는다.
+      _acceptedPaymentMethods = const [];
+    }
   }
 
   Future<void> _hydratePreviews(TripDetail detail) async {
@@ -214,8 +232,10 @@ class _ReceiptEvidenceScreenState extends State<ReceiptEvidenceScreen> {
                 onTap: _uploading ? null : _pickAndAnalyze,
               ),
               const SizedBox(height: 10),
-              const _Note(
-                  '인정 결제수단: 지역화폐 · 카드 · 현금영수증. 간이영수증·계좌이체는 인정되지 않을 수 있어요.'),
+              _Note(_acceptedPaymentMethods.isEmpty
+                  ? '인정 결제수단은 지역마다 달라요. 지역 상세의 "결제 수단"을 확인하고 결제해 주세요.'
+                  : '${detail.trip.regionName} 인정 결제수단: '
+                      '${_acceptedPaymentMethods.map((code) => PaymentTypeWire.fromWire(code).label).join(' · ')}'),
 
               // OCR 결과 (draft)
               if (draft != null) ...[

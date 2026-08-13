@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/app_scope.dart';
 import '../../models/app_models.dart';
 import '../../screens/merchant_map_screen.dart';
+import '../../utils/internal_note.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui.dart';
 
@@ -144,9 +145,12 @@ class _MallTabState extends State<MallTab> {
                             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                               Text(entry.$2.name,
                                   style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: AppColors.ink9)),
-                              const SizedBox(height: 2),
-                              Text(entry.$2.description,
-                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink5)),
+                              // 내부 메모("TODO: 실제 온라인몰 연동 예정")가 그대로 노출되던 자리.
+                              if (userFacingNote(entry.$2.description) case final note?) ...[
+                                const SizedBox(height: 2),
+                                Text(note,
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink5)),
+                              ],
                             ]),
                           ),
                           const Icon(Icons.open_in_new_rounded, size: 17, color: AppColors.ink4),

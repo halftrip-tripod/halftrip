@@ -32,7 +32,9 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
   bool _initialized = false;
   bool _layoutEditMode = false;
   bool _layoutSaving = false;
-  double _previewZoom = 1.5;
+  // 150%로 시작하면 양식 좌우가 화면 밖으로 잘려 연락처·이용금액 칸이 보이지 않는다.
+  // "화면 맞춤"과 같은 배율에서 시작한다.
+  double _previewZoom = 1.0;
   String? _selectedFieldKey;
   // 앱 차원 개인정보 제공 동의 (양식에 동의 필드가 없는 지역용 — 페이로드 미포함).
   bool _appPrivacyAgreed = false;
