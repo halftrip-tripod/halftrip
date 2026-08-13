@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../core/app_config.dart';
 import '../core/app_scope.dart';
 import '../models/app_models.dart';
+import '../services/course_ai_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/ui/pill.dart';
@@ -170,41 +171,68 @@ class _RegionCourseBuilderScreenState extends State<RegionCourseBuilderScreen> {
         ),
       ),
     );
-    await Future<void>.delayed(const Duration(milliseconds: 2000));
-    if (!mounted) return;
-    Navigator.of(context).pop();
-
-    final scored = detail.halfPricePlaces
+    final candidates = detail.halfPricePlaces
         .where((place) => place.latitude != null && place.longitude != null)
-        .map(
-          (place) => (
-            place: place,
-            score: _scorePlace(place, _preferences),
-          ),
-        )
-        .toList()
-      ..sort((a, b) => b.score.compareTo(a.score));
+        .toList();
 
-    final selected = <PlaceItem>[];
-    for (final item in scored) {
-      if (selected.any((element) => element.id == item.place.id)) {
-        continue;
-      }
-      selected.add(item.place);
-      if (selected.length >= 4) {
-        break;
-      }
+    List<PlaceItem> selected;
+    try {
+      // FastAPI LLM으로 실제 코스 생성(취향·환급조건 반영, 후보 중에서만 선정).
+      final aiService = CourseAiService(AppConfig.fromEnvironment());
+      final result = await aiService.generate(
+        regionName: widget.regionName,
+        nights: 1,
+        people: 2,
+        themePriority: _preferences,
+        candidates: candidates
+            .map((place) => {
+                  'name': place.name,
+                  'category': '',
+                  'address': place.address,
+                  'description': place.description,
+                  'eligibleForRefund': place.eligibleForRefund,
+                })
+            .toList(),
+      );
+      final byName = {for (final place in candidates) place.name: place};
+      selected = result.stops
+          .map((stop) => byName[stop.name])
+          .whereType<PlaceItem>()
+          .toList();
+    } catch (_) {
+      selected = const [];
     }
 
     if (selected.length < 2) {
-      final fallback = detail.halfPricePlaces
-          .where((place) => place.latitude != null && place.longitude != null)
-          .take(3)
-          .toList();
-      selected
-        ..clear()
-        ..addAll(fallback);
+      // LLM 실패/빈 결과 — 취향 키워드 매칭 규칙 기반으로 대체.
+      final scored = candidates
+          .map(
+            (place) => (
+              place: place,
+              score: _scorePlace(place, _preferences),
+            ),
+          )
+          .toList()
+        ..sort((a, b) => b.score.compareTo(a.score));
+
+      selected = <PlaceItem>[];
+      for (final item in scored) {
+        if (selected.any((element) => element.id == item.place.id)) {
+          continue;
+        }
+        selected.add(item.place);
+        if (selected.length >= 4) {
+          break;
+        }
+      }
+
+      if (selected.length < 2) {
+        selected = candidates.take(3).toList();
+      }
     }
+
+    if (!mounted) return;
+    Navigator.of(context).pop();
 
     setState(() {
       _plannerStops = selected
