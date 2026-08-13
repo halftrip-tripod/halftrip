@@ -10,6 +10,7 @@ Future<DateTimeRange?> showTripCalendarSheet(
   DateTimeRange? initial,
   DateTime? firstDate,
   DateTime? lastDate,
+  bool singleDay = false,
 }) {
   final now = DateUtils.dateOnly(DateTime.now());
   return showModalBottomSheet<DateTimeRange>(
@@ -24,6 +25,7 @@ Future<DateTimeRange?> showTripCalendarSheet(
       initial: initial,
       firstDate: firstDate ?? now,
       lastDate: lastDate ?? DateTime(now.year + 1, now.month, now.day),
+      singleDay: singleDay,
     ),
   );
 }
@@ -36,11 +38,15 @@ class _TripCalendarSheet extends StatefulWidget {
     required this.initial,
     required this.firstDate,
     required this.lastDate,
+    this.singleDay = false,
   });
 
   final DateTimeRange? initial;
   final DateTime firstDate;
   final DateTime lastDate;
+
+  /// 하루만 고르는 모드 — 탭 즉시 시작=종료로 확정 (행 편집 등 단일 날짜용).
+  final bool singleDay;
 
   @override
   State<_TripCalendarSheet> createState() => _TripCalendarSheetState();
@@ -70,6 +76,11 @@ class _TripCalendarSheetState extends State<_TripCalendarSheet> {
 
   void _tapDay(DateTime day) {
     setState(() {
+      if (widget.singleDay) {
+        _start = day;
+        _end = day;
+        return;
+      }
       if (_start == null || _end != null) {
         _start = day;
         _end = null;
