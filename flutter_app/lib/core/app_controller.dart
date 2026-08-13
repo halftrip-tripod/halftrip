@@ -205,18 +205,14 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> signUpWithCredentials({
-    required String name,
     required String loginId,
     required String password,
-    required String phoneNumber,
     required String residence,
   }) async {
     await _runBusy(() async {
       final authUser = await _repository.localSignUp(
-        name: name,
         loginId: loginId,
         password: password,
-        phoneNumber: phoneNumber,
         residence: residence,
       );
       currentUser = await _repository.getUser(authUser.id);

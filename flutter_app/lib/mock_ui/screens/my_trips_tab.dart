@@ -44,8 +44,16 @@ class _MyTripsTabState extends State<MyTripsTab> {
   Widget build(BuildContext context) {
     final controller = AppScope.of(context);
     final trips = controller.trips;
-    final active = trips.where((t) => !t.settlementApplied).toList()
+    // 여행이 끝났지만 정산 전인 건을 "진행 중인 여행"에 두면
+    // 카드에 "여행 종료" 배지가 붙은 채로 진행 중이라고 말하게 된다. 따로 뺀다.
+    final active = trips
+        .where((t) => !t.settlementApplied && stageOf(t) != TripStageView.settle)
+        .toList()
       ..sort((a, b) => a.startDate.compareTo(b.startDate));
+    final settling = trips
+        .where((t) => !t.settlementApplied && stageOf(t) == TripStageView.settle)
+        .toList()
+      ..sort((a, b) => b.endDate.compareTo(a.endDate));
     final past = trips.where((t) => t.settlementApplied).toList()
       ..sort((a, b) => b.endDate.compareTo(a.endDate));
     final favCount = controller.currentUser?.favoriteRegions.length ?? 0;
@@ -100,6 +108,15 @@ class _MyTripsTabState extends State<MyTripsTab> {
               TripCard(trip: trip, onChanged: () => setState(() {})),
               const SizedBox(height: 14),
             ],
+          if (settling.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            const SectionTitle('정산 준비 중'),
+            const SizedBox(height: 12),
+            for (final trip in settling) ...[
+              TripCard(trip: trip, onChanged: () => setState(() {})),
+              const SizedBox(height: 14),
+            ],
+          ],
           const SizedBox(height: 8),
           const SectionTitle('보관함'),
           const SizedBox(height: 12),
@@ -465,8 +482,10 @@ Future<void> _showTripInfoSheet(BuildContext context, RegionSummary region) {
                 userId: user.id,
                 regionId: region.id,
                 draft: TripDraft(
-                  applicantName: user.name,
-                  phoneNumber: user.phoneNumber,
+                  // 실명·전화번호는 여행을 만들 때가 아니라 정산 신청 시점에 받는다.
+                  // (개인정보 최소수집 — settlement_screen의 _askApplicantInfo)
+                  applicantName: '',
+                  phoneNumber: '',
                   residence: user.residence,
                   startDate: range.start,
                   endDate: range.end,
