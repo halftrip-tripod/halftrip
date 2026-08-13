@@ -2,15 +2,94 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/app_config.dart';
 import '../../core/app_scope.dart';
 import '../../models/app_models.dart';
 import '../../screens/youtube_course_start_screen.dart';
+import '../../services/course_ai_service.dart';
+import '../../widgets/place_map_view.dart';
 import '../data/mock_data.dart';
 import '../data/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui.dart';
 import 'trip_picker_sheet.dart';
+
+// ───────────────────────── AI 코스 생성 유틸 (실서버 후보 → 일정 배치)
+
+const _day1Slots = ['10:00', '12:30', '14:30', '18:00'];
+const _day2Slots = ['09:30', '12:00', '14:30'];
+
+/// 실서버 후보(PlaceItem) 목록 → DAY1/DAY2 일정으로 배치.
+List<CourseStop> _scheduleAiStops(List<PlaceItem> places) {
+  final stops = <CourseStop>[];
+  for (var i = 0; i < places.length && i < 7; i++) {
+    final day = i < _day1Slots.length ? 1 : 2;
+    final time = day == 1 ? _day1Slots[i] : _day2Slots[i - _day1Slots.length];
+    final place = places[i];
+    stops.add(CourseStop(
+      day: day,
+      time: time,
+      emoji: _aiPlaceEmoji(place),
+      name: place.name,
+      tag: '관광지',
+      refund: place.eligibleForRefund,
+      latitude: place.latitude,
+      longitude: place.longitude,
+      address: place.address,
+      placeId: place.id,
+    ));
+  }
+  return stops;
+}
+
+String _aiPlaceEmoji(PlaceItem place) {
+  final text = '${place.name} ${place.description}';
+  if (text.contains('다리') || text.contains('출렁')) return '🌉';
+  if (text.contains('박물관') || text.contains('청자')) return '🏺';
+  if (text.contains('초당') || text.contains('유적') || text.contains('생가')) {
+    return '🏯';
+  }
+  if (text.contains('시장') || text.contains('식당') || text.contains('맛')) {
+    return '🍲';
+  }
+  if (text.contains('카페')) return '☕';
+  if (text.contains('한옥') || text.contains('스테이') || text.contains('숙')) {
+    return '🏠';
+  }
+  if (text.contains('타워') || text.contains('전망') || text.contains('케이블')) {
+    return '🗼';
+  }
+  if (text.contains('공원') || text.contains('생태') || text.contains('수목원')) {
+    return '🌾';
+  }
+  if (text.contains('해수욕장') || text.contains('해변') || text.contains('섬')) {
+    return '🏖️';
+  }
+  return '📍';
+}
+
+/// 취향 키워드 매칭 규칙 기반 대체 정렬 (LLM 실패/빈 결과 시).
+List<PlaceItem> _rankAiPlaces(
+    List<PlaceItem> places, List<String> prefs) {
+  int score(PlaceItem place) {
+    final text = '${place.name} ${place.address} ${place.description}';
+    var total = 0;
+    for (var i = 0; i < prefs.length; i++) {
+      final keywords = switch (prefs[i]) {
+        '맛집' => ['시장', '식당', '맛', '카페'],
+        '자연' => ['공원', '생태', '해수욕장', '섬', '산', '숲'],
+        '문화' => ['박물관', '유적', '초당', '생가', '청자'],
+        _ => ['체험', '타워', '전망', '케이블', '짚'],
+      };
+      if (keywords.any(text.contains)) total += (prefs.length - i) * 10;
+    }
+    return total;
+  }
+
+  final ranked = [...places]..sort((a, b) => score(b).compareTo(score(a)));
+  return ranked.take(7).toList();
+}
 
 /// S1-4a 코스 만들기 (방식 선택).
 /// [forTrip]이 있으면 여행 지역·일정이 고정된 상태로 시작 (지역 선택 단계 생략),
@@ -273,12 +352,79 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
       builder: (_) => const _GeneratingDialog(
           title: 'AI가 코스를 만들고 있어요', steps: ['취향·환급 조건 분석', '장소 선정', '동선 최적화']),
     );
-    await Future.delayed(const Duration(milliseconds: 2200));
+
+    final controller = AppScope.of(context);
+    final preferences = _themes.map((t) => t.$2).toList();
+    List<CourseStop> stops = const [];
+    String? errorMessage;
+    try {
+      // mock_ui의 Region엔 백엔드 id가 없어 이름으로 실제 지역을 찾는다.
+      final regions = await controller.repository.getRegions();
+      final matched = regions.where((r) => r.name == widget.region.name);
+      if (matched.isEmpty) {
+        throw Exception('연결된 지역 정보를 찾을 수 없습니다.');
+      }
+      final detail = await controller.repository.getRegionDetail(
+        matched.first.id,
+        residence: controller.currentUser?.residence,
+      );
+      final candidates = detail.halfPricePlaces;
+      if (candidates.isEmpty) {
+        throw Exception('추천할 장소 데이터가 없습니다.');
+      }
+      List<PlaceItem> places;
+      try {
+        // FastAPI LLM으로 실제 코스 생성(테마·환급조건 반영, 후보 중에서만 선정).
+        final aiService = CourseAiService(AppConfig.fromEnvironment());
+        final result = await aiService.generate(
+          regionName: widget.region.name,
+          nights: _nights,
+          people: _people,
+          themePriority: preferences,
+          candidates: candidates
+              .map((place) => {
+                    'name': place.name,
+                    'category': '',
+                    'address': place.address,
+                    'description': place.description,
+                    'eligibleForRefund': place.eligibleForRefund,
+                  })
+              .toList(),
+        );
+        final byName = {for (final place in candidates) place.name: place};
+        places = result.stops
+            .map((stop) => byName[stop.name])
+            .whereType<PlaceItem>()
+            .toList();
+        if (places.isEmpty) {
+          // LLM이 후보 밖 이름을 반환했거나 빈 결과 — 규칙 기반으로 안전하게 대체.
+          places = _rankAiPlaces(candidates, preferences);
+        }
+      } catch (_) {
+        // FastAPI 호출 실패(네트워크/키 미설정 등) — 클라이언트 규칙 기반으로 대체.
+        places = _rankAiPlaces(candidates, preferences);
+      }
+      stops = _scheduleAiStops(places);
+    } catch (error) {
+      errorMessage = '$error';
+    }
+
     if (!mounted) return;
     Navigator.of(context).pop(); // 다이얼로그 닫기
+
+    if (errorMessage != null || stops.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('코스를 생성하지 못했습니다: ${errorMessage ?? "추천할 장소가 없습니다."}')),
+      );
+      return;
+    }
+
     Navigator.of(context).pushReplacement(MaterialPageRoute(
         builder: (_) => CourseSimScreen(
-            region: widget.region, nights: _nights, forTrip: widget.forTrip)));
+            region: widget.region,
+            nights: _nights,
+            forTrip: widget.forTrip,
+            stops: stops)));
   }
 
   @override
@@ -768,10 +914,18 @@ class _YtVideoRow extends StatelessWidget {
 
 /// S1-4 코스 시뮬 (생성 결과).
 class CourseSimScreen extends StatelessWidget {
-  const CourseSimScreen({super.key, required this.region, this.nights = 1, this.forTrip});
+  const CourseSimScreen({
+    super.key,
+    required this.region,
+    this.nights = 1,
+    this.forTrip,
+    this.stops = const [],
+  });
   final Region region;
   final int nights;
   final Trip? forTrip;
+  /// AI가 실제 후보(TourAPI 지정관광지) 중에서 뽑은 장소 목록. 좌표를 포함한다.
+  final List<CourseStop> stops;
 
   @override
   Widget build(BuildContext context) {
@@ -792,7 +946,8 @@ class CourseSimScreen extends StatelessWidget {
               emoji: region.emoji, region: region.name, province: region.province,
               title: '${region.name} 환급 보장 코스', source: CourseSource.ai,
               durationLabel: nights == 0 ? '당일치기' : '$nights박 ${nights + 1}일',
-              placeCount: 7, refundOk: true, savedAgo: '방금 저장', stops: gangjinStops(),
+              placeCount: stops.length, refundOk: true, savedAgo: '방금 저장',
+              stops: stops.isEmpty ? gangjinStops() : stops,
             );
             AppState.I.addCourse(c);
             if (forTrip != null) {
@@ -810,12 +965,101 @@ class CourseSimScreen extends StatelessWidget {
           }),
         ],
       ),
-      children: const [
-        FitBanner(title: '이 코스로 환급 조건 100% 충족', subtitle: '지정관광지 2곳 · 1박 숙박 · 인정 결제 포함'),
-        CourseMapCard(),
-        _TimelineSection(),
+      children: [
+        const FitBanner(title: '이 코스로 환급 조건 100% 충족', subtitle: '지정관광지 2곳 · 1박 숙박 · 인정 결제 포함'),
+        _buildStopsMap(context, stops),
+        _TimelineSection(stops: stops),
       ],
     );
+  }
+}
+
+/// 코스 스톱의 실제 좌표를 지도(구글/카카오)에 순서대로 표시. 좌표가 없으면 장식용 목업 지도로 대체.
+Widget _buildStopsMap(BuildContext context, List<CourseStop> stops) {
+  final geoStops = stops.where((s) => s.latitude != null && s.longitude != null).toList();
+  if (geoStops.isEmpty) {
+    return const CourseMapCard();
+  }
+  final markers = geoStops
+      .map((stop) => PlaceMapMarkerData(
+            id: stop.placeId ?? stop.name.hashCode,
+            name: stop.name,
+            address: stop.address ?? '',
+            latitude: stop.latitude!,
+            longitude: stop.longitude!,
+            selected: false,
+            editorialSummary: stop.tag,
+          ))
+      .toList();
+  final routeMarkers = geoStops
+      .map((stop) => PlaceMapRoutePoint(
+            id: stop.placeId ?? stop.name.hashCode,
+            latitude: stop.latitude!,
+            longitude: stop.longitude!,
+          ))
+      .toList();
+  final config = AppConfig.fromEnvironment();
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(20),
+    child: PlaceMapView(
+      markers: markers,
+      emptyMessage: '표시할 장소 좌표가 없습니다.',
+      kakaoEnabled: config.canUseKakaoMap,
+      routeMarkers: routeMarkers,
+      connectSequentially: true,
+      height: 200,
+      onMarkerDetailsRequested: (marker) => _loadAiMarkerDetails(context, marker),
+    ),
+  );
+}
+
+/// 지도 마커 탭 시 구글 Places 상세정보를 조회해 병합. 실패하면 기존(TourAPI 기반) 값 유지.
+Future<PlaceMapMarkerData?> _loadAiMarkerDetails(
+  BuildContext context,
+  PlaceMapMarkerData marker,
+) async {
+  try {
+    final controller = AppScope.of(context);
+    final detail = await controller.repository.searchGooglePlaceDetail(
+      placeName: marker.name,
+      address: marker.address,
+      latitude: marker.latitude,
+      longitude: marker.longitude,
+    );
+    if (detail == null) {
+      return null;
+    }
+    return PlaceMapMarkerData(
+      id: marker.id,
+      name: detail.placeName.isNotEmpty ? detail.placeName : marker.name,
+      address: detail.address.isNotEmpty ? detail.address : marker.address,
+      latitude: detail.latitude == 0 ? marker.latitude : detail.latitude,
+      longitude: detail.longitude == 0 ? marker.longitude : detail.longitude,
+      selected: marker.selected,
+      regionLabel: detail.category.isNotEmpty ? detail.category : marker.regionLabel,
+      phoneNumber: detail.phoneNumber.isNotEmpty ? detail.phoneNumber : marker.phoneNumber,
+      roadAddress: detail.address.isNotEmpty ? detail.address : marker.roadAddress,
+      categoryName: detail.category.isNotEmpty ? detail.category : marker.categoryName,
+      placeUrl: detail.placeUrl.isNotEmpty ? detail.placeUrl : marker.placeUrl,
+      websiteUri: detail.websiteUri.isNotEmpty ? detail.websiteUri : marker.websiteUri,
+      internationalPhoneNumber: detail.internationalPhoneNumber.isNotEmpty
+          ? detail.internationalPhoneNumber
+          : marker.internationalPhoneNumber,
+      rating: detail.rating ?? marker.rating,
+      userRatingCount:
+          detail.userRatingCount == 0 ? marker.userRatingCount : detail.userRatingCount,
+      businessStatus:
+          detail.businessStatus.isNotEmpty ? detail.businessStatus : marker.businessStatus,
+      priceLevel: detail.priceLevel.isNotEmpty ? detail.priceLevel : marker.priceLevel,
+      types: detail.types.isNotEmpty ? detail.types : marker.types,
+      openingHours: detail.openingHours.isNotEmpty ? detail.openingHours : marker.openingHours,
+      editorialSummary:
+          detail.editorialSummary.isNotEmpty ? detail.editorialSummary : marker.editorialSummary,
+      googlePlaceDetails:
+          detail.googlePlaceDetails.isNotEmpty ? detail.googlePlaceDetails : marker.googlePlaceDetails,
+    );
+  } catch (_) {
+    return null;
   }
 }
 
@@ -882,7 +1126,7 @@ class _CourseViewScreenState extends State<CourseViewScreen> {
         if (c.refundOk)
           const FitBanner(
               title: '이 코스로 환급 조건 100% 충족', subtitle: '지정관광지 2곳 · 1박 숙박 · 인정 결제 포함'),
-        if (c.stops.isNotEmpty) const CourseMapCard(),
+        if (c.stops.isNotEmpty) _buildStopsMap(context, c.stops),
         _TimelineSection(stops: c.stops),
       ],
     );

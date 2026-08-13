@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../core/app_config.dart';
 import '../core/app_scope.dart';
 import '../models/app_models.dart';
+import '../services/course_ai_service.dart';
 import '../theme/app_colors.dart';
+import '../widgets/place_map_view.dart';
 import '../widgets/ui/app_card.dart';
 
 /// 코스 플로우 (목업 halftrip-mockup/lib/screens/course_flow.dart 1:1 이식).
@@ -136,16 +139,56 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
     );
 
     final controller = AppScope.of(context);
-    final detail = await controller.repository.getRegionDetail(
-      widget.tripDetail.trip.regionId,
-      residence: controller.currentUser?.residence,
-    );
-    await Future<void>.delayed(const Duration(milliseconds: 1800));
+    final preferences = _themes.map((t) => t.$2).toList();
+    List<PlaceItem> places;
+    try {
+      final detail = await controller.repository.getRegionDetail(
+        widget.tripDetail.trip.regionId,
+        residence: controller.currentUser?.residence,
+      );
+      final candidates = detail.halfPricePlaces;
+      try {
+        // FastAPI LLM으로 실제 코스 생성(테마·환급조건 반영, 후보 중에서만 선정).
+        final aiService = CourseAiService(AppConfig.fromEnvironment());
+        final result = await aiService.generate(
+          regionName: widget.tripDetail.trip.regionName,
+          nights: _nights,
+          people: _people,
+          themePriority: preferences,
+          candidates: candidates
+              .map((place) => {
+                    'name': place.name,
+                    'category': '',
+                    'address': place.address,
+                    'description': place.description,
+                    'eligibleForRefund': place.eligibleForRefund,
+                  })
+              .toList(),
+        );
+        final byName = {for (final place in candidates) place.name: place};
+        places = result.stops
+            .map((stop) => byName[stop.name])
+            .whereType<PlaceItem>()
+            .toList();
+        if (places.isEmpty) {
+          // LLM이 후보 밖 이름을 반환했거나 빈 결과 — 규칙 기반으로 안전하게 대체.
+          places = _rankPlaces(candidates, preferences);
+        }
+      } catch (_) {
+        // FastAPI 호출 실패(네트워크/키 미설정 등) — 클라이언트 규칙 기반으로 대체.
+        places = _rankPlaces(candidates, preferences);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      Navigator.of(context).pop(); // 로딩 다이얼로그 닫기
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('코스를 생성하지 못했습니다: $error')),
+      );
+      return;
+    }
     if (!mounted) return;
     Navigator.of(context).pop(); // 다이얼로그 닫기
 
-    final preferences = _themes.map((t) => t.$2).toList();
-    final places = _rankPlaces(detail.halfPricePlaces, preferences);
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => CourseSimScreen(
@@ -527,10 +570,7 @@ class CourseSimScreen extends StatelessWidget {
             subtitle: '지정관광지 $refundCount곳 · ${nights > 0 ? '1박 숙박 · ' : ''}인정 결제 포함',
           ),
           const SizedBox(height: 16),
-          CourseMapCard(
-            day1: stops.where((s) => s.day == 1).length,
-            day2: stops.where((s) => s.day == 2).length,
-          ),
+          _buildCourseMap(context),
           const SizedBox(height: 16),
           CourseTimeline(stops: stops),
         ],
@@ -585,6 +625,100 @@ class CourseSimScreen extends StatelessWidget {
         ]),
       ),
     );
+  }
+
+  /// 코스 장소를 실제 지도(구글/카카오, MAP_PROVIDER 설정에 따름)에 순서대로 표시.
+  /// 마커를 탭하면 구글 상세정보(평점·전화·영업시간 등)를 조회해 카드에 보여준다.
+  /// TourAPI 기반 설명(description)은 구글 상세가 비어있을 때의 대체 정보로 함께 넘긴다.
+  Widget _buildCourseMap(BuildContext context) {
+    final geoPlaces =
+        places.where((p) => p.latitude != null && p.longitude != null).toList();
+    final markers = geoPlaces
+        .map(
+          (place) => PlaceMapMarkerData(
+            id: place.id,
+            name: place.name,
+            address: place.address,
+            latitude: place.latitude!,
+            longitude: place.longitude!,
+            selected: false,
+            editorialSummary: place.description.isEmpty ? null : place.description,
+          ),
+        )
+        .toList();
+    final routeMarkers = geoPlaces
+        .map(
+          (place) => PlaceMapRoutePoint(
+            id: place.id,
+            latitude: place.latitude!,
+            longitude: place.longitude!,
+          ),
+        )
+        .toList();
+    final config = AppConfig.fromEnvironment();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: PlaceMapView(
+        markers: markers,
+        emptyMessage: '표시할 장소 좌표가 없습니다.',
+        kakaoEnabled: config.canUseKakaoMap,
+        routeMarkers: routeMarkers,
+        connectSequentially: true,
+        height: 240,
+        onMarkerDetailsRequested: (marker) => _loadGoogleMarkerDetails(context, marker),
+      ),
+    );
+  }
+
+  /// 지도 마커 탭 시 구글 Places 상세정보를 조회해 병합. 실패하면 기존(TourAPI 기반) 값 유지.
+  Future<PlaceMapMarkerData?> _loadGoogleMarkerDetails(
+    BuildContext context,
+    PlaceMapMarkerData marker,
+  ) async {
+    try {
+      final controller = AppScope.of(context);
+      final detail = await controller.repository.searchGooglePlaceDetail(
+        placeName: marker.name,
+        address: marker.address,
+        latitude: marker.latitude,
+        longitude: marker.longitude,
+      );
+      if (detail == null) {
+        return null;
+      }
+      return PlaceMapMarkerData(
+        id: marker.id,
+        name: detail.placeName.isNotEmpty ? detail.placeName : marker.name,
+        address: detail.address.isNotEmpty ? detail.address : marker.address,
+        latitude: detail.latitude == 0 ? marker.latitude : detail.latitude,
+        longitude: detail.longitude == 0 ? marker.longitude : detail.longitude,
+        selected: marker.selected,
+        regionLabel: detail.category.isNotEmpty ? detail.category : marker.regionLabel,
+        phoneNumber: detail.phoneNumber.isNotEmpty ? detail.phoneNumber : marker.phoneNumber,
+        roadAddress: detail.address.isNotEmpty ? detail.address : marker.roadAddress,
+        categoryName: detail.category.isNotEmpty ? detail.category : marker.categoryName,
+        placeUrl: detail.placeUrl.isNotEmpty ? detail.placeUrl : marker.placeUrl,
+        websiteUri: detail.websiteUri.isNotEmpty ? detail.websiteUri : marker.websiteUri,
+        internationalPhoneNumber: detail.internationalPhoneNumber.isNotEmpty
+            ? detail.internationalPhoneNumber
+            : marker.internationalPhoneNumber,
+        rating: detail.rating ?? marker.rating,
+        userRatingCount:
+            detail.userRatingCount == 0 ? marker.userRatingCount : detail.userRatingCount,
+        businessStatus:
+            detail.businessStatus.isNotEmpty ? detail.businessStatus : marker.businessStatus,
+        priceLevel: detail.priceLevel.isNotEmpty ? detail.priceLevel : marker.priceLevel,
+        types: detail.types.isNotEmpty ? detail.types : marker.types,
+        openingHours: detail.openingHours.isNotEmpty ? detail.openingHours : marker.openingHours,
+        // TourAPI 설명을 기본값으로 이미 채워뒀으므로, 구글 상세가 비어있으면 그대로 유지.
+        editorialSummary:
+            detail.editorialSummary.isNotEmpty ? detail.editorialSummary : marker.editorialSummary,
+        googlePlaceDetails:
+            detail.googlePlaceDetails.isNotEmpty ? detail.googlePlaceDetails : marker.googlePlaceDetails,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 }
 
