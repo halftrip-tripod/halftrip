@@ -28,9 +28,10 @@ class _RegionActionScreenState extends State<RegionActionScreen> {
 
   Future<void> _toggleOpenAlert() async {
     final controller = AppScope.of(context);
-    final wasEnabled =
-        controller.preopenAlertRegionIds.contains(widget.region.id);
-    await controller.togglePreopenAlertRegion(widget.region.id);
+    final wasEnabled = controller.currentUser?.favoriteRegions
+            .any((item) => item.id == widget.region.id) ??
+        false;
+    await controller.toggleFavoriteRegion(widget.region);
     if (!mounted) return;
     setState(() {});
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -71,7 +72,7 @@ class _RegionActionScreenState extends State<RegionActionScreen> {
     final isFavorite = controller.currentUser?.favoriteRegions
             .any((item) => item.id == region.id) ??
         false;
-    final alertEnabled = controller.preopenAlertRegionIds.contains(region.id);
+    final alertEnabled = isFavorite;
 
     return Scaffold(
       backgroundColor: AppColors.bg,

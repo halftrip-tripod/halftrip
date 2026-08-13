@@ -11,6 +11,7 @@ import '../theme/app_colors.dart';
 import '../widgets/ui.dart';
 import 'community.dart';
 import 'course_flow.dart';
+import 'my_trips_tab.dart' show stageOf, TripStageView;
 import 'region_detail.dart';
 
 /// S1-1 홈 메인 (대시보드).
@@ -49,7 +50,17 @@ class _HomeTabState extends State<HomeTab> {
         .where((r) => user.residence.trim().isEmpty || r.matchedByResidence)
         .toList()
       ..sort((a, b) => a.displayOrder.compareTo(b.displayOrder));
-    return _HomeData(residence: user.residence, regions: eligible);
+    await controller.refreshTrips();
+    final visitedRegionIds = controller.trips
+        .where((t) =>
+            stageOf(t) == TripStageView.settle || stageOf(t) == TripStageView.review)
+        .map((t) => t.regionId)
+        .toSet();
+    return _HomeData(
+      residence: user.residence,
+      regions: eligible,
+      visitedRegionIds: visitedRegionIds,
+    );
   }
 
   Future<void> _refresh() async {
@@ -126,7 +137,12 @@ class _HomeTabState extends State<HomeTab> {
                 onChanged: (i) => setState(() => _pane = i),
               ),
               const SizedBox(height: 14),
-              if (_pane == 0) _MapPane(regions: data.regions),
+              if (_pane == 0)
+                _MapPane(
+                  regions: data.regions,
+                  residence: data.residence,
+                  visitedRegionIds: data.visitedRegionIds,
+                ),
               if (_pane == 1) ...[
                 for (final r in applying) ...[_UrgCard(region: r), const SizedBox(height: 14)],
                 if (applying.isEmpty) const _EmptyBlock(message: '지금 접수 중인 지역이 없어요.'),
@@ -211,9 +227,14 @@ class _HomeTabState extends State<HomeTab> {
 }
 
 class _HomeData {
-  const _HomeData({required this.residence, required this.regions});
+  const _HomeData({
+    required this.residence,
+    required this.regions,
+    required this.visitedRegionIds,
+  });
   final String residence;
   final List<RegionSummary> regions;
+  final Set<int> visitedRegionIds;
 }
 
 void _openRegion(BuildContext context, RegionSummary region) {
@@ -221,13 +242,28 @@ void _openRegion(BuildContext context, RegionSummary region) {
 }
 
 class _MapPane extends StatelessWidget {
-  const _MapPane({required this.regions});
+  const _MapPane({
+    required this.regions,
+    required this.residence,
+    required this.visitedRegionIds,
+  });
   final List<RegionSummary> regions;
+  final String residence;
+  final Set<int> visitedRegionIds;
+
+  /// 거주지("시도 시군구") 문자열의 시/도 부분을 시/도청 위경도로 투영.
+  Offset? _residenceOffset() {
+    final province = residence.trim().split(' ').first;
+    final latLng = _provinceLatLng[province];
+    if (latLng == null) return null;
+    return _projectLatLng(latLng.$1, latLng.$2);
+  }
 
   @override
   Widget build(BuildContext context) {
     final applying = regions.where((r) => r.statusCode.toUpperCase() == 'APPLYING').length;
     final preparing = regions.where((r) => r.statusCode.toUpperCase() == 'PREPARING').length;
+    final meOffset = _residenceOffset();
 
     return AppCard(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
@@ -261,25 +297,9 @@ class _MapPane extends StatelessWidget {
                     child: SizedBox(
                       width: 52,
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        Container(
-                          width: r.statusCode.toUpperCase() == 'APPLYING' ? 26 : 20,
-                          height: r.statusCode.toUpperCase() == 'APPLYING' ? 26 : 20,
-                          decoration: BoxDecoration(
-                            color: r.statusCode.toUpperCase() == 'APPLYING'
-                                ? AppColors.p500
-                                : const Color(0xFF5CC4EE),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2.5),
-                            boxShadow: const [
-                              BoxShadow(color: Color(0x660284C7), blurRadius: 6, offset: Offset(0, 2)),
-                            ],
-                          ),
-                          child: const Center(
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                              child: SizedBox(width: 6, height: 6),
-                            ),
-                          ),
+                        _RegionPinDot(
+                          applying: r.statusCode.toUpperCase() == 'APPLYING',
+                          visited: visitedRegionIds.contains(r.id),
                         ),
                         const SizedBox(height: 2),
                         Text(r.name,
@@ -294,28 +314,101 @@ class _MapPane extends StatelessWidget {
                     ),
                   ),
                 ),
+              if (meOffset != null)
+                Positioned(
+                  left: px(meOffset) - 11,
+                  top: py(meOffset) - 11,
+                  child: const IgnorePointer(
+                    child: _MapDot(size: 22, color: AppColors.coral),
+                  ),
+                ),
             ]),
           );
         }),
         const SizedBox(height: 8),
-        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          _legend(AppColors.p500, '접수중 $applying'),
-          const SizedBox(width: 14),
-          _legend(AppColors.p300, '오픈예정 $preparing'),
-          const SizedBox(width: 14),
-          _legend(AppColors.gray, '마감'),
-        ]),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 14,
+          runSpacing: 6,
+          children: [
+            _legend(AppColors.p500, '접수중 $applying'),
+            _legend(AppColors.p300, '오픈예정 $preparing'),
+            _legend(AppColors.gray, '마감'),
+            _legend(AppColors.coral, '내 위치'),
+            _legend(AppColors.coralDeep, '다녀온 지역'),
+          ],
+        ),
         const SizedBox(height: 6),
       ]),
     );
   }
 
-  Widget _legend(Color c, String label) => Row(children: [
+  Widget _legend(Color c, String label) => Row(mainAxisSize: MainAxisSize.min, children: [
         Container(width: 9, height: 9, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
         const SizedBox(width: 5),
         Text(label,
             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink5)),
       ]);
+}
+
+/// 지도 위 지역 핀 — 다녀온 지역(정산 신청 이상 단계)은 파란 점 대신 도장 표시.
+class _RegionPinDot extends StatelessWidget {
+  const _RegionPinDot({required this.applying, required this.visited});
+  final bool applying;
+  final bool visited;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = applying ? 26.0 : 20.0;
+    if (visited) {
+      return Transform.rotate(
+        angle: -0.2,
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: AppColors.coralTint,
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.coralDeep, width: 2.2),
+            boxShadow: const [
+              BoxShadow(color: Color(0x33000000), blurRadius: 4, offset: Offset(0, 2)),
+            ],
+          ),
+          child: Icon(Icons.star_rounded, size: size * 0.65, color: AppColors.coralDeep),
+        ),
+      );
+    }
+    return _MapDot(size: size, color: applying ? AppColors.p500 : const Color(0xFF5CC4EE));
+  }
+}
+
+/// 지도 핀 공통 모양 — 색 테두리 원 + 흰 점(디자인 시안 halftrip-design/home.html과 동일 형태).
+class _MapDot extends StatelessWidget {
+  const _MapDot({required this.size, required this.color});
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 2.5),
+        boxShadow: const [
+          BoxShadow(color: Color(0x660284C7), blurRadius: 6, offset: Offset(0, 2)),
+        ],
+      ),
+      child: const Center(
+        child: DecoratedBox(
+          decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+          child: SizedBox(width: 6, height: 6),
+        ),
+      ),
+    );
+  }
 }
 
 /// 접수중 지역 카드 (urg) — 조건 요약 + 잔여 예산 + 즐겨찾기.
@@ -328,7 +421,7 @@ class _UrgCard extends StatelessWidget {
     final controller = AppScope.of(context);
     final isFavorite =
         controller.currentUser?.favoriteRegions.any((f) => f.id == region.id) ?? false;
-    final dday = _mockDday[region.name];
+    final dday = regionDday(region);
 
     return AppCard(
       padding: const EdgeInsets.all(16),
@@ -384,21 +477,17 @@ class _UrgCard extends StatelessWidget {
   }
 }
 
-/// 오픈예정 "+관심" — 백엔드에 지역별 알림 신청 API가 없어서 세션 동안만 유지되는
-/// 임시 로컬 상태(재방문 시 초기화됨). API 생기면 이 맵은 지우고 컨트롤러로 교체.
-final Map<int, ValueNotifier<bool>> _preopenInterestNotifiers = {};
-
-ValueNotifier<bool> _preopenInterestFor(int regionId) =>
-    _preopenInterestNotifiers.putIfAbsent(regionId, () => ValueNotifier(false));
-
-/// 오픈예정 행 (+ 관심 = 오픈 알림).
+/// 오픈예정 행 (+ 관심 = 오픈 알림 — 접수중 별표시와 동일한 즐겨찾기).
 class _SoonRow extends StatelessWidget {
   const _SoonRow({required this.region});
   final RegionSummary region;
 
   @override
   Widget build(BuildContext context) {
-    final interest = _preopenInterestFor(region.id);
+    final controller = AppScope.of(context);
+    final on =
+        controller.currentUser?.favoriteRegions.any((f) => f.id == region.id) ??
+            false;
 
     return GestureDetector(
       onTap: () => _openRegion(context, region),
@@ -429,26 +518,25 @@ class _SoonRow extends StatelessWidget {
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.ink5)),
             ]),
           ),
-          ValueListenableBuilder(
-            valueListenable: interest,
-            builder: (_, on, __) => GestureDetector(
-              onTap: () {
-                interest.value = !on;
-                showMock(context,
-                    on ? '${region.name} 관심 등록을 해제했어요.' : '${region.name}을(를) 관심 지역에 담았어요. 오픈하면 알려드릴게요!');
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                decoration: BoxDecoration(
-                  color: on ? AppColors.p100 : AppColors.p500,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(on ? '관심 ✓' : '+ 관심',
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: on ? AppColors.p700 : Colors.white)),
+          GestureDetector(
+            onTap: () async {
+              final wasEnabled = on;
+              await controller.toggleFavoriteRegion(region);
+              if (!context.mounted) return;
+              showMock(context,
+                  wasEnabled ? '${region.name} 관심 등록을 해제했어요.' : '${region.name}을(를) 관심 지역에 담았어요. 오픈하면 알려드릴게요!');
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              decoration: BoxDecoration(
+                color: on ? AppColors.p100 : AppColors.p500,
+                borderRadius: BorderRadius.circular(12),
               ),
+              child: Text(on ? '관심 ✓' : '+ 관심',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: on ? AppColors.p700 : Colors.white)),
             ),
           ),
         ]),
@@ -539,16 +627,28 @@ Offset _projectLatLng(double lat, double lng) => Offset(
       189.7 - 182.1 * (lat - 37.567),
     );
 
-/// 임시 D-day 목업값 — 백엔드에 마감일 필드가 생기면 이 테이블은 지우고 실 데이터로 교체.
-const _mockDday = <String, (int, bool)>{
-  '평창': (2, true),
-  '강진': (5, false),
-  '영월': (3, false),
-  '거창': (7, false),
-  '고창': (11, false),
-  '완도': (9, false),
-  '제천': (12, false),
+/// 시/도청 소재지 위경도 — "내 위치" 마커는 거주지(residence, "시도 시군구" 형식)의
+/// 시/도 부분만 이 표로 투영한다. 실제 GPS가 아니라 등록 거주지 기준.
+const _provinceLatLng = <String, (double, double)>{
+  '서울특별시': (37.5665, 126.9780),
+  '부산광역시': (35.1796, 129.0756),
+  '대구광역시': (35.8714, 128.6014),
+  '인천광역시': (37.4563, 126.7052),
+  '광주광역시': (35.1595, 126.8526),
+  '대전광역시': (36.3504, 127.3845),
+  '울산광역시': (35.5384, 129.3114),
+  '세종특별자치시': (36.4800, 127.2890),
+  '경기도': (37.2750, 127.0095),
+  '강원특별자치도': (37.8228, 128.1555),
+  '충청북도': (36.6357, 127.4917),
+  '충청남도': (36.6588, 126.6728),
+  '전북특별자치도': (35.8202, 127.1088),
+  '전라남도': (34.8161, 126.4630),
+  '경상북도': (36.5760, 128.5056),
+  '경상남도': (35.2380, 128.6924),
+  '제주특별자치도': (33.4996, 126.5312),
 };
+
 
 /// 지역별 이모지 — 백엔드에 없는 순수 장식용 값이라 클라이언트에서 고정 매핑.
 String _regionEmoji(String regionName) {

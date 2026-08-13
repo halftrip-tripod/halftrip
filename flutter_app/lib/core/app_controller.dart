@@ -28,13 +28,11 @@ class AppController extends ChangeNotifier {
   List<SavedCourse> savedCourses = const [];
   Map<int, String> selectedCourseIdsByTrip = const <int, String>{};
   List<PendingYoutubeCourseJob> pendingYoutubeCourseJobs = const [];
-  Set<int> preopenAlertRegionIds = const <int>{};
   Set<int> appliedTripIds = const <int>{};
 
   static const _savedCoursesKey = 'saved_courses_v1';
   static const _selectedCoursesKey = 'selected_course_ids_by_trip_v1';
   static const _pendingYoutubeJobsKey = 'pending_youtube_jobs_v1';
-  static const _preopenAlertsKey = 'preopen_alert_regions_v1';
   static const _appliedTripsKey = 'applied_trip_ids_v1';
 
   final navigatorKey = GlobalKey<NavigatorState>();
@@ -293,18 +291,6 @@ class AppController extends ChangeNotifier {
           : await _repository.addFavoriteRegion(user.id, region.id);
       currentUser = user.copyWith(favoriteRegions: updatedFavorites);
     }, resetError: false);
-  }
-
-  Future<void> togglePreopenAlertRegion(int regionId) async {
-    final next = {...preopenAlertRegionIds};
-    if (next.contains(regionId)) {
-      next.remove(regionId);
-    } else {
-      next.add(regionId);
-    }
-    preopenAlertRegionIds = next;
-    await _persistLocalDashboardData();
-    notifyListeners();
   }
 
   List<SavedCourse> _demoSavedCourses() => [
@@ -613,10 +599,6 @@ class AppController extends ChangeNotifier {
           ),
         )
         .toList();
-    preopenAlertRegionIds = (preferences.getStringList(_preopenAlertsKey) ?? const [])
-        .map(int.tryParse)
-        .whereType<int>()
-        .toSet();
     appliedTripIds = (preferences.getStringList(_appliedTripsKey) ?? const [])
         .map(int.tryParse)
         .whereType<int>()
@@ -640,10 +622,6 @@ class AppController extends ChangeNotifier {
     await preferences.setStringList(
       _pendingYoutubeJobsKey,
       pendingYoutubeCourseJobs.map((item) => jsonEncode(item.toJson())).toList(),
-    );
-    await preferences.setStringList(
-      _preopenAlertsKey,
-      preopenAlertRegionIds.map((item) => item.toString()).toList(),
     );
     await preferences.setStringList(
       _appliedTripsKey,
