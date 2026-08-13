@@ -145,8 +145,8 @@ class _YoutubeCourseStartScreenState extends State<YoutubeCourseStartScreen> {
                               const SizedBox(width: 7),
                               Expanded(
                                 child: Text(
-                                  '영상 속 장소로 코스를 자동 생성해 코스함에 저장해요. '
-                                  '저장 후 자유롭게 수정할 수 있어요.',
+                                  '영상 속 장소로 코스를 자동 생성해요. 자막·화면에 '
+                                  '장소 정보가 없으면 추출되지 않을 수 있어요.',
                                   style: const TextStyle(
                                     color: AppColors.ink5,
                                     fontSize: 12.5,
@@ -176,16 +176,16 @@ class _Hero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text.rich(
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(top: 6),
+                child: Text.rich(
                   TextSpan(
                     children: [
                       TextSpan(text: '유튜브 링크를 넣으면\n'),
@@ -203,22 +203,25 @@ class _Hero extends StatelessWidget {
                     letterSpacing: -1.1,
                   ),
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  '영상 속 장소와 동선을 찾아 코스와 계획표로 정리해드려요.',
-                  style: const TextStyle(
-                    color: AppColors.ink5,
-                    fontSize: 12.5,
-                    height: 1.55,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
+              ),
             ),
+            SizedBox(width: 4),
+            _PlayBadge(),
+          ],
+        ),
+        const SizedBox(height: 6),
+        // 마크 옆이 아니라 전체 폭에 두어 한 줄로 나오게 한다.
+        const Text(
+          '영상 속 장소와 동선을 찾아 코스와 계획표로 정리해드려요.',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: AppColors.ink5,
+            fontSize: 12.5,
+            height: 1.55,
+            fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(width: 4),
-        const _PlayBadge(),
       ],
     );
   }
@@ -231,8 +234,8 @@ class _PlayBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 84,
-      height: 82,
+      width: 74,
+      height: 62,
       child: Stack(
         alignment: Alignment.center,
         children: [
@@ -241,7 +244,7 @@ class _PlayBadge extends StatelessWidget {
             top: 4,
             child: Transform.rotate(
               angle: -0.20,
-              child: _card(const Color(0xFFD9E7F7), 56, 53),
+              child: _card(const Color(0xFFD9E7F7), 48, 44),
             ),
           ),
           Positioned(
@@ -249,21 +252,21 @@ class _PlayBadge extends StatelessWidget {
             bottom: 3,
             child: Transform.rotate(
               angle: 0.24,
-              child: _card(const Color(0xFFEFE6F6), 56, 53),
+              child: _card(const Color(0xFFEFE6F6), 48, 44),
             ),
           ),
           Transform.rotate(
             angle: 0.05,
             child: Container(
-              width: 56,
-              height: 52,
+              width: 48,
+              height: 43,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [Color(0xFFFF6B6B), Color(0xFFF01A1A)],
                 ),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(13),
                 boxShadow: const [
                   BoxShadow(
                     color: Color(0x4DF01A1A),
@@ -275,7 +278,7 @@ class _PlayBadge extends StatelessWidget {
               child: const Icon(
                 Icons.play_arrow_rounded,
                 color: Colors.white,
-                size: 30,
+                size: 25,
               ),
             ),
           ),
