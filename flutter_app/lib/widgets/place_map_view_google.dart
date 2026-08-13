@@ -1,5 +1,7 @@
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show Factory;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -255,6 +257,13 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
             return Stack(
               children: [
                 GoogleMap(
+                  // 지도가 ListView 등 스크롤 가능한 조상 안에 놓일 때 드래그/핀치줌
+                  // 제스처를 부모 스크롤이 가로채 지도가 고정된 그림처럼 보이는 문제를 막는다.
+                  gestureRecognizers: {
+                    Factory<OneSequenceGestureRecognizer>(
+                      () => EagerGestureRecognizer(),
+                    ),
+                  },
                   style: _halftripStyle,
                   initialCameraPosition:
                       CameraPosition(target: _center, zoom: 12),

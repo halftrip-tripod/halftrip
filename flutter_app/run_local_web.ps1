@@ -33,6 +33,7 @@ Set-Location $root
 
 & "C:\flutter\bin\flutter.bat" run `
   -d chrome `
+  --target lib/main_api.dart `
   --web-port 3000 `
   --dart-define=FLUTTER_WEB_CANVASKIT_URL=/canvaskit/ `
   @defines
