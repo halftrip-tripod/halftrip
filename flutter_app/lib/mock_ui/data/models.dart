@@ -42,6 +42,10 @@ class CourseStop {
     required this.tag,
     this.refund = false,
     this.stay = false,
+    this.latitude,
+    this.longitude,
+    this.address,
+    this.placeId,
   });
 
   final int day;
@@ -51,6 +55,11 @@ class CourseStop {
   final String tag; // 관광지/맛집/숙소/카페 …
   final bool refund;
   final bool stay;
+  // AI 코스 생성 결과(실서버 후보)일 때만 채워짐 — 지도·구글 상세정보 조회에 사용.
+  final double? latitude;
+  final double? longitude;
+  final String? address;
+  final int? placeId;
 }
 
 class Course {
