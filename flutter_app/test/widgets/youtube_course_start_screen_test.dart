@@ -38,7 +38,7 @@ void main() {
     await _pumpScreen(tester, const Size(360, 780));
 
     expect(tester.takeException(), isNull);
-    expect(find.text('유튜브 링크를 입력하세요'), findsOneWidget);
+    expect(find.text('유튜브 코스 생성'), findsOneWidget);
     expect(find.text('분석하기'), findsOneWidget);
   });
 
@@ -46,7 +46,7 @@ void main() {
     await _pumpScreen(tester, const Size(1100, 900));
 
     expect(tester.takeException(), isNull);
-    expect(find.text('유튜브 링크를 입력하세요'), findsOneWidget);
+    expect(find.text('유튜브 코스 생성'), findsOneWidget);
   });
 
   testWidgets('링크를 넣기 전에는 미리보기가 자리를 차지하지 않는다', (tester) async {
@@ -67,12 +67,11 @@ void main() {
     expect(find.text('영상을 찾았어요'), findsOneWidget);
   });
 
-  testWidgets('이력이 없어도 최근 분석 칸은 자리를 지킨다', (tester) async {
+  testWidgets('최근 분석 목록은 두지 않는다 (코스함과 중복)', (tester) async {
     await _pumpScreen(tester, const Size(390, 840));
 
-    expect(find.text('최근 분석'), findsOneWidget);
-    expect(find.text('아직 분석한 영상이 없어요'), findsOneWidget);
-    // 빈 목록으로 보낼 이유가 없으니 전체 보기는 감춘다.
+    // 분석 결과는 코스함에 쌓이므로 이 화면에 별도 목록을 두지 않기로 했다.
+    expect(find.text('최근 분석'), findsNothing);
     expect(find.text('전체 보기'), findsNothing);
   });
 
