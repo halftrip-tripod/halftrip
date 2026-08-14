@@ -126,5 +126,7 @@ clean composition with empty space on the left third for headline text, no lette
 - [ ] 개인정보처리방침 **웹 URL** (콘솔 필수 입력 — 호스팅 작업과 연동)
 - [ ] 계정 삭제 안내 웹 URL (Play 정책)
 - [ ] 데이터 보안 섹션 설문 (수집 항목: 이름·전화·거주지·사진 등 — 개인정보처리방침과 일치하게)
-- [ ] 콘텐츠 등급 설문, 대상 연령
-- [ ] 스크린샷 실캡처 (기능 완성 후 — 위 8장 구성대로)
+- [ ] 콘텐츠 등급 설문, 대상 연령 → [store-questionnaire.md](store-questionnaire.md)에 답안 완비
+- [x] **스크린샷 8장 완성** (2026-08-12) — `halftrip-design/` 화면 HTML을 Chrome 헤드리스로 390×707@2x 렌더 → `store-assets/cap-*.png` → `build.py`. 재생성: 캡처 갈아끼우고 `python3 build.py`.
+- [x] **앱 아이콘 512×512** — `store-assets/icon-512.png` (런처 아이콘 3D 핀 + 연한 하늘 배경)
+- [x] **피처 그래픽 1024×500** — `store-assets/feature-graphic.png` (`python3 feature_graphic.py`, cap-home 사용)

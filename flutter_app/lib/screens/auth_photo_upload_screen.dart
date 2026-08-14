@@ -377,27 +377,20 @@ class _Note extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF6E9),
-        borderRadius: BorderRadius.circular(AppRadius.field),
+    // 정본 .note — 배경/테두리 없는 인라인 텍스트(ink5) + p600 아이콘.
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Icon(Icons.photo_camera_outlined, size: 14, color: AppColors.p600),
+      const SizedBox(width: 7),
+      Expanded(
+        child: Text(text,
+            style: const TextStyle(
+                fontFamily: 'Pretendard',
+                fontSize: 12,
+                height: 1.5,
+                fontWeight: FontWeight.w500,
+                color: AppColors.ink5)),
       ),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Icon(Icons.info_outline_rounded,
-            size: 17, color: AppColors.warning),
-        const SizedBox(width: 9),
-        Expanded(
-          child: Text(text,
-              style: const TextStyle(
-                  fontFamily: 'Pretendard',
-                  fontSize: 12.5,
-                  height: 1.5,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF9A6800))),
-        ),
-      ]),
-    );
+    ]);
   }
 }
 

@@ -162,16 +162,23 @@ class SubmissionPackageScreen extends StatelessWidget {
                 ),
               ]),
               const SizedBox(height: 14),
-              OutlinedButton.icon(
+              // 정본 .btn-outline — 보조 톤(surf 배경·ink7 글자·p600 아이콘). 최종액션이 아니라 미리보기라 primary 아님.
+              TextButton.icon(
                 // 증빙 파일이 하나도 없으면 병합할 것이 없다.
                 onPressed: hasAnyFile ? () => _downloadPackage(context) : null,
-                icon: const Icon(Icons.description_outlined, size: 18),
+                icon: const Icon(Icons.description_outlined,
+                    size: 16, color: AppColors.p600),
                 label: Text(
-                    hasAnyFile ? '패키지 미리보기 · 다운로드' : '증빙을 1개 이상 올려야 만들 수 있어요'),
-                style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(0, 48),
+                    hasAnyFile ? '패키지 미리보기 · 다운로드' : '증빙을 1개 이상 올려야 만들 수 있어요',
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.ink7)),
+                style: TextButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 46),
+                    backgroundColor: AppColors.surf,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppRadius.field))),
+                        borderRadius: BorderRadius.circular(14))),
               ),
             ]),
           ),
@@ -295,25 +302,19 @@ class _Note extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: AppColors.surf,
-        borderRadius: BorderRadius.circular(AppRadius.field),
+    // 정본 .note — 배경/테두리 없는 인라인 텍스트(ink5) + p600 아이콘.
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Icon(Icons.info_outline_rounded, size: 14, color: AppColors.p600),
+      const SizedBox(width: 7),
+      Expanded(
+        child: Text(text,
+            style: const TextStyle(
+                fontFamily: 'Pretendard',
+                fontSize: 12,
+                height: 1.5,
+                fontWeight: FontWeight.w500,
+                color: AppColors.ink5)),
       ),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Icon(Icons.info_outline_rounded, size: 17, color: AppColors.ink4),
-        const SizedBox(width: 9),
-        Expanded(
-          child: Text(text,
-              style: const TextStyle(
-                  fontFamily: 'Pretendard',
-                  fontSize: 12.5,
-                  height: 1.5,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.ink5)),
-        ),
-      ]),
-    );
+    ]);
   }
 }

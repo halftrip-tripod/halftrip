@@ -37,10 +37,32 @@ class _CommunityTabState extends State<CommunityTab> {
   @override
   void initState() {
     super.initState();
+    // 셸 IndexedStack 자식이 const라 탭 전환만으론 build가 다시 돌지 않는다.
+    // "인기 코스 보러 가기" 등이 거는 프리셋 요청을 직접 듣고 rebuild를 트리거해야
+    // build 안의 소비 로직이 실행된다 (안 그러면 프리셋이 조용히 무시됨).
+    AppState.I.communityRegion.addListener(_onPresetRequest);
+    AppState.I.communityFilter.addListener(_onPresetRequest);
     // 서버 모드: 탭 진입마다 최신 피드로 갱신 (다른 사용자 글 반영).
     AppState.I.refreshCommunityFromServer().then((_) {
       if (mounted) setState(() {});
     });
+  }
+
+  @override
+  void dispose() {
+    AppState.I.communityRegion.removeListener(_onPresetRequest);
+    AppState.I.communityFilter.removeListener(_onPresetRequest);
+    super.dispose();
+  }
+
+  void _onPresetRequest() {
+    // 소비(값→null 초기화) 시에도 리스너가 다시 불리므로 요청이 있을 때만 rebuild.
+    if (!mounted) return;
+    if (AppState.I.communityRegion.value == null &&
+        AppState.I.communityFilter.value == null) {
+      return;
+    }
+    setState(() {});
   }
 
   List<String> get _regionLabels {
@@ -58,7 +80,9 @@ class _CommunityTabState extends State<CommunityTab> {
     return switch (_filter) {
       0 => (all..sort((a, b) => b.likes.compareTo(a.likes))),
       1 => all,
-      _ => all.where((p) => tagLabel(p.tag) == _filters[_filter]).toList(),
+      // 종류 필터(후기·코스·질문·정보)는 인기순(좋아요 많은 순)으로 보여준다.
+      _ => (all.where((p) => tagLabel(p.tag) == _filters[_filter]).toList()
+        ..sort((a, b) => b.likes.compareTo(a.likes))),
     };
   }
 
@@ -131,6 +155,13 @@ class _CommunityTabState extends State<CommunityTab> {
       final idx = _regionLabels.indexOf(requested);
       if (idx > 0) _region = idx;
       AppState.I.communityRegion.value = null;
+    }
+    // "인기 코스 보러 가기" 등에서 넘어온 종류 필터 프리셋 ('코스' 칩 선택 상태로 진입).
+    final requestedFilter = AppState.I.communityFilter.value;
+    if (requestedFilter != null) {
+      final fi = _filters.indexOf(requestedFilter);
+      if (fi >= 0) _filter = fi;
+      AppState.I.communityFilter.value = null;
     }
 
     return Stack(children: [
@@ -232,9 +263,12 @@ class _FilterPill extends StatelessWidget {
 }
 
 /// 지역상세 등에서 push하는 피드 화면 (탭 밖). [region]을 주면 그 지역 글만.
+/// [courseOnly]면 코스 글·코스 첨부 글만 인기순으로 — 여행 상세의
+/// "인기 코스 보러 가기"가 탭 전환 없이 이 화면을 push해 뒤로가기로 복귀한다.
 class CommunityFeedScreen extends StatefulWidget {
-  const CommunityFeedScreen({super.key, this.region});
+  const CommunityFeedScreen({super.key, this.region, this.courseOnly = false});
   final String? region;
+  final bool courseOnly;
 
   @override
   State<CommunityFeedScreen> createState() => _CommunityFeedScreenState();
@@ -243,11 +277,20 @@ class CommunityFeedScreen extends StatefulWidget {
 class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
   @override
   Widget build(BuildContext context) {
-    final posts = AppState.I.posts
+    var posts = AppState.I.posts
         .where((p) => !p.private)
-        .where((p) => widget.region == null || p.region == widget.region);
+        .where((p) => widget.region == null || p.region == widget.region)
+        .toList();
+    if (widget.courseOnly) {
+      posts = posts
+          .where((p) => p.tag == PostTag.course || p.courseName != null)
+          .toList()
+        ..sort((a, b) => b.likes.compareTo(a.likes));
+    }
     return DetailScaffold(
-      title: widget.region == null ? '커뮤니티' : '${widget.region} 여행 후기',
+      title: widget.courseOnly
+          ? '${widget.region ?? ''} 인기 코스'.trim()
+          : (widget.region == null ? '커뮤니티' : '${widget.region} 여행 후기'),
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 40),
       children: [
         if (posts.isEmpty)
@@ -359,7 +402,13 @@ class PostCard extends StatelessWidget {
           const SizedBox(height: 12),
           Row(children: [
             for (final ph in post.photos) ...[
-              EmojiBox(ph, size: 74, fontSize: 30, color: AppColors.surf),
+              // 'assets/' 경로면 실사진, 아니면 이모지 폴백.
+              ph.startsWith('assets/')
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: Image.asset(ph, width: 74, height: 74, fit: BoxFit.cover),
+                    )
+                  : EmojiBox(ph, size: 74, fontSize: 30, color: AppColors.surf),
               const SizedBox(width: 8),
             ],
           ]),
@@ -868,13 +917,21 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.only(right: 8),
-                      child: Container(
-                        height: 120,
-                        alignment: Alignment.center,
-                        decoration:
-                            BoxDecoration(color: AppColors.surf, borderRadius: BorderRadius.circular(16)),
-                        child: Text(ph, style: const TextStyle(fontSize: 44)),
-                      ),
+                      // 'assets/' 경로면 실사진, 아니면 이모지 폴백.
+                      child: ph.startsWith('assets/')
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: Image.asset(ph,
+                                  height: 120, width: double.infinity, fit: BoxFit.cover),
+                            )
+                          : Container(
+                              height: 120,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                  color: AppColors.surf,
+                                  borderRadius: BorderRadius.circular(16)),
+                              child: Text(ph, style: const TextStyle(fontSize: 44)),
+                            ),
                     ),
                   ),
               ]),
@@ -1026,8 +1083,13 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
 
 /// 글쓰기.
 class CommunityWriteScreen extends StatefulWidget {
-  const CommunityWriteScreen({super.key, this.regionName, this.editPost});
+  const CommunityWriteScreen(
+      {super.key, this.regionName, this.tripId, this.editPost});
   final String? regionName;
+
+  /// 특정 여행에서 후기로 진입한 경우의 그 여행 id. 같은 지역에 여행이 여러 개일 때
+  /// 인증 배지를 실제 후기 대상 여행으로 특정하기 위해 사용(null이면 지역 기준).
+  final int? tripId;
 
   /// 수정 모드 — 기존 글을 넘기면 프리필·수정 저장.
   final Post? editPost;
@@ -1204,13 +1266,23 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
   /// 다녀온 여행 인증 — 이 지역의 실제 내 여행이 있어야 켤 수 있다 (최종 검증은 서버).
   Widget _buildVerifySection(BuildContext context) {
     final controller = AppScope.of(context);
-    final trips =
+    // 후기 진입 시 넘어온 tripId가 있으면 그 여행으로 특정한다. 지역만 맞춰 첫 여행을
+    // 잡던 기존 로직은 같은 지역에 여행이 여러 개면 엉뚱한 여행을 인증 대상으로 잡았다.
+    final regionTrips =
         controller.trips.where((t) => t.regionName == _region).toList();
-    if (trips.isEmpty) {
+    var trip = regionTrips.isEmpty ? null : regionTrips.first;
+    if (widget.tripId != null) {
+      for (final t in controller.trips) {
+        if (t.id == widget.tripId) {
+          trip = t;
+          break;
+        }
+      }
+    }
+    if (trip == null) {
       if (_verify) _verify = false;
       return const NoteRow('이 지역에 다녀온 여행이 없어 인증 배지를 붙일 수 없어요.');
     }
-    final trip = trips.first;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       MenuGroup(children: [
         ToggleRow(

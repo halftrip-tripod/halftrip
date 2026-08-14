@@ -12,6 +12,7 @@ import '../../screens/submission_package_screen.dart';
 import '../data/models.dart' as mock;
 import '../state/app_state.dart' as mock;
 import '../theme/app_colors.dart';
+import 'community.dart';
 import 'course_flow.dart';
 import '../widgets/region_art.dart';
 import '../widgets/ui.dart';
@@ -93,6 +94,73 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       ),
     );
     await _reload();
+  }
+
+  /// 확정 코스 탭 — 수정 / 여행 등록 취소 / 보관함 삭제 를 고르는 시트.
+  Future<void> _openCourseActions(TripDetail detail, SavedCourse course) async {
+    final action = await showAppSheet<String>(
+      context,
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 14, 24, 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(course.title,
+                style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.ink9)),
+          ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.edit_outlined,
+              size: 20, color: AppColors.ink7),
+          title: const Text('코스 수정',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          onTap: () => Navigator.of(context).pop('edit'),
+        ),
+        ListTile(
+          leading: const Icon(Icons.link_off_rounded,
+              size: 20, color: AppColors.ink7),
+          title: const Text('여행 코스 등록 취소',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          subtitle: const Text('코스는 코스함에 남아요',
+              style: TextStyle(fontSize: 12, color: AppColors.ink4)),
+          onTap: () => Navigator.of(context).pop('unlink'),
+        ),
+        ListTile(
+          leading:
+              const Icon(Icons.delete_outline_rounded, size: 20, color: AppColors.danger),
+          title: const Text('코스함에서 삭제',
+              style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.danger)),
+          subtitle: const Text('여행 등록도 함께 취소돼요',
+              style: TextStyle(fontSize: 12, color: AppColors.ink4)),
+          onTap: () => Navigator.of(context).pop('delete'),
+        ),
+        const SizedBox(height: 10),
+      ]),
+    );
+    if (!mounted || action == null) return;
+    final controller = AppScope.of(context);
+    switch (action) {
+      case 'edit':
+        _push(PlannerScreen(tripId: widget.tripId));
+      case 'unlink':
+        await controller.unselectCourseForTrip(detail.trip.id);
+        if (mounted) {
+          setState(() {});
+          showMock(context, '여행 코스 등록을 취소했어요. 코스는 코스함에 있어요.');
+        }
+      case 'delete':
+        await controller.deleteSavedCourse(course.id);
+        if (mounted) {
+          setState(() {});
+          showMock(context, '코스를 코스함에서 삭제했어요.');
+        }
+    }
   }
 
   /// 코스 만들기 — 목업 1:1 코스 플로우(course_flow)를 실여행 프록시로 태우고,
@@ -217,18 +285,13 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         title: '여행 코스',
         children: [
           if (course != null)
+            // 코스가 있으면 새로 만들기 동선은 숨긴다. 탭하면 수정·등록취소·삭제.
             SurfRow(
               icon: Icons.route_outlined,
               title: course.title,
               subtitle: '${course.regionName} · ${course.stops.length}곳',
               tinted: true,
-              onTap: () => _push(PlannerScreen(tripId: widget.tripId)),
-            ),
-          if (course != null)
-            OutlineButton(
-              '유튜브로 새 코스 만들기',
-              icon: Icons.play_circle_outline_rounded,
-              onTap: () => _openYoutubeAnalysis(detail),
+              onTap: () => _openCourseActions(detail, course),
             )
           else ...[
             OutlineButton(
@@ -236,16 +299,23 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
               icon: Icons.add_rounded,
               onTap: () => _openCourseCreate(detail),
             ),
-            OutlineButton(
-              '${detail.trip.regionName} 인기 코스 보러 가기',
-              icon: Icons.chat_bubble_outline_rounded,
-              trailingIcon: Icons.chevron_right_rounded,
-              onTap: () {
-                Navigator.of(context).popUntil((r) => r.isFirst);
-                mock.AppState.I.communityRegion.value = detail.trip.regionName;
-                mock.AppState.I.tabRequest.value = 3;
-              },
-            ),
+            // 이 지역에 참고할 코스(코스 글 또는 코스가 첨부된 후기 등)가 있을 때만
+            // 노출 — 눌렀는데 빈 피드가 나오지 않게.
+            if (mock.AppState.I.posts.any((p) =>
+                !p.private &&
+                p.region == detail.trip.regionName &&
+                (p.tag == mock.PostTag.course || p.courseName != null)))
+              OutlineButton(
+                '${detail.trip.regionName} 인기 코스 보러 가기',
+                icon: Icons.chat_bubble_outline_rounded,
+                trailingIcon: Icons.chevron_right_rounded,
+                // 탭 전환 대신 "이 지역 인기 코스 모음"을 push — 뒤로가기로
+                // 여행 상세에 그대로 복귀한다. 코스 글·코스 첨부 글만 인기순.
+                onTap: () => _push(CommunityFeedScreen(
+                  region: detail.trip.regionName,
+                  courseOnly: true,
+                )),
+              ),
           ],
         ],
       ),
@@ -600,9 +670,14 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           _NextLink(
             '후기 올리기',
             onTap: () {
-              Navigator.of(context).popUntil((r) => r.isFirst);
-              mock.AppState.I.communityRegion.value = detail.trip.regionName;
-              mock.AppState.I.tabRequest.value = 3;
+              // 이 여행을 명시적으로 실어 후기 작성 화면을 연다. 지역만 넘기면
+              // 같은 지역 여행이 여러 개일 때 인증 배지가 엉뚱한 여행을 가리킨다.
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => CommunityWriteScreen(
+                  tripId: detail.trip.id,
+                  regionName: detail.trip.regionName,
+                ),
+              ));
             },
           ),
         ],

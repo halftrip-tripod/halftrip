@@ -24,6 +24,9 @@ class AppState extends ChangeNotifier {
   /// 커뮤니티 탭 진입 시 적용할 지역 필터 요청 (1회성).
   final ValueNotifier<String?> communityRegion = ValueNotifier(null);
 
+  /// 커뮤니티 탭 진입 시 적용할 종류 필터 요청 (1회성, '코스' 등 칩 라벨).
+  final ValueNotifier<String?> communityFilter = ValueNotifier(null);
+
   // 세션
   bool loggedIn = false;
   String loginProvider = '카카오';

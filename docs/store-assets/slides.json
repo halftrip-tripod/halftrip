@@ -42,12 +42,12 @@
   },
   {
     "n": 6,
-    "headline": "유튜브 영상이<br><em>내 코스로</em>",
-    "sub": "링크만 넣으면 동선을 자동 생성",
-    "img": "cap-youtube.png",
+    "headline": "취향만 고르면<br><em>코스 완성</em>",
+    "sub": "AI 추천·유튜브 분석, 환급 조건까지 맞춰줘요",
+    "img": "cap-course.png",
     "brand": false,
-    "emoji": "▶️",
-    "label": "유튜브 코스"
+    "emoji": "🗺️",
+    "label": "AI 코스 생성"
   },
   {
     "n": 7,

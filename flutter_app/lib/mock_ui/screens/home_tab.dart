@@ -288,6 +288,48 @@ class _MapPane extends StatelessWidget {
             height: h,
             child: Stack(clipBehavior: Clip.none, children: [
               SvgPicture.asset('assets/brand/krmap.svg', width: w, height: h),
+              // 내 지역(거주지) 핀 — 코랄. 시/도 대표 좌표 기준.
+              if (_residenceLatLng[residence.split(' ').first] != null)
+                Positioned(
+                  left: px(_projectLatLng(
+                          _residenceLatLng[residence.split(' ').first]!.$1,
+                          _residenceLatLng[residence.split(' ').first]!.$2)) -
+                      26,
+                  top: py(_projectLatLng(
+                          _residenceLatLng[residence.split(' ').first]!.$1,
+                          _residenceLatLng[residence.split(' ').first]!.$2)) -
+                      11,
+                  child: SizedBox(
+                    width: 52,
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Container(
+                        width: 22,
+                        height: 22,
+                        decoration: BoxDecoration(
+                          color: AppColors.coral,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2.5),
+                          boxShadow: const [
+                            BoxShadow(color: Color(0x66D9534F), blurRadius: 6, offset: Offset(0, 2)),
+                          ],
+                        ),
+                        child: const Center(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                            child: SizedBox(width: 6, height: 6),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text('내 지역',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.coralDeep,
+                          )),
+                    ]),
+                  ),
+                ),
               for (final r in regions)
                 Positioned(
                   left: px(pinOffset(r)) - 45,
@@ -663,6 +705,18 @@ const _regionLatLng = <String, (double, double)>{
   '해남': (34.573, 126.599),
   '고흥': (34.611, 127.285),
   '완도': (34.311, 126.755),
+};
+
+/// 거주지(시/도) 대표 위경도 — 내 지역 코랄 핀용.
+const _residenceLatLng = <String, (double, double)>{
+  '서울특별시': (37.567, 126.978),
+  '인천광역시': (37.456, 126.705),
+  '경기도': (37.289, 127.053),
+  '대전광역시': (36.351, 127.385),
+  '대구광역시': (35.871, 128.601),
+  '부산광역시': (35.180, 129.075),
+  '광주광역시': (35.160, 126.851),
+  '울산광역시': (35.539, 129.311),
 };
 
 /// 실제 위경도 → krmap.svg viewBox(544.8×1000) 좌표. 서울·강진 앵커로 선형 보정.

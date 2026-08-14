@@ -111,6 +111,60 @@ class CourseCreateScreen extends StatelessWidget {
         builder: (_) => CourseRegionScreen(onPicked: builder)));
   }
 
+  /// 코스함의 같은 지역 코스 중 하나를 골라 이 여행의 확정 코스로 연결한다.
+  Future<void> _pickFromSaved(BuildContext context, Trip trip) async {
+    final candidates =
+        AppState.I.courses.where((c) => c.region == trip.region).toList();
+    final picked = await showAppSheet<Course>(
+      context,
+      scrollable: true,
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(24, 14, 24, 6),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text('코스함에서 가져오기',
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.ink9)),
+          ),
+        ),
+        Flexible(
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: candidates.length,
+            itemBuilder: (ctx, i) {
+              final c = candidates[i];
+              return ListTile(
+                leading: EmojiBox(c.emoji, size: 40, fontSize: 20),
+                title: Text(c.title,
+                    style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.ink9)),
+                subtitle: Text('${c.durationLabel} · ${c.placeCount}곳',
+                    style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.ink5)),
+                trailing: const Icon(Icons.chevron_right_rounded,
+                    size: 20, color: AppColors.ink4),
+                onTap: () => Navigator.of(ctx).pop(c),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 10),
+      ]),
+    );
+    if (picked == null || !context.mounted) return;
+    trip.course = picked;
+    AppState.I.update();
+    Navigator.of(context).pop(); // 방식 선택 화면 닫고 여행 상세 복귀
+    showMock(context, '코스함의 "${picked.title}" 코스를 이 여행에 연결했어요.');
+  }
+
   @override
   Widget build(BuildContext context) {
     final trip = forTrip;
@@ -150,6 +204,17 @@ class CourseCreateScreen extends StatelessWidget {
               ),
             ]),
           ),
+        // 코스함에 이 지역 코스가 이미 있으면 새로 만들지 않고 가져올 수 있게.
+        if (trip != null &&
+            AppState.I.courses.any((c) => c.region == trip.region))
+          _MakeCard(
+            icon: Icons.bookmark_rounded,
+            iconBg: AppColors.warningTint,
+            iconFg: const Color(0xFFB8731B),
+            title: '코스함에서 가져오기',
+            desc: '보관함의 코스 중에서 골라서 등록해요',
+            onTap: () => _pickFromSaved(context, trip),
+          ),
         _MakeCard(
           icon: Icons.auto_awesome_rounded,
           iconBg: AppColors.p50,
@@ -173,18 +238,18 @@ class CourseCreateScreen extends StatelessWidget {
           iconFg: AppColors.mintDeep,
           title: '직접 만들기',
           desc: '가고 싶은 장소를 검색해서 내 마음대로 코스를 구성해요',
-          onTap: () => _go(context, (r) {
-            final course = Course(
-              emoji: r.emoji, region: r.name, province: r.province,
-              title: '${r.name} 나만의 코스', source: CourseSource.manual,
-              durationLabel: '1박 2일', placeCount: 0, refundOk: false,
-              savedAgo: '방금 저장', stops: [],
-            );
-            AppState.I.addCourse(course);
-            forTrip?.course = course;
-            AppState.I.update();
-            return CourseEditScreen(course: course);
-          }),
+          // 저장 전에는 아무것도 만들지 않는다 — 그냥 뒤로 나가면 코스가 남지 않게
+          // 초안만 들고 편집 화면으로 가고, "변경사항 저장"에서 코스함 추가·여행 연결.
+          onTap: () => _go(context, (r) => CourseEditScreen(
+                course: Course(
+                  emoji: r.emoji, region: r.name, province: r.province,
+                  title: '${r.name} 나만의 코스', source: CourseSource.manual,
+                  durationLabel: '1박 2일', placeCount: 0, refundOk: false,
+                  savedAgo: '방금 저장', stops: [],
+                ),
+                isNew: true,
+                forTrip: forTrip,
+              )),
         ),
       ],
     );
@@ -913,7 +978,7 @@ class _YtVideoRow extends StatelessWidget {
 }
 
 /// S1-4 코스 시뮬 (생성 결과).
-class CourseSimScreen extends StatelessWidget {
+class CourseSimScreen extends StatefulWidget {
   const CourseSimScreen({
     super.key,
     required this.region,
@@ -928,7 +993,27 @@ class CourseSimScreen extends StatelessWidget {
   final List<CourseStop> stops;
 
   @override
+  State<CourseSimScreen> createState() => _CourseSimScreenState();
+}
+
+class _CourseSimScreenState extends State<CourseSimScreen> {
+  /// 지도에 표시할 일차 (1박2일이면 DAY 1/2 토글).
+  int _mapDay = 1;
+
+  /// 상세 일정에서 탭한 장소 — 지도를 그 핀으로 이동시키고 정보창을 연다.
+  int? _focusStopId;
+
+  Region get region => widget.region;
+  int get nights => widget.nights;
+  Trip? get forTrip => widget.forTrip;
+  List<CourseStop> get stops => widget.stops;
+
+  @override
   Widget build(BuildContext context) {
+    // 코스에 실제로 존재하는 일차 목록 (당일치기면 [1]).
+    final days = stops.map((s) => s.day).toSet().toList()..sort();
+    final mapStops =
+        stops.where((s) => days.length < 2 || s.day == _mapDay).toList();
     return DetailScaffold(
       title: '${region.name} 코스',
       cta: CtaBar(
@@ -966,16 +1051,82 @@ class CourseSimScreen extends StatelessWidget {
         ],
       ),
       children: [
-        const FitBanner(title: '이 코스로 환급 조건 100% 충족', subtitle: '지정관광지 2곳 · 1박 숙박 · 인정 결제 포함'),
-        _buildStopsMap(context, stops),
-        _TimelineSection(stops: stops),
+        // 지도 + 일차 토글 + 일정을 한 덩어리로 — 스캐폴드 기본 간격(16)이 사이에 안 끼게.
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _buildStopsMap(context, mapStops, focusId: _focusStopId),
+          if (days.length >= 2) ...[
+            const SizedBox(height: 8),
+            // 일차가 많아 가로를 넘치면 스크롤, 적으면 중앙 정렬.
+            Center(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  for (final d in days) ...[
+                    if (d != days.first) const SizedBox(width: 8),
+                    _DayChip(
+                      label: 'DAY $d',
+                      active: _mapDay == d,
+                      onTap: () => setState(() {
+                        _mapDay = d;
+                        _focusStopId = null;
+                      }),
+                    ),
+                  ],
+                ]),
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          _TimelineSection(
+            stops: stops,
+            selectedStopId: _focusStopId,
+            onStopTap: (s) {
+              if (s.latitude == null || s.longitude == null) return;
+              setState(() {
+                if (days.length >= 2) _mapDay = s.day;
+                _focusStopId = s.placeId ?? s.name.hashCode;
+              });
+            },
+          ),
+        ]),
       ],
     );
   }
 }
 
+/// 코스 지도의 일차 선택 칩.
+class _DayChip extends StatelessWidget {
+  const _DayChip({required this.label, required this.active, required this.onTap});
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: active ? AppColors.p600 : Colors.white,
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: active ? null : AppShadows.soft,
+        ),
+        child: Text(label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: active ? Colors.white : AppColors.ink5,
+            )),
+      ),
+    );
+  }
+}
+
 /// 코스 스톱의 실제 좌표를 지도(구글/카카오)에 순서대로 표시. 좌표가 없으면 장식용 목업 지도로 대체.
-Widget _buildStopsMap(BuildContext context, List<CourseStop> stops) {
+/// [focusId]가 있으면 그 핀을 중심으로 이동하고 정보창을 연 상태로 그린다.
+Widget _buildStopsMap(BuildContext context, List<CourseStop> stops,
+    {int? focusId}) {
   final geoStops = stops.where((s) => s.latitude != null && s.longitude != null).toList();
   if (geoStops.isEmpty) {
     return const CourseMapCard();
@@ -998,16 +1149,27 @@ Widget _buildStopsMap(BuildContext context, List<CourseStop> stops) {
             longitude: stop.longitude!,
           ))
       .toList();
+  final focusStop = focusId == null
+      ? null
+      : geoStops
+          .cast<CourseStop?>()
+          .firstWhere((s) => (s!.placeId ?? s.name.hashCode) == focusId,
+              orElse: () => null);
   final config = AppConfig.fromEnvironment();
   return ClipRRect(
     borderRadius: BorderRadius.circular(20),
     child: PlaceMapView(
+      // 포커스가 바뀌면 지도를 새로 그려 그 핀 중심으로 이동시킨다.
+      key: ValueKey('course-map-$focusId'),
       markers: markers,
       emptyMessage: '표시할 장소 좌표가 없습니다.',
       kakaoEnabled: config.canUseKakaoMap,
       routeMarkers: routeMarkers,
       connectSequentially: true,
-      height: 200,
+      height: 280,
+      highlightedMarkerId: focusId,
+      initialCenterLatitude: focusStop?.latitude,
+      initialCenterLongitude: focusStop?.longitude,
       onMarkerDetailsRequested: (marker) => _loadAiMarkerDetails(context, marker),
     ),
   );
@@ -1065,8 +1227,14 @@ Future<PlaceMapMarkerData?> _loadAiMarkerDetails(
 
 /// DAY별 타임라인.
 class _TimelineSection extends StatelessWidget {
-  const _TimelineSection({this.stops});
+  const _TimelineSection({this.stops, this.onStopTap, this.selectedStopId});
   final List<CourseStop>? stops;
+
+  /// 장소 탭 콜백 — 시뮬 화면에서 지도 이동·정보창 열기에 쓴다.
+  final void Function(CourseStop)? onStopTap;
+
+  /// 선택된 장소 id — 해당 행을 파란 테두리·틴트로 표시.
+  final int? selectedStopId;
 
   @override
   Widget build(BuildContext context) {
@@ -1094,7 +1262,18 @@ class _TimelineSection extends StatelessWidget {
             child: Text('DAY $day · 6.1${3 + day} (${day == 1 ? '토' : '일'})',
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: .3)),
           ),
-          for (final s in list.where((s) => s.day == day)) TimelineStop(stop: s),
+          for (final s in list.where((s) => s.day == day))
+            onStopTap == null
+                ? TimelineStop(stop: s)
+                : GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onStopTap!(s),
+                    child: TimelineStop(
+                      stop: s,
+                      selected:
+                          (s.placeId ?? s.name.hashCode) == selectedStopId,
+                    ),
+                  ),
         ],
     ]);
   }
@@ -1134,8 +1313,11 @@ class _CourseViewScreenState extends State<CourseViewScreen> {
 }
 
 class TimelineStop extends StatelessWidget {
-  const TimelineStop({super.key, required this.stop});
+  const TimelineStop({super.key, required this.stop, this.selected = false});
   final CourseStop stop;
+
+  /// 지도 연동 등에서 이 장소가 선택된 상태 — 파란 테두리·틴트로 표시.
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
@@ -1174,7 +1356,12 @@ class TimelineStop extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-                color: Colors.white, borderRadius: BorderRadius.circular(18), boxShadow: AppShadows.card),
+                color: selected ? AppColors.p50 : Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: selected
+                    ? Border.all(color: AppColors.p500, width: 1.4)
+                    : null,
+                boxShadow: AppShadows.card),
             child: Row(children: [
               EmojiBox(stop.emoji, size: 40, fontSize: 20, color: AppColors.surf, radius: 13),
               const SizedBox(width: 11),
@@ -1366,8 +1553,15 @@ class _CourseSavedScreenState extends State<CourseSavedScreen> {
 
 /// S2-4 / 코스 편집 (플래너).
 class CourseEditScreen extends StatefulWidget {
-  const CourseEditScreen({super.key, required this.course});
+  const CourseEditScreen(
+      {super.key, required this.course, this.isNew = false, this.forTrip});
   final Course course;
+
+  /// 새 코스 초안 편집이면 true — "변경사항 저장"에서야 코스함에 추가된다.
+  final bool isNew;
+
+  /// 여행에서 진입한 경우 저장 시 이 여행의 확정 코스로 연결한다.
+  final Trip? forTrip;
 
   @override
   State<CourseEditScreen> createState() => _CourseEditScreenState();
@@ -1385,6 +1579,19 @@ class _CourseEditScreenState extends State<CourseEditScreen> {
       title: '코스 편집',
       cta: CtaBar(children: [
         PrimaryButton('변경사항 저장', onTap: () {
+          // 새 코스는 저장 시점에야 코스함에 추가·여행에 연결된다.
+          if (widget.isNew) AppState.I.addCourse(c);
+          final trip = widget.forTrip;
+          if (trip != null) {
+            trip.course = c;
+            AppState.I.update();
+            // 편집 → 방식 선택까지 닫고 여행 상세로 복귀.
+            Navigator.of(context).pop();
+            Navigator.of(context).pop();
+            showMock(context, '코스를 저장하고 여행에 연결했어요.');
+            return;
+          }
+          if (widget.isNew) AppState.I.update();
           Navigator.of(context).pop();
           showMock(context, '코스를 저장했어요.');
         }),

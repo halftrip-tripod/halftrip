@@ -26,7 +26,7 @@ class _ResidenceScreenState extends State<ResidenceScreen> {
       appBar: AppBar(
         title: const Text('거주지 설정'),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
           // 온보딩 건너뛰기 — 기존(가입 시) 거주지를 유지하고 메인으로 진입.
           onPressed: () {
             final controller = AppScope.of(context);

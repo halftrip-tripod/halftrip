@@ -38,7 +38,6 @@ h1 em {{ font-style:normal; color:#0284C7; }}
 </style></head><body>
 <div class="blob b1"></div><div class="blob b2"></div>
 <div class="copy">
-  <div class="brand">하프트립</div>
   <h1>복잡한 반값여행,<br><em>하프트립 하나로</em></h1>
   <div class="sub">정보 확인부터 인증·증빙·정산 관리까지</div>
 </div>

@@ -5,10 +5,12 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/app_config.dart';
+import '../theme/app_colors.dart';
 import '../features/youtube_travel_plan/google_sheets_export_service.dart';
 import '../features/youtube_travel_plan/travel_plan_edit_sheet.dart';
 import '../features/youtube_travel_plan/travel_plan_models.dart';
 import '../features/youtube_travel_plan/travel_plan_store.dart';
+import '../mock_ui/widgets/trip_calendar_sheet.dart';
 import '../models/app_models.dart';
 import '../widgets/place_map_view.dart';
 
@@ -72,9 +74,9 @@ class _YoutubeTravelPlanScreenState extends State<YoutubeTravelPlanScreen> {
   Widget build(BuildContext context) {
     final store = _store;
     return Scaffold(
-      backgroundColor: const Color(0xFFFDFDFE),
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFDFDFE),
+        backgroundColor: AppColors.bg,
         surfaceTintColor: Colors.transparent,
         centerTitle: true,
         toolbarHeight: 52,
@@ -87,7 +89,8 @@ class _YoutubeTravelPlanScreenState extends State<YoutubeTravelPlanScreen> {
             IconButton(
               tooltip: '직접 저장',
               onPressed: store.saveNow,
-              icon: const Icon(Icons.save_outlined),
+              // 문서 저장 글리프 — 숙박확인서 'PDF 저장'과 동일한 다운로드 아이콘.
+              icon: const Icon(Icons.download_rounded),
             ),
         ],
       ),
@@ -320,18 +323,32 @@ class _YoutubeTravelPlanScreenState extends State<YoutubeTravelPlanScreen> {
   Future<void> _showMobileMap(TravelPlanStore store) async {
     await showModalBottomSheet<void>(
       context: context,
-      showDragHandle: true,
+      // 시트 드래그가 지도 팬 제스처를 가로채 모달이 따라 움직이던 문제 —
+      // 시트 드래그를 끄고(지도 드래그 = 지도 이동) 닫기는 X 버튼으로.
+      enableDrag: false,
       isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
       builder:
           (context) => SafeArea(
             child: SizedBox(
               height: MediaQuery.sizeOf(context).height * 0.78,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const _SheetMenuTitle(title: '일정 지도'),
+                    Row(children: [
+                      const Expanded(child: _SheetMenuTitle(title: '일정 지도')),
+                      IconButton(
+                        tooltip: '닫기',
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close_rounded,
+                            size: 22, color: AppColors.ink5),
+                      ),
+                    ]),
                     Expanded(child: _MapPanel(store: store, height: 680)),
                   ],
                 ),
@@ -370,66 +387,104 @@ class _YoutubeTravelPlanScreenState extends State<YoutubeTravelPlanScreen> {
       context: context,
       builder:
           (dialogContext) => AlertDialog(
-            title: const Text('여행 정보 수정'),
+            backgroundColor: Colors.white,
+            surfaceTintColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24)),
+            titlePadding: const EdgeInsets.fromLTRB(24, 16, 12, 4),
+            title: Row(children: [
+              const Expanded(
+                child: Text('여행 정보 수정',
+                    style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.ink9)),
+              ),
+              IconButton(
+                tooltip: '닫기',
+                onPressed: () => Navigator.pop(dialogContext),
+                icon: const Icon(Icons.close_rounded,
+                    size: 22, color: AppColors.ink5),
+              ),
+            ]),
             content: SizedBox(
               width: 480,
               child: SingleChildScrollView(
-                child: Column(
+                child: Theme(
+                  data: travelPlanFormTheme(dialogContext),
+                  child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    TextField(
+                    travelPlanLabeledField('여행 제목', TextField(
                       controller: titleController,
-                      decoration: const InputDecoration(labelText: '여행 제목'),
-                    ),
+                      decoration: const InputDecoration(),
+                    )),
                     const SizedBox(height: 12),
-                    TextField(
+                    travelPlanLabeledField('여행 도시', TextField(
                       controller: cityController,
-                      decoration: const InputDecoration(labelText: '여행 도시'),
-                    ),
+                      decoration: const InputDecoration(),
+                    )),
                     const SizedBox(height: 12),
                     Row(
                       children: [
                         Expanded(
-                          child: TextField(
+                          // 날짜는 직접 타이핑 대신 캘린더로 — 숙박확인서와 동일 UX.
+                          child: travelPlanLabeledField('시작일', TextField(
                             controller: startDateController,
+                            readOnly: true,
+                            onTap: () => _pickPlanDateRange(dialogContext,
+                                startDateController, endDateController),
                             decoration: const InputDecoration(
-                              labelText: '시작일',
-                              hintText: 'YYYY-MM-DD',
+                              hintText: '날짜 선택',
+                              suffixIcon: Icon(Icons.calendar_month_rounded,
+                                  size: 18),
                             ),
-                          ),
+                          )),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: TextField(
+                          child: travelPlanLabeledField('종료일', TextField(
                             controller: endDateController,
+                            readOnly: true,
+                            onTap: () => _pickPlanDateRange(dialogContext,
+                                startDateController, endDateController),
                             decoration: const InputDecoration(
-                              labelText: '종료일',
-                              hintText: 'YYYY-MM-DD',
+                              hintText: '날짜 선택',
+                              suffixIcon: Icon(Icons.calendar_month_rounded,
+                                  size: 18),
                             ),
-                          ),
+                          )),
                         ),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    TextField(
+                    travelPlanLabeledField('참여 인원', TextField(
                       controller: participantController,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(
-                        labelText: '참여 인원',
+                        
                         suffixText: '명',
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text('확인되지 않은 날짜와 인원은 빈칸으로 두세요.'),
+                    )),
+                    const SizedBox(height: 10),
+                    Row(children: const [
+                      Icon(Icons.info_outline_rounded,
+                          size: 14, color: AppColors.p500),
+                      SizedBox(width: 6),
+                      Expanded(
+                        child: Text('확인되지 않은 날짜와 인원은 빈칸으로 두세요.',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.ink5)),
+                      ),
+                    ]),
                   ],
+                  ),
                 ),
               ),
             ),
             actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('취소'),
-              ),
               FilledButton(
                 onPressed: () {
                   Navigator.pop(
@@ -469,6 +524,32 @@ class _YoutubeTravelPlanScreenState extends State<YoutubeTravelPlanScreen> {
     );
   }
 
+  /// 시작일·종료일을 우리 범위 캘린더(여행 추가와 동일)로 한 번에 고른다.
+  Future<void> _pickPlanDateRange(
+    BuildContext context,
+    TextEditingController start,
+    TextEditingController end,
+  ) async {
+    final s = DateTime.tryParse(start.text.trim());
+    final e = DateTime.tryParse(end.text.trim());
+    final today = DateTime.now();
+    final selected = await showTripCalendarSheet(
+      context,
+      initial: (s != null && e != null && !e.isBefore(s))
+          ? DateTimeRange(start: s, end: e)
+          : null,
+      firstDate: DateTime(today.year - 2),
+      lastDate: DateTime(today.year + 2, 12, 31),
+    );
+    if (selected == null) return;
+    String fmt(DateTime d) =>
+        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    start.text = fmt(selected.start);
+    end.text = fmt(selected.end);
+    start.selection = const TextSelection.collapsed(offset: 0);
+    end.selection = const TextSelection.collapsed(offset: 0);
+  }
+
   Future<void> _showExportDialog(TravelPlanStore store) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
@@ -478,9 +559,9 @@ class _YoutubeTravelPlanScreenState extends State<YoutubeTravelPlanScreen> {
               builder: (context, setRouteState) {
                 final document = store.document;
                 return Scaffold(
-                  backgroundColor: const Color(0xFFFDFDFE),
+                  backgroundColor: AppColors.bg,
                   appBar: AppBar(
-                    backgroundColor: const Color(0xFFFDFDFE),
+                    backgroundColor: AppColors.bg,
                     surfaceTintColor: Colors.transparent,
                     title: const Text(
                       'Google 스프레드시트 내보내기',
@@ -513,10 +594,13 @@ class _YoutubeTravelPlanScreenState extends State<YoutubeTravelPlanScreen> {
                           DecoratedBox(
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              border: Border.all(
-                                color: const Color(0xFFCFC6FF),
-                              ),
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: const [
+                                BoxShadow(
+                                    color: Color(0x0F1B3A5B),
+                                    blurRadius: 14,
+                                    offset: Offset(0, 4)),
+                              ],
                             ),
                             child: const Column(
                               children: [
@@ -687,8 +771,9 @@ class _YoutubeTravelPlanScreenState extends State<YoutubeTravelPlanScreen> {
   }
 }
 
-const _plannerPurple = Color(0xFF5B3FE4);
-const _plannerPurpleSoft = Color(0xFFF3F0FF);
+// 계획표 강조색 — 디자인 시스템 하늘색(p500)으로 통일 (기존 보라 폐기, 8/14 규희).
+const _plannerPurple = Color(0xFF0EA5E9);
+const _plannerPurpleSoft = Color(0xFFF0F9FF);
 const _plannerGrid = Color(0xFFE5E7EB);
 const _plannerMuted = Color(0xFF667085);
 
@@ -712,12 +797,17 @@ class _MobilePlannerHeader extends StatelessWidget {
         children: [
           DecoratedBox(
             decoration: BoxDecoration(
-              color: const Color(0xFFFAFAFC),
-              border: Border.all(color: _plannerGrid),
-              borderRadius: BorderRadius.circular(10),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: const [
+                BoxShadow(
+                    color: Color(0x0F1B3A5B),
+                    blurRadius: 14,
+                    offset: Offset(0, 4)),
+              ],
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
               child: Row(
                 children: [
                   const Icon(
@@ -774,19 +864,22 @@ class _MobilePlannerHeader extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: OutlinedButton.icon(
+                child: FilledButton.icon(
                   onPressed: onEditHeader,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: _plannerPurple,
-                    side: const BorderSide(color: Color(0xFFCFC6FF)),
-                    minimumSize: const Size(0, 36),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _plannerPurpleSoft,
+                    foregroundColor: const Color(0xFF0369A1),
+                    elevation: 0,
+                    minimumSize: const Size(0, 38),
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
+                      horizontal: 12,
                       vertical: 8,
                     ),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(999)),
                     textStyle: const TextStyle(
                       fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                   icon: const Icon(Icons.edit_outlined, size: 15),
@@ -799,19 +892,22 @@ class _MobilePlannerHeader extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 6),
-              OutlinedButton.icon(
+              FilledButton.icon(
                 onPressed: onExport,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: _plannerPurple,
-                  side: const BorderSide(color: _plannerPurple),
-                  minimumSize: const Size(0, 36),
+                style: FilledButton.styleFrom(
+                  backgroundColor: _plannerPurple,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  minimumSize: const Size(0, 38),
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
+                    horizontal: 13,
                     vertical: 8,
                   ),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999)),
                   textStyle: const TextStyle(
                     fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
                 icon: const Icon(Icons.ios_share_rounded, size: 15),
@@ -1068,11 +1164,11 @@ class _GridCell extends StatelessWidget {
         color: background,
         border: Border(
           right: BorderSide(
-            color: selected ? const Color(0xFFA18EFF) : _plannerGrid,
+            color: selected ? const Color(0xFF38BDF8) : _plannerGrid,
             width: selected ? 1.2 : 1,
           ),
           bottom: BorderSide(
-            color: selected ? const Color(0xFFA18EFF) : _plannerGrid,
+            color: selected ? const Color(0xFF38BDF8) : _plannerGrid,
             width: selected ? 1.2 : 1,
           ),
         ),
@@ -1113,10 +1209,16 @@ class _MobileBottomToolbar extends StatelessWidget {
       child: DecoratedBox(
         decoration: const BoxDecoration(
           color: Colors.white,
-          border: Border(top: BorderSide(color: _plannerGrid)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+          boxShadow: [
+            BoxShadow(
+                color: Color(0x0D0F172A),
+                blurRadius: 18,
+                offset: Offset(0, -4)),
+          ],
         ),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(6, 5, 6, 3),
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 5),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
@@ -1172,27 +1274,35 @@ class _BottomTool extends StatelessWidget {
   Widget build(BuildContext context) {
     final color =
         onTap == null
-            ? const Color(0xFFB8BCC5)
+            ? const Color(0xFFCBD5E1)
             : active
-            ? _plannerPurple
-            : const Color(0xFF343944);
+            ? const Color(0xFF0284C7)
+            : const Color(0xFF64748B);
     return InkResponse(
       onTap: onTap,
       radius: 24,
       child: SizedBox(
-        width: 56,
+        width: 60,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 19, color: color),
-            const SizedBox(height: 2),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 11, vertical: 4),
+              decoration: BoxDecoration(
+                color: active ? _plannerPurpleSoft : Colors.transparent,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Icon(icon, size: 20, color: color),
+            ),
+            const SizedBox(height: 3),
             Text(
               label,
               maxLines: 1,
               style: TextStyle(
                 color: color,
-                fontSize: 9,
-                fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+                fontSize: 10,
+                fontWeight: active ? FontWeight.w800 : FontWeight.w700,
               ),
             ),
           ],
@@ -1213,9 +1323,10 @@ class _SheetMenuTitle extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(8, 4, 8, 10),
       child: Text(
         title,
-        style: Theme.of(
-          context,
-        ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+        style: const TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF0F172A)),
       ),
     );
   }
@@ -1404,30 +1515,16 @@ class _ExportNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: const Color(0xFFF6F4FD),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: const Padding(
-        padding: EdgeInsets.all(13),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.info_outline_rounded, color: _plannerMuted, size: 18),
-            SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                '날짜나 시간이 비어 있는 셀은 내보내기 시에도 빈칸으로 유지됩니다.',
-                style: TextStyle(
-                  color: _plannerMuted,
-                  fontSize: 12,
-                  height: 1.45,
-                ),
-              ),
-            ),
-          ],
-        ),
+    return const Padding(
+      padding: EdgeInsets.only(top: 4),
+      child: Text(
+        '날짜나 시간이 비어 있는 셀은 내보내기 시에도 빈칸으로 유지됩니다.',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+            color: Color(0xFF94A3B8),
+            fontSize: 11.5,
+            height: 1.4,
+            fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -1531,10 +1628,12 @@ class _PlanToolbar extends StatelessWidget {
           children: [
             SizedBox(
               width: 180,
-              child: DropdownButtonFormField<TravelPlanFilter>(
+              child: travelPlanLabeledField('필터', DropdownButtonFormField<TravelPlanFilter>(
+                      borderRadius: BorderRadius.circular(14),
+                      dropdownColor: Colors.white,
                 initialValue: store.filter,
                 decoration: const InputDecoration(
-                  labelText: '필터',
+                  
                   isDense: true,
                 ),
                 items: [
@@ -1544,14 +1643,16 @@ class _PlanToolbar extends StatelessWidget {
                 onChanged: (value) {
                   if (value != null) store.setFilter(value);
                 },
-              ),
+              )),
             ),
             SizedBox(
               width: 200,
-              child: DropdownButtonFormField<TravelPlanSort>(
+              child: travelPlanLabeledField('정렬', DropdownButtonFormField<TravelPlanSort>(
+                      borderRadius: BorderRadius.circular(14),
+                      dropdownColor: Colors.white,
                 initialValue: store.sort,
                 decoration: const InputDecoration(
-                  labelText: '정렬',
+                  
                   isDense: true,
                 ),
                 items: [
@@ -1561,7 +1662,7 @@ class _PlanToolbar extends StatelessWidget {
                 onChanged: (value) {
                   if (value != null) store.setSort(value);
                 },
-              ),
+              )),
             ),
             IconButton.filledTonal(
               tooltip: '실행 취소',
