@@ -1213,7 +1213,10 @@ class ReceiptItem {
         json['reviewStatus'] as String? ?? '',
       ),
       amount: json['amount'] as int?,
-      paymentDateTime: DateTime.tryParse(json['paymentDateTime'] as String? ?? ''),
+      // 서버는 "+09:00"을 붙여 내려주는데, DateTime.parse는 이를 UTC 시각으로 만든다.
+      // toLocal()을 빼면 11:05 결제가 02:05로 보인다. (다른 날짜 필드도 모두 toLocal)
+      paymentDateTime:
+          DateTime.tryParse(json['paymentDateTime'] as String? ?? '')?.toLocal(),
       eligibleAmount: json['eligibleAmount'] as int? ?? 0,
       reviewReason: json['reviewReason'] as String? ?? '',
       rawText: json['rawText'] as String? ?? '',
