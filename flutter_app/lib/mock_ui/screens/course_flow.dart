@@ -13,7 +13,6 @@ import '../data/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui.dart';
-import 'trip_picker_sheet.dart';
 
 // ───────────────────────── AI 코스 생성 유틸 (실서버 후보 → 일정 배치)
 
@@ -229,8 +228,11 @@ class CourseCreateScreen extends StatelessWidget {
           iconFg: const Color(0xFFE0322B),
           title: '유튜브 영상으로 만들기',
           desc: '여행 브이로그 링크를 붙여넣으면 영상 속 장소로 코스를 완성해요',
+          // 여행 없이도 실분석 — 지역 선택 후 실서버 유튜브 분석으로 바로 간다.
+          // (코스는 지역 귀속 — 서버 잡 tripId 옵셔널화와 세트, 2026-08-15)
           onTap: onYoutubeForTrip ??
-              () => _go(context, (r) => CourseYoutubeScreen(region: r, forTrip: forTrip)),
+              () => _go(context,
+                  (r) => YoutubeCourseStartScreen(regionName: r.name)),
         ),
         _MakeCard(
           icon: Icons.edit_rounded,
@@ -1403,57 +1405,6 @@ class CourseSavedScreen extends StatefulWidget {
 class _CourseSavedScreenState extends State<CourseSavedScreen> {
   int _filter = 0;
 
-  /// 저장 코스함에는 여행 컨텍스트가 없다. 유튜브 실분석은 TripDetail이 필요하므로
-  /// 연결할 여행을 먼저 고르게 하고, 그 여행으로 실서버 플로우를 태운다.
-  /// (여행을 못 고르면 목업 연출로 떨어지지 않고 그대로 중단한다.)
-  Future<void> _openYoutubeWithTripPick() async {
-    final controller = AppScope.of(context);
-    // 내 여행 탭을 거치지 않고 홈·알림에서 바로 들어오면 목록이 비어 있을 수 있다.
-    if (controller.trips.isEmpty) {
-      try {
-        await controller.refreshTrips();
-      } catch (_) {
-        // 아래 빈 목록 안내로 처리한다.
-      }
-    }
-    if (!mounted) return;
-
-    // 정산 신청이 끝난 여행은 코스를 새로 붙일 수 없으므로 제외한다.
-    final candidates =
-        controller.trips.where((t) => !t.settlementApplied).toList()
-          ..sort((a, b) => a.startDate.compareTo(b.startDate));
-    if (candidates.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('코스를 연결할 여행이 없어요. 내 여행에서 여행을 먼저 만들어 주세요.'),
-        ),
-      );
-      return;
-    }
-
-    final picked = await pickTripSheet(context, trips: candidates);
-    if (picked == null || !mounted) return;
-
-    final TripDetail detail;
-    try {
-      detail = await controller.repository.getTripDetail(picked.id);
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('여행 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.')),
-      );
-      return;
-    }
-    if (!mounted) return;
-
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => YoutubeCourseStartScreen(tripDetail: detail),
-      ),
-    );
-    if (mounted) setState(() {});
-  }
-
   @override
   Widget build(BuildContext context) {
     final s = AppState.I;
@@ -1474,9 +1425,7 @@ class _CourseSavedScreenState extends State<CourseSavedScreen> {
           icon: const Icon(Icons.add_rounded, color: AppColors.p600),
           onPressed: () => Navigator.of(context)
               .push(MaterialPageRoute(
-                  builder: (_) => CourseCreateScreen(
-                        onYoutubeForTrip: _openYoutubeWithTripPick,
-                      )))
+                  builder: (_) => const CourseCreateScreen()))
               .then((_) => setState(() {})),
         ),
       ],

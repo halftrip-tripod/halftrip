@@ -400,7 +400,7 @@ class ApiTravelRepository implements TravelRepository {
   @override
   Future<CreateYoutubeCourseJobResponse> createYoutubeCourseJob({
     required int userId,
-    required int tripId,
+    int? tripId,
     required int regionId,
     required String youtubeUrl,
   }) async {
@@ -409,7 +409,7 @@ class ApiTravelRepository implements TravelRepository {
       '/youtube-course-jobs',
       body: {
         'userId': userId,
-        'tripId': tripId,
+        if (tripId != null) 'tripId': tripId,
         'regionId': regionId,
         'youtubeUrl': youtubeUrl,
       },

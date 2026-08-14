@@ -42,9 +42,15 @@ String? youtubeVideoId(String raw) {
 }
 
 class YoutubeCourseStartScreen extends StatefulWidget {
-  const YoutubeCourseStartScreen({super.key, required this.tripDetail});
+  const YoutubeCourseStartScreen({super.key, this.tripDetail, this.regionName})
+      : assert(tripDetail != null || regionName != null,
+            '여행 또는 지역 중 하나는 필요합니다');
 
-  final TripDetail tripDetail;
+  /// 여행에서 진입한 경우 — 완료 시 이 여행의 플래너에 적용된다.
+  final TripDetail? tripDetail;
+
+  /// 코스함 등 여행 없이 진입한 경우의 대상 지역 이름.
+  final String? regionName;
 
   @override
   State<YoutubeCourseStartScreen> createState() =>
@@ -83,6 +89,7 @@ class _YoutubeCourseStartScreenState extends State<YoutubeCourseStartScreen> {
         builder:
             (_) => YoutubeCourseAnalysisScreen(
               tripDetail: widget.tripDetail,
+              regionName: widget.regionName,
               youtubeUrl: url,
             ),
       ),

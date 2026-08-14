@@ -973,7 +973,7 @@ class MockTravelRepository implements TravelRepository {
   @override
   Future<CreateYoutubeCourseJobResponse> createYoutubeCourseJob({
     required int userId,
-    required int tripId,
+    int? tripId,
     required int regionId,
     required String youtubeUrl,
   }) async {
