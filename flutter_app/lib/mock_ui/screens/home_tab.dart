@@ -70,8 +70,6 @@ class _HomeTabState extends State<HomeTab> {
 
   @override
   Widget build(BuildContext context) {
-    final s = AppState.I;
-
     return FutureBuilder<_HomeData>(
       future: _future,
       builder: (context, snapshot) {
@@ -152,25 +150,9 @@ class _HomeTabState extends State<HomeTab> {
                 if (preparing.isEmpty) const _EmptyBlock(message: '오픈 예정인 지역이 없어요.'),
               ],
               const SizedBox(height: 10),
-              // 저장 코스 (아직 목업 — 코스 탭 API 연동은 별도 작업)
-              AppCard(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Row(children: [
-                    Icon(Icons.bookmark_rounded, size: 19, color: AppColors.p600),
-                    SizedBox(width: 8),
-                    Text('저장 코스',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.5)),
-                  ]),
-                  const SizedBox(height: 14),
-                  SurfRow(
-                    icon: Icons.route_outlined,
-                    title: s.courses.first.title,
-                    subtitle: '${s.courses.first.region} · ${s.courses.first.placeCount}개 장소',
-                    onTap: () => Navigator.of(context)
-                        .push(MaterialPageRoute(builder: (_) => const CourseSavedScreen())),
-                  ),
-                ]),
-              ),
+              // 저장 코스 — 내 여행 보관함과 같은 소스(controller.savedCourses)를 쓴다.
+              // 목업(AppState.courses)을 그리면 보관함은 0개인데 홈만 코스가 있는 것처럼 보인다.
+              _SavedCourseCard(courses: AppScope.of(context).savedCourses),
               const SizedBox(height: 22),
               // 커뮤니티 인기 글 — 공개 글 좋아요순 상위 2개 (코스 태그 우선).
               if (_popularPosts().isNotEmpty)
@@ -283,6 +265,24 @@ class _MapPane extends StatelessWidget {
 
           double px(Offset o) => o.dx / 544.8 * w;
           double py(Offset o) => o.dy / 1000 * h;
+
+          // 완도·강진처럼 가까운 지역은 이름표가 서로 겹쳐 아예 읽을 수 없다.
+          // 이미 놓인 이름표와 부딪히면 그 핀의 이름표만 아래로 한 칸씩 내린다.
+          const labelStep = 15.0;
+          final labelShift = <int, double>{};
+          final placedLabels = <Offset>[];
+          for (final r in regions) {
+            final o = Offset(px(pinOffset(r)), py(pinOffset(r)));
+            var shift = 0.0;
+            while (placedLabels.any((p) =>
+                (p.dx - o.dx).abs() < 58 &&
+                (p.dy - (o.dy + shift)).abs() < labelStep)) {
+              shift += labelStep;
+            }
+            labelShift[r.id] = shift;
+            placedLabels.add(Offset(o.dx, o.dy + shift));
+          }
+
           return SizedBox(
             width: w,
             height: h,
@@ -332,19 +332,24 @@ class _MapPane extends StatelessWidget {
                 ),
               for (final r in regions)
                 Positioned(
-                  left: px(pinOffset(r)) - 26,
+                  left: px(pinOffset(r)) - 45,
                   top: py(pinOffset(r)) - (r.statusCode.toUpperCase() == 'APPLYING' ? 13 : 10),
                   child: GestureDetector(
                     onTap: () => _openRegion(context, r),
                     child: SizedBox(
-                      width: 52,
+                      width: 90,
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
                         _RegionPinDot(
                           applying: r.statusCode.toUpperCase() == 'APPLYING',
                           visited: visitedRegionIds.contains(r.id),
                         ),
-                        const SizedBox(height: 2),
+                        SizedBox(height: 2 + (labelShift[r.id] ?? 0)),
+                        // 좁은 상자에 가두면 "태백 샘플권/역"처럼 글자 중간에서 끊긴다.
                         Text(r.name,
+                            maxLines: 1,
+                            softWrap: false,
+                            overflow: TextOverflow.visible,
+                            textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: r.statusCode.toUpperCase() == 'APPLYING' ? 12 : 11,
                               fontWeight: FontWeight.w900,
@@ -617,6 +622,45 @@ class _PopCard extends StatelessWidget {
           ]),
         ]),
       ),
+    );
+  }
+}
+
+/// 홈의 저장 코스 카드. 내 여행 보관함과 같은 목록을 본다.
+class _SavedCourseCard extends StatelessWidget {
+  const _SavedCourseCard({required this.courses});
+  final List<SavedCourse> courses;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.bookmark_rounded, size: 19, color: AppColors.p600),
+          const SizedBox(width: 8),
+          const Text('저장 코스',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.5)),
+          const Spacer(),
+          if (courses.isNotEmpty)
+            Text('${courses.length}개',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink5)),
+        ]),
+        const SizedBox(height: 14),
+        if (courses.isEmpty)
+          const _EmptyBlock(message: '저장한 여행 코스가 없어요. 코스를 만들면 여기에 모여요.')
+        else
+          for (final course in courses.take(2))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: SurfRow(
+                icon: Icons.route_outlined,
+                title: course.title,
+                subtitle: '${course.regionName} · ${course.stops.length}개 장소',
+                onTap: () => Navigator.of(context)
+                    .push(MaterialPageRoute(builder: (_) => const CourseSavedScreen())),
+              ),
+            ),
+      ]),
     );
   }
 }

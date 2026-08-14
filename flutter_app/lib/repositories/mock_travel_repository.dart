@@ -722,19 +722,13 @@ class MockTravelRepository implements TravelRepository {
 
   @override
   Future<AppUser> localSignUp({
-    required String name,
     required String loginId,
     required String password,
-    required String phoneNumber,
     required String residence,
   }) async {
     _localLoginId = loginId.trim();
     _localPassword = password.trim();
-    _user = _user.copyWith(
-      name: name.trim(),
-      phoneNumber: phoneNumber.trim(),
-      residence: residence.trim(),
-    );
+    _user = _user.copyWith(residence: residence.trim());
     return _user;
   }
 

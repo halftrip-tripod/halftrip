@@ -1136,18 +1136,23 @@ class _CheckLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final row = Row(
       children: [
+        // 미완료에도 체크를 그리면 완료와 구분이 안 돼 준비가 끝난 것으로 읽힌다.
         Container(
           width: 22,
           height: 22,
           decoration: BoxDecoration(
-            color: done ? AppColors.p500 : AppColors.track,
+            color: done ? AppColors.p500 : Colors.transparent,
             borderRadius: BorderRadius.circular(7),
+            border: done ? null : Border.all(color: AppColors.ink4, width: 1.5),
           ),
-          child: Icon(
-            Icons.check_rounded,
-            size: 15,
-            color: done ? Colors.white : AppColors.ink4,
-          ),
+          child:
+              done
+                  ? const Icon(
+                    Icons.check_rounded,
+                    size: 15,
+                    color: Colors.white,
+                  )
+                  : null,
         ),
         const SizedBox(width: 11),
         Expanded(

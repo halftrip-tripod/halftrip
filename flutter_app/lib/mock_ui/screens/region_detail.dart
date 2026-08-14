@@ -156,12 +156,20 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
                 : _paymentSummary(guideText),
           ),
           _Kv('인증 조건', _proofSummary(guideText)),
-          _Kv('최소 소비', _minSpendSummary(guideText)),
+          // 서버가 내려주는 금액이 먼저다. guideText 문자열 매칭에만 기대면
+          // 목록은 "최소 소비 20만원"인데 상세는 "지역 공고 기준 확인"으로 어긋난다.
+          _Kv(
+            '최소 소비',
+            r.refundConditionAmount > 0
+                ? '${_formatWon(r.refundConditionAmount)}원 이상'
+                : _minSpendSummary(guideText),
+          ),
+          // refundConditionAmount는 최소 소비 조건이지 1인 최대 환급액이 아니다.
           _Kv(
             '1인 최대 환급',
             r.maxRefundPerPerson != null
                 ? '${_formatWon(r.maxRefundPerPerson!)}원'
-                : '${_formatWon(r.refundConditionAmount)}원',
+                : '지역 공고 기준 확인',
           ),
         ]),
         // 인정 관광지 — 실 API(RegionDetail.halfPricePlaces) 연동.
@@ -484,7 +492,9 @@ String _paymentSummary(String guideText) {
 
 String _proofSummary(String guideText) {
   if (guideText.contains('인증샷') || guideText.contains('사진')) return '영수증 + 여행 인증 사진';
-  return '영수증 제출';
+  // 앱이 실제로 요구하는 증빙(인증샷 2곳 + 영수증)과 같은 기준으로 말한다.
+  // "영수증 제출"만 적으면 목록 카드("지정관광지 2곳 인증")와 어긋난다.
+  return '영수증 + 지정관광지 2곳 인증샷';
 }
 
 String _minSpendSummary(String guideText) {

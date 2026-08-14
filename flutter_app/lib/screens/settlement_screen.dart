@@ -163,6 +163,44 @@ class _SettlementScreenState extends State<SettlementScreen> {
     );
   }
 
+  /// 지자체에 제출했을 때 반려 사유가 되는 항목들.
+  List<String> _missingEvidence(
+      TripDetail detail, int authCount, bool hasLodging) {
+    final goal = detail.trip.refundConditionAmount;
+    return [
+      if (authCount < 2) '관광지 인증샷',
+      if (detail.receipts.isEmpty) '영수증',
+      if (goal > 0 && detail.trip.totalSpentAmount < goal) '최소 소비금액',
+      if (!hasLodging) '숙박확인서',
+    ];
+  }
+
+  /// 증빙이 빈 채로 외부 정산 페이지까지 가지 않도록 한 번 되묻는다.
+  /// 신청 자체는 외부에서 이뤄지므로 완전히 막지는 않는다.
+  Future<void> _confirmThenOpenSite(
+      TripDetail detail, List<String> missing) async {
+    if (missing.isNotEmpty) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('아직 빠진 증빙이 있어요'),
+          content: Text('${missing.join(' · ')}가 준비되지 않았어요.\n'
+              '이대로 제출하면 반려될 수 있어요. 그래도 진행할까요?'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('증빙 마저 준비하기')),
+            TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('그래도 진행')),
+          ],
+        ),
+      );
+      if (proceed != true) return;
+    }
+    await _openSettlementSite(detail.trip.regionName);
+  }
+
   Future<void> _openSubmission(TripDetail detail) async {
     await Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => SubmissionPackageScreen(
@@ -189,6 +227,7 @@ class _SettlementScreenState extends State<SettlementScreen> {
           final hasLodging = detail.uploadedFiles
                   .any((f) => f.fileCategory == FileCategory.lodgingConfirmation) ||
               detail.lodgingInfo?.uploadedFileId != null;
+          final missing = _missingEvidence(detail, authCount, hasLodging);
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
@@ -254,8 +293,9 @@ class _SettlementScreenState extends State<SettlementScreen> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                _Note(
-                    '${detail.trip.regionName} 정산 페이지에서 증빙을 제출하세요. 심사를 거쳐 지역화폐가 지급돼요.'),
+                _Note(missing.isEmpty
+                    ? '${detail.trip.regionName} 정산 페이지에서 증빙을 제출하세요. 심사를 거쳐 지역화폐가 지급돼요.'
+                    : '아직 ${missing.join(' · ')}가 준비되지 않았어요. 이대로 제출하면 반려될 수 있어요.'),
               ],
             ],
           );
@@ -268,13 +308,20 @@ class _SettlementScreenState extends State<SettlementScreen> {
           if (detail == null || detail.trip.settlementApplied) {
             return const SizedBox.shrink();
           }
+          final authCount = detail.uploadedFiles
+              .where((f) => f.fileCategory == FileCategory.authPhoto)
+              .length;
+          final hasLodging = detail.uploadedFiles
+                  .any((f) => f.fileCategory == FileCategory.lodgingConfirmation) ||
+              detail.lodgingInfo?.uploadedFileId != null;
+          final missing = _missingEvidence(detail, authCount, hasLodging);
           return SafeArea(
             minimum: const EdgeInsets.fromLTRB(20, 12, 20, 26),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               FilledButton.icon(
                 onPressed: _busy
                     ? null
-                    : () => _openSettlementSite(detail.trip.regionName),
+                    : () => _confirmThenOpenSite(detail, missing),
                 icon: const Icon(Icons.open_in_new_rounded, size: 18),
                 label: const Text('정산 신청하러 가기'),
               ),
@@ -324,14 +371,18 @@ class _CheckItem extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.only(top: 8, bottom: last ? 0 : 8),
       child: Row(children: [
+        // 미완료에 체크를 그리면 준비가 끝난 것으로 읽힌다.
         Container(
           width: 22,
           height: 22,
           decoration: BoxDecoration(
-              color: done ? AppColors.p500 : AppColors.track,
-              shape: BoxShape.circle),
-          child: Icon(Icons.check_rounded,
-              size: 14, color: done ? Colors.white : AppColors.ink4),
+              color: done ? AppColors.p500 : Colors.transparent,
+              shape: BoxShape.circle,
+              border:
+                  done ? null : Border.all(color: AppColors.ink4, width: 1.5)),
+          child: done
+              ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
+              : null,
         ),
         const SizedBox(width: 12),
         Text(label,

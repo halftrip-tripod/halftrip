@@ -19,11 +19,12 @@ abstract class TravelRepository {
     required String loginId,
     required String password,
   });
+  /// 로컬 회원가입. 실명·전화번호는 받지 않는다 — 개인정보 최소수집 원칙상
+  /// 상시 보유하는 값은 거주지·닉네임·로그인 식별자뿐이고, 실명·전화번호는
+  /// 정산 신청 시점에 그 여행 레코드에만 저장한다.
   Future<AppUser> localSignUp({
-    required String name,
     required String loginId,
     required String password,
-    required String phoneNumber,
     required String residence,
   });
   Future<AppUser> getUser(int userId);

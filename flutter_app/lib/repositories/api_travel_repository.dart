@@ -215,20 +215,16 @@ class ApiTravelRepository implements TravelRepository {
 
   @override
   Future<AppUser> localSignUp({
-    required String name,
     required String loginId,
     required String password,
-    required String phoneNumber,
     required String residence,
   }) async {
     final response = await _jsonRequest(
       'POST',
       '/auth/signup',
       body: {
-        'name': name,
         'loginId': loginId,
         'password': password,
-        'phoneNumber': phoneNumber,
         'residence': residence,
       },
     );
