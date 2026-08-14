@@ -14,11 +14,16 @@ class YoutubeCourseAnalysisScreen extends StatefulWidget {
   const YoutubeCourseAnalysisScreen({
     super.key,
     this.tripDetail,
+    this.regionName,
     this.youtubeUrl = '',
     this.jobId,
   });
 
   final TripDetail? tripDetail;
+
+  /// 여행 없이 진입한 경우의 대상 지역 이름 — 잡 생성 시 지역 id로 해석한다.
+  final String? regionName;
+
   final String youtubeUrl;
   final String? jobId;
 
@@ -76,21 +81,36 @@ class _YoutubeCourseAnalysisScreenState
       return;
     }
 
+    // 코스는 지역 귀속 — 여행에서 오면 여행의 지역을, 코스함에서 오면
+    // 지역 이름을 id로 해석해 여행 없이도 분석을 시작한다.
     final tripDetail = widget.tripDetail;
-    if (tripDetail == null) {
+    int? regionId = tripDetail?.trip.regionId;
+    if (regionId == null && widget.regionName != null) {
+      try {
+        final regions = await controller.repository.getRegions();
+        for (final region in regions) {
+          if (region.name == widget.regionName) {
+            regionId = region.id;
+            break;
+          }
+        }
+      } catch (_) {}
+    }
+    if (regionId == null) {
       setState(() {
         _creating = false;
-        _errorMessage = '여행 정보가 없어 유튜브 코스 작업을 시작하지 못했습니다.';
+        _errorMessage = '지역 정보가 없어 유튜브 코스 작업을 시작하지 못했습니다.';
       });
       return;
     }
+    final resolvedRegionId = regionId;
 
     try {
       final response = await controller.runTask(
         () => controller.repository.createYoutubeCourseJob(
           userId: userId,
-          tripId: tripDetail.trip.id,
-          regionId: tripDetail.trip.regionId,
+          tripId: tripDetail?.trip.id,
+          regionId: resolvedRegionId,
           youtubeUrl: widget.youtubeUrl,
         ),
       );
@@ -99,16 +119,18 @@ class _YoutubeCourseAnalysisScreenState
         _jobId = response.jobId;
         _creating = false;
       });
-      await controller.trackPendingYoutubeCourseJob(
-        PendingYoutubeCourseJob(
-          jobId: response.jobId,
-          tripId: tripDetail.trip.id,
-          regionId: tripDetail.trip.regionId,
-          regionName: tripDetail.trip.regionName,
-          youtubeUrl: widget.youtubeUrl,
-          createdAt: DateTime.now(),
-        ),
-      );
+      if (tripDetail != null) {
+        await controller.trackPendingYoutubeCourseJob(
+          PendingYoutubeCourseJob(
+            jobId: response.jobId,
+            tripId: tripDetail.trip.id,
+            regionId: tripDetail.trip.regionId,
+            regionName: tripDetail.trip.regionName,
+            youtubeUrl: widget.youtubeUrl,
+            createdAt: DateTime.now(),
+          ),
+        );
+      }
       await _refreshJob();
       _startPollingIfNeeded();
     } catch (error) {
@@ -348,22 +370,25 @@ class _YoutubeCourseAnalysisScreenState
       );
       final savedCourse = controller.findSavedCourse(_job!.jobId);
       final tripId = widget.tripDetail?.trip.id ?? _job?.tripId;
-      if (tripId == null) {
-        throw Exception('저장할 여행 정보가 없습니다.');
-      }
-      await controller.runTask(
-        () => controller.repository.replaceTripPlaces(tripId, payload),
-      );
-      if (savedCourse != null) {
-        await controller.selectCourseForTrip(
-          tripId: tripId,
-          courseId: savedCourse.id,
+      if (tripId != null) {
+        // 여행에서 진입 — 플래너 적용 + 확정 코스 연결까지.
+        await controller.runTask(
+          () => controller.repository.replaceTripPlaces(tripId, payload),
         );
+        if (savedCourse != null) {
+          await controller.selectCourseForTrip(
+            tripId: tripId,
+            courseId: savedCourse.id,
+          );
+        }
+        await controller.refreshTrips();
       }
-      await controller.refreshTrips();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('생성된 코스를 현재 여행 플래너에 적용했습니다.')),
+        SnackBar(
+            content: Text(tripId != null
+                ? '생성된 코스를 현재 여행 플래너에 적용했습니다.'
+                : '코스를 내 코스함에 저장했습니다.')),
       );
     } catch (error) {
       if (!mounted) return;
@@ -469,17 +494,19 @@ class _YoutubeCourseAnalysisScreenState
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 22, 20, 14),
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.info_outline_rounded,
+                        const Icon(Icons.info_outline_rounded,
                             size: 14, color: AppColors.p500),
-                        SizedBox(width: 5),
+                        const SizedBox(width: 5),
                         Text(
-                          '저장하면 내 코스함에서 자유롭게 수정할 수 있어요',
-                          style: TextStyle(
+                          widget.tripDetail != null
+                              ? '저장하면 이 여행 플래너에 적용되고 코스함에도 저장돼요'
+                              : '저장하면 내 코스함에서 자유롭게 수정할 수 있어요',
+                          style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                               color: AppColors.ink5),

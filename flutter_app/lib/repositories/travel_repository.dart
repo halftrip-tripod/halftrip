@@ -68,7 +68,7 @@ abstract class TravelRepository {
   });
   Future<CreateYoutubeCourseJobResponse> createYoutubeCourseJob({
     required int userId,
-    required int tripId,
+    int? tripId, // 코스는 지역 귀속 — 여행 없이(코스함 바로 분석)도 잡 생성 가능
     required int regionId,
     required String youtubeUrl,
   });

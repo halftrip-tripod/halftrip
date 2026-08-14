@@ -229,8 +229,11 @@ class CourseCreateScreen extends StatelessWidget {
           iconFg: const Color(0xFFE0322B),
           title: '유튜브 영상으로 만들기',
           desc: '여행 브이로그 링크를 붙여넣으면 영상 속 장소로 코스를 완성해요',
+          // 여행 없이도 실분석 — 지역 선택 후 실서버 유튜브 분석으로 바로 간다.
+          // (코스는 지역 귀속 — 서버 잡 tripId 옵셔널화와 세트, 2026-08-15)
           onTap: onYoutubeForTrip ??
-              () => _go(context, (r) => CourseYoutubeScreen(region: r, forTrip: forTrip)),
+              () => _go(context,
+                  (r) => YoutubeCourseStartScreen(regionName: r.name)),
         ),
         _MakeCard(
           icon: Icons.edit_rounded,
