@@ -232,7 +232,6 @@ class _RegionUsageCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final applied = '${trip.endDate.month}.${trip.endDate.day}';
     return AppCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
@@ -242,8 +241,9 @@ class _RegionUsageCard extends StatelessWidget {
             Text(trip.regionName,
                 style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.3)),
             const SizedBox(height: 2),
-            Text('정산 신청 완료 · $applied',
-                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink5)),
+            // 날짜는 붙이지 않는다. 여기에 여행 종료일을 적어 두어 신청일로 읽혔다.
+            const Text('정산 신청 완료',
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink5)),
           ]),
         ]),
         const SizedBox(height: 14),
