@@ -909,6 +909,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
         routeMarkers: widget.routeMarkers,
         connectSequentially: widget.connectSequentially,
         highlightedMarkerId: widget.highlightedMarkerId,
+        onViewportChanged: widget.onViewportChanged,
         onMarkerTap: widget.onMarkerTap,
         onMarkerDetailsRequested: widget.onMarkerDetailsRequested,
         initialCenterLatitude: widget.initialCenterLatitude,

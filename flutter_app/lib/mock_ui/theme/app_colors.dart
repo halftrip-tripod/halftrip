@@ -28,6 +28,7 @@ abstract final class AppColors {
   // Semantic
   static const success = Color(0xFF22B35E);
   static const warning = Color(0xFFF5A623);
+  static const gold = Color(0xFFFFC107); // 다녀온 지역 도장 (밝은 노랑)
   static const danger = Color(0xFFEF4444);
   static const wallet = Color(0xFFFF6B00);
 

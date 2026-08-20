@@ -1,0 +1,41 @@
+# 지역 데이터 명세서 — 홈·상세·증빙에 필요한 값 채우기 (2026-08-20 규희)
+
+> 배경: 운영 지역 API 실측 결과, 앱(준서 #51)이 파싱하는 **일정·환급 필드가 서버 응답에 아예 없음**
+> (`dataSourceNote: SAMPLE_SEED` — 전부 샘플 시드). 그래서 홈 카드가 "조건은 상세에서 미리 확인" 폴백으로만 뜸.
+> 운영 실측(8/20): 16지역 · statusCode = APPLYING 1 / PREPARING 2 / CLOSED 13 · 날짜 필드 0/16.
+
+## 1. 서버에 추가할 필드 (regions) — 앱 필드명과 정확히 일치해야 함
+
+| 필드 (JSON 키) | 타입 | 표시 위치 | 없을 때 폴백 |
+| --- | --- | --- | --- |
+| `applyStartDate` | date | 홈 카드 "오픈 예정 · N.N 오픈", 상세 신청 일정 | "오픈 예정 · 조건은 상세에서" |
+| `applyDeadline` | date | 홈 D-day("마감 D-5"), 상세 접수 기간 | D-day 미표시 |
+| `openDate` | date | 오픈예정 지역의 오픈일 표기 | 〃 |
+| `travelPeriodStart` / `travelPeriodEnd` | date | 상세 "여행 기간 N.N~N.N 중 1박2일" | 문구 생략 |
+| `settlementDeadlineDays` | int | 상세 "정산 신청: 여행 종료 다음날부터 N일 이내" | 기본 문구 |
+| `refundRate` | int(%) | 상세 환급 요약 "50%" (청년 70% 지역은 비고로) | 50 고정 표기 |
+| `maxRefundPerPerson` | int(원) | 상세 "1인 최대 N만원" | 미표시 |
+| `paymentMethods` | string[] | 상세 결제수단 · **영수증 증빙 인정 결제수단 안내** | "지역화폐·카드" 일반 문구 |
+| `refundConditionText` | string | 상세 인증 조건 요약("지정관광지 2곳 + 영수증") | 일반 문구 |
+| (기존) `refundConditionAmount` | int | 최소 소비 금액 — **증빙 게이지 기준** | 이미 있음 ✅ |
+| (기존) `statusCode` | enum | APPLYING/PREPARING/CLOSED — 지도·필터 | 이미 있음 ✅ |
+
+- 작업: Flyway `V○○__region_schedule_fields.sql`(컬럼 추가) + RegionDtos/TripMapper 필드 추가 → **규희가 코드 작업**, 값은 아래 조사 시트로.
+- 증빙 검증 관점: 최소소비(`refundConditionAmount`)·인정 결제수단(`paymentMethods`)·인증 요건 문구(`refundConditionText`)가 영수증/인증샷 화면 안내와 일치해야 함.
+
+## 2. 데이터 수집 방침 (→ 하민)
+
+- **§1 표의 "화면에 필요한 필드"만** 수집하면 됨 — 그 외는 불필요.
+- **하반기(2차) 지역 위주로 수집** — 상반기 16곳 대부분 CLOSED라 심사위원이 볼 건 2차 지역. 상반기 지역은 공식 안내 기본값(환급 50%·1인 10만 등)으로 일괄 채워도 충분.
+- 출처: 각 지역 공고(`halfPriceApplyUrl`) + [대한민국 반값여행 공식](https://korean.visitkorea.or.kr/dgtourcard/tour50.do).
+
+## 3. 🚨 하반기(2차) 지역 대응 — 9월 시작 예정
+
+- 정부가 하반기 확대 발표: **7월 공모 → 추가 지자체 선정 → 9월 2차 사업 시작** (기사 기준 4~14곳, 최종 명단 미확인).
+- **9월 2차 = 우리 심사 기간(10월)과 정확히 겹침** → 심사위원이 보는 "접수중" 지역이 2차 지역들. **최우선 데이터**.
+- 할 일(명단 발표 시): ①지역 시드 마이그레이션(기본정보+일정) ②지도 좌표(mapTop/LeftPercent) ③가맹점 CSV ④일러스트(준서) ⑤숙박확인서 양식 조사.
+- 모니터링: [visitkorea 반값여행](https://korean.visitkorea.or.kr/dgtourcard/tour50.do)·문체부 보도자료 주 1회 확인 (하민).
+
+## 4. 발견된 앱 후속 버그 (규희 픽스 예정)
+- 홈 지도 핀이 CLOSED(13개) 지역을 **회색 처리하지 않음** — 범례엔 '마감'(회색)이 있는데 핀 색 분기가 접수중/기본 2종뿐.
+

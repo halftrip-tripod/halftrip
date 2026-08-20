@@ -21,6 +21,7 @@ class GooglePlaceMapView extends StatefulWidget {
     this.routeMarkers = const [],
     this.connectSequentially = false,
     this.highlightedMarkerId,
+    this.onViewportChanged,
     this.onMarkerTap,
     this.onMarkerDetailsRequested,
     this.initialCenterLatitude,
@@ -34,6 +35,7 @@ class GooglePlaceMapView extends StatefulWidget {
   final List<PlaceMapRoutePoint> routeMarkers;
   final bool connectSequentially;
   final int? highlightedMarkerId;
+  final ValueChanged<PlaceMapViewport>? onViewportChanged;
   final ValueChanged<int>? onMarkerTap;
   final Future<PlaceMapMarkerData?> Function(PlaceMapMarkerData marker)?
       onMarkerDetailsRequested;
@@ -65,6 +67,27 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
   BitmapDescriptor? _pinHighlight;
   List<BitmapDescriptor> _numberedPins = const [];
   PlaceMapMarkerData? _selectedMarker;
+  GoogleMapController? _controller;
+
+  Future<void> _notifyViewport() async {
+    final controller = _controller;
+    final callback = widget.onViewportChanged;
+    if (controller == null || callback == null) return;
+    try {
+      final bounds = await controller.getVisibleRegion();
+      if (!mounted) return;
+      callback(PlaceMapViewport(
+        centerLatitude:
+            (bounds.southwest.latitude + bounds.northeast.latitude) / 2,
+        centerLongitude:
+            (bounds.southwest.longitude + bounds.northeast.longitude) / 2,
+        minLatitude: bounds.southwest.latitude,
+        maxLatitude: bounds.northeast.latitude,
+        minLongitude: bounds.southwest.longitude,
+        maxLongitude: bounds.northeast.longitude,
+      ));
+    } catch (_) {}
+  }
 
   Future<bool> _prepare() async {
     final loaded = await ensureGoogleMapsJs(widget.apiKey);
@@ -262,7 +285,12 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
                   mapToolbarEnabled: false,
                   zoomControlsEnabled: false,
                   onTap: (_) => setState(() => _selectedMarker = null),
-                  onMapCreated: (_) {},
+                  onMapCreated: (controller) {
+                    _controller = controller;
+                    // 초기 가시 영역도 한 번 알린다 (뷰포트 기반 마커 필터용).
+                    _notifyViewport();
+                  },
+                  onCameraIdle: _notifyViewport,
                 ),
                 if (_selectedMarker != null)
                   Positioned(
