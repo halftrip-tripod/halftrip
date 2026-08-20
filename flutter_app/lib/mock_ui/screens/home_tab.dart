@@ -382,7 +382,7 @@ class _MapPane extends StatelessWidget {
             _legend(AppColors.p300, '오픈예정 $preparing'),
             _legend(AppColors.gray, '마감'),
             _legend(AppColors.coral, '내 위치'),
-            _legend(AppColors.coralDeep, '다녀온 지역'),
+            _legend(AppColors.gold, '다녀온 지역'),
           ],
         ),
         const SizedBox(height: 6),
@@ -414,14 +414,15 @@ class _RegionPinDot extends StatelessWidget {
           width: size,
           height: size,
           decoration: BoxDecoration(
-            color: AppColors.coralTint,
+            // 다녀온 도장 — 노랑·주황 계열 (warning 토큰 기반).
+            color: AppColors.gold.withValues(alpha: .18),
             shape: BoxShape.circle,
-            border: Border.all(color: AppColors.coralDeep, width: 2.2),
+            border: Border.all(color: AppColors.gold, width: 2.2),
             boxShadow: const [
               BoxShadow(color: Color(0x33000000), blurRadius: 4, offset: Offset(0, 2)),
             ],
           ),
-          child: Icon(Icons.star_rounded, size: size * 0.65, color: AppColors.coralDeep),
+          child: Icon(Icons.star_rounded, size: size * 0.65, color: AppColors.gold),
         ),
       );
     }
