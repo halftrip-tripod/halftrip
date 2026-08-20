@@ -9,6 +9,26 @@ import '../widgets/ui/app_card.dart';
 
 /// 지역화폐 가맹점 지도 — 디자인: 목업 MerchantMapScreen.
 /// 지역 상세 API의 가맹점 실데이터 + 지도 + 카테고리 필터.
+
+/// 통계청 세분류 category → 사용자용 대분류. 칩·아이콘·리스트가 공유한다.
+/// (원문 나열 시 "육상 운송 및 파이프라인 운송업" 같은 칩 수십 개가 생기던 문제)
+(String, String) merchantGroupOf(String name, String category) {
+  final text = '$name $category';
+  bool has(List<String> keys) => keys.any(text.contains);
+  if (has(['카페', '커피', '디저트', '제과', '빵', '찻집'])) return ('카페·디저트', '☕');
+  if (has(['식당', '음식', '한식', '중식', '일식', '양식', '분식', '치킨', '주점', '횟집', '고기', '피자', '족발', '국밥'])) {
+    return ('음식점', '🍲');
+  }
+  if (has(['숙박', '펜션', '모텔', '호텔', '민박', '리조트', '스테이'])) return ('숙박', '🏠');
+  if (has(['마트', '슈퍼', '편의', '상회', '수산', '정육', '청과', '농산', '시장'])) return ('쇼핑·마트', '🛒');
+  if (has(['미용', '헤어', '이용', '뷰티', '네일', '피부', '세탁', '목욕', '안경', '약국', '의원', '병원'])) {
+    return ('미용·생활', '💇');
+  }
+  if (has(['레저', '낚시', '체험', '관광', '여행', '스포츠', '골프', '요트', '렌터', '대여'])) return ('레저·관광', '🎣');
+  if (has(['꽃', '화훼', '문구', '서점', '의류', '패션', '잡화', '가구', '철물', '전자'])) return ('쇼핑·마트', '🛍️');
+  return ('기타', '📍');
+}
+
 class MerchantMapScreen extends StatefulWidget {
   const MerchantMapScreen({
     super.key,
@@ -41,8 +61,13 @@ class _MerchantMapScreenState extends State<MerchantMapScreen> {
     _initialized = true;
   }
 
-  List<String> _categories(List<MerchantItem> merchants) =>
-      ['전체', ...{for (final m in merchants) m.category}];
+  List<String> _categories(List<MerchantItem> merchants) => [
+        '전체',
+        ...{for (final m in merchants) merchantGroupOf(m.name, m.category).$1},
+      ];
+
+  static const _maxMarkers = 250;
+  PlaceMapViewport? _viewport;
 
   @override
   Widget build(BuildContext context) {
@@ -59,10 +84,43 @@ class _MerchantMapScreenState extends State<MerchantMapScreen> {
           final categories = _categories(merchants);
           final visible = merchants
               .where((m) =>
-                  _category == 0 || m.category == categories[_category])
+                  _category == 0 ||
+                  merchantGroupOf(m.name, m.category).$1 ==
+                      categories[_category])
               .toList();
-          final markers = visible
+          // 수천 개를 한 번에 그리면 지도가 마커로 덮인다 — 현재 뷰포트 안에서
+          // 중심 가까운 순으로 최대 250개만 렌더 (이동·줌 시 갱신).
+          final geoAll = visible
               .where((m) => m.latitude != null && m.longitude != null)
+              .toList();
+          final vp = _viewport;
+          var geo = vp == null
+              ? geoAll
+              : geoAll
+                  .where((m) =>
+                      m.latitude! >= vp.minLatitude &&
+                      m.latitude! <= vp.maxLatitude &&
+                      m.longitude! >= vp.minLongitude &&
+                      m.longitude! <= vp.maxLongitude)
+                  .toList();
+          if (geo.length > _maxMarkers) {
+            final cLat = vp?.centerLatitude ??
+                geo.map((m) => m.latitude!).reduce((a, b) => a + b) /
+                    geo.length;
+            final cLng = vp?.centerLongitude ??
+                geo.map((m) => m.longitude!).reduce((a, b) => a + b) /
+                    geo.length;
+            geo.sort((a, b) {
+              double d(MerchantItem m) {
+                final dy = m.latitude! - cLat;
+                final dx = m.longitude! - cLng;
+                return dy * dy + dx * dx;
+              }
+              return d(a).compareTo(d(b));
+            });
+            geo = geo.take(_maxMarkers).toList();
+          }
+          final markers = geo
               .map((m) => PlaceMapMarkerData(
                     id: m.id,
                     name: m.name,
@@ -70,7 +128,7 @@ class _MerchantMapScreenState extends State<MerchantMapScreen> {
                     latitude: m.latitude!,
                     longitude: m.longitude!,
                     selected: true,
-                    regionLabel: m.category,
+                    regionLabel: merchantGroupOf(m.name, m.category).$1,
                   ))
               .toList();
 
@@ -127,6 +185,8 @@ class _MerchantMapScreenState extends State<MerchantMapScreen> {
                   kakaoEnabled: AppConfig.fromEnvironment().canUseKakaoMap,
                   highlightedMarkerId: _highlightedId,
                   onMarkerTap: (id) => setState(() => _highlightedId = id),
+                  onViewportChanged: (viewport) =>
+                      setState(() => _viewport = viewport),
                   height: 300,
                 ),
               ),
@@ -174,19 +234,7 @@ class _MerchantRow extends StatelessWidget {
   final bool highlighted;
   final VoidCallback onTap;
 
-  String get _emoji {
-    final text = '${merchant.name} ${merchant.category}';
-    if (text.contains('시장')) return '🧺';
-    if (text.contains('카페') || text.contains('디저트')) return '☕';
-    if (text.contains('숙') || text.contains('스테이') || text.contains('펜션')) {
-      return '🏠';
-    }
-    if (text.contains('마트') || text.contains('편의')) return '🛒';
-    if (text.contains('식당') || text.contains('음식') || text.contains('한식')) {
-      return '🍲';
-    }
-    return '🏪';
-  }
+  String get _emoji => merchantGroupOf(merchant.name, merchant.category).$2;
 
   @override
   Widget build(BuildContext context) {

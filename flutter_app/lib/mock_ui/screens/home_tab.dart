@@ -267,20 +267,23 @@ class _MapPane extends StatelessWidget {
           double py(Offset o) => o.dy / 1000 * h;
 
           // 완도·강진처럼 가까운 지역은 이름표가 서로 겹쳐 아예 읽을 수 없다.
-          // 이미 놓인 이름표와 부딪히면 그 핀의 이름표만 아래로 한 칸씩 내린다.
-          const labelStep = 15.0;
-          final labelShift = <int, double>{};
+          // 밀어내는 대신 우선순위(접수중 > 오픈예정 > 나머지)가 높은 것만 남기고
+          // 겹치는 낮은 쪽 이름표는 숨긴다 — 숨겨진 지역은 핀을 탭하면 상세로.
+          int labelPriority(RegionSummary r) => switch (r.statusCode.toUpperCase()) {
+                'APPLYING' => 2,
+                'PREPARING' => 1,
+                _ => 0,
+              };
+          final ordered = [...regions]
+            ..sort((a, b) => labelPriority(b).compareTo(labelPriority(a)));
+          final labelVisible = <int, bool>{};
           final placedLabels = <Offset>[];
-          for (final r in regions) {
+          for (final r in ordered) {
             final o = Offset(px(pinOffset(r)), py(pinOffset(r)));
-            var shift = 0.0;
-            while (placedLabels.any((p) =>
-                (p.dx - o.dx).abs() < 58 &&
-                (p.dy - (o.dy + shift)).abs() < labelStep)) {
-              shift += labelStep;
-            }
-            labelShift[r.id] = shift;
-            placedLabels.add(Offset(o.dx, o.dy + shift));
+            final collides = placedLabels.any((p) =>
+                (p.dx - o.dx).abs() < 58 && (p.dy - o.dy).abs() < 17);
+            labelVisible[r.id] = !collides;
+            if (!collides) placedLabels.add(o);
           }
 
           return SizedBox(
@@ -343,9 +346,10 @@ class _MapPane extends StatelessWidget {
                           applying: r.statusCode.toUpperCase() == 'APPLYING',
                           visited: visitedRegionIds.contains(r.id),
                         ),
-                        SizedBox(height: 2 + (labelShift[r.id] ?? 0)),
+                        const SizedBox(height: 2),
                         // 좁은 상자에 가두면 "태백 샘플권/역"처럼 글자 중간에서 끊긴다.
-                        Text(r.name,
+                        if (labelVisible[r.id] ?? true)
+                          Text(r.name,
                             maxLines: 1,
                             softWrap: false,
                             overflow: TextOverflow.visible,
