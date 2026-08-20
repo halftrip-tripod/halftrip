@@ -343,7 +343,7 @@ class _MapPane extends StatelessWidget {
                       width: 90,
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
                         _RegionPinDot(
-                          applying: r.statusCode.toUpperCase() == 'APPLYING',
+                          statusCode: r.statusCode,
                           visited: visitedRegionIds.contains(r.id),
                         ),
                         const SizedBox(height: 2),
@@ -357,9 +357,11 @@ class _MapPane extends StatelessWidget {
                             style: TextStyle(
                               fontSize: r.statusCode.toUpperCase() == 'APPLYING' ? 12 : 11,
                               fontWeight: FontWeight.w900,
-                              color: r.statusCode.toUpperCase() == 'APPLYING'
-                                  ? const Color(0xFF0F2A3E)
-                                  : const Color(0xFF1F7BB0),
+                              color: switch (r.statusCode.toUpperCase()) {
+                                'APPLYING' => const Color(0xFF0F2A3E),
+                                'PREPARING' => const Color(0xFF1F7BB0),
+                                _ => AppColors.ink4,
+                              },
                             )),
                       ]),
                     ),
@@ -404,12 +406,14 @@ class _MapPane extends StatelessWidget {
 
 /// 지도 위 지역 핀 — 다녀온 지역(정산 신청 이상 단계)은 파란 점 대신 도장 표시.
 class _RegionPinDot extends StatelessWidget {
-  const _RegionPinDot({required this.applying, required this.visited});
-  final bool applying;
+  const _RegionPinDot({required this.statusCode, required this.visited});
+  final String statusCode;
   final bool visited;
 
   @override
   Widget build(BuildContext context) {
+    final status = statusCode.toUpperCase();
+    final applying = status == 'APPLYING';
     final size = applying ? 26.0 : 20.0;
     if (visited) {
       return Transform.rotate(
@@ -430,7 +434,13 @@ class _RegionPinDot extends StatelessWidget {
         ),
       );
     }
-    return _MapDot(size: size, color: applying ? AppColors.p500 : const Color(0xFF5CC4EE));
+    // 범례와 같은 토큰: 접수중 p500 / 오픈예정 p300 / 마감 gray.
+    final color = applying
+        ? AppColors.p500
+        : status == 'PREPARING'
+            ? AppColors.p300
+            : AppColors.gray;
+    return _MapDot(size: size, color: color);
   }
 }
 
@@ -449,8 +459,8 @@ class _MapDot extends StatelessWidget {
         color: color,
         shape: BoxShape.circle,
         border: Border.all(color: Colors.white, width: 2.5),
-        boxShadow: const [
-          BoxShadow(color: Color(0x660284C7), blurRadius: 6, offset: Offset(0, 2)),
+        boxShadow: [
+          BoxShadow(color: color.withValues(alpha: .4), blurRadius: 6, offset: const Offset(0, 2)),
         ],
       ),
       child: const Center(
