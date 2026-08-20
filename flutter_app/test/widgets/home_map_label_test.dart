@@ -7,6 +7,7 @@ import 'package:travel_support_mvp/core/app_controller.dart';
 import 'package:travel_support_mvp/core/app_scope.dart';
 import 'package:travel_support_mvp/models/app_models.dart';
 import 'package:travel_support_mvp/mock_ui/screens/home_tab.dart';
+import 'package:travel_support_mvp/mock_ui/theme/app_colors.dart';
 import 'package:travel_support_mvp/repositories/mock_travel_repository.dart';
 
 RegionSummary _region({
@@ -42,6 +43,8 @@ class _CollidingRegionsRepo extends MockTravelRepository {
         _region(id: 902, name: '가상마감', statusCode: 'CLOSED', top: 51, left: 50),
         // 멀리 떨어진 지역 — 겹치지 않으니 라벨이 보여야 한다.
         _region(id: 903, name: '가상외딴곳', statusCode: 'CLOSED', top: 20, left: 80),
+        // 오픈예정 — 핀 색 상태 분기 검증용.
+        _region(id: 904, name: '가상오픈예정', statusCode: 'PREPARING', top: 70, left: 20),
       ];
 }
 
@@ -75,6 +78,30 @@ void main() {
     expect(find.text('가상외딴곳'), findsOneWidget);
     expect(tester.takeException(), isNull);
     // testWidgets는 본문 종료 시 foundation 변수 원복을 검사한다.
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('핀 색이 상태별로 갈린다 — 접수중 p500·오픈예정 p300·마감 gray', (tester) async {
+    final controller = AppController(repository: _CollidingRegionsRepo());
+    await controller.loginWithCredentials(loginId: 'sample', password: '1234');
+    await tester.pumpWidget(
+      AppScope(
+        controller: controller,
+        child: const MaterialApp(home: Scaffold(body: HomeTab())),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+
+    final dotColors = tester
+        .widgetList(find.byWidgetPredicate((w) => w.runtimeType.toString() == '_MapDot'))
+        .map((w) => (w as dynamic).color as Color)
+        .toSet();
+    expect(dotColors, contains(AppColors.p500));
+    expect(dotColors, contains(AppColors.p300));
+    expect(dotColors, contains(AppColors.gray));
+    // 마감 핀이 예전 하늘색으로 남아 있으면 회귀.
+    expect(dotColors, isNot(contains(const Color(0xFF5CC4EE))));
     debugDefaultTargetPlatformOverride = null;
   });
 }
