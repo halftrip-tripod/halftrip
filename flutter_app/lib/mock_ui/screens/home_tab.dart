@@ -171,17 +171,16 @@ class _HomeTabState extends State<HomeTab> {
                       ),
                     ]),
                     const SizedBox(height: 14),
-                    Row(children: [
-                      for (final (i, p) in _popularPosts().indexed) ...[
-                        if (i > 0) const SizedBox(width: 12),
-                        Expanded(
-                            child: _PopCard(
-                                region: p.region,
-                                title: p.courseName ?? p.text,
-                                likes: p.likes,
-                                onTap: () => _openPost(context, p))),
-                      ],
-                    ]),
+                    IntrinsicHeight(
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                        for (final (i, p) in _popularPosts().indexed) ...[
+                          if (i > 0) const SizedBox(width: 12),
+                          Expanded(
+                              child: _PopCard(
+                                  post: p, onTap: () => _openPost(context, p))),
+                        ],
+                      ]),
+                    ),
                   ]),
                 ),
             ],
@@ -233,6 +232,16 @@ class _MapPane extends StatelessWidget {
   final String residence;
   final Set<int> visitedRegionIds;
 
+  /// 핀의 화면 크기 — 앵커(중심 정렬)와 이름표 배치 계산이 함께 쓴다.
+  double _pinVisualSize(RegionSummary r) {
+    if (visitedRegionIds.contains(r.id)) return 34;
+    return switch (r.statusCode.toUpperCase()) {
+      'APPLYING' => 26,
+      'CLOSED' => 15,
+      _ => 20,
+    };
+  }
+
   /// 거주지("시도 시군구") 문자열의 시/도 부분을 시/도청 위경도로 투영.
   Offset? _residenceOffset() {
     final province = residence.trim().split(' ').first;
@@ -266,24 +275,59 @@ class _MapPane extends StatelessWidget {
           double px(Offset o) => o.dx / 544.8 * w;
           double py(Offset o) => o.dy / 1000 * h;
 
+          // 마감 지역은 마감일로부터 2주까지만 핀을 남기고 그 뒤엔 지도에서 내린다.
+          // 단 다녀온 지역은 마그넷 도장을 계속 보여줘야 하니 예외. 마감일 정보가
+          // 없는 지역은 판단할 수 없으므로 일단 표시한다.
+          bool expiredClosed(RegionSummary r) {
+            if (r.statusCode.toUpperCase() != 'CLOSED') return false;
+            final deadline = r.applyDeadline;
+            if (deadline == null) return false;
+            return DateTime.now().difference(deadline).inDays > 14;
+          }
+
+          final shownRegions = regions
+              .where((r) => visitedRegionIds.contains(r.id) || !expiredClosed(r))
+              .toList();
+
           // 완도·강진처럼 가까운 지역은 이름표가 서로 겹쳐 아예 읽을 수 없다.
-          // 밀어내는 대신 우선순위(접수중 > 오픈예정 > 나머지)가 높은 것만 남기고
-          // 겹치는 낮은 쪽 이름표는 숨긴다 — 숨겨진 지역은 핀을 탭하면 상세로.
-          int labelPriority(RegionSummary r) => switch (r.statusCode.toUpperCase()) {
-                'APPLYING' => 2,
-                'PREPARING' => 1,
-                _ => 0,
-              };
-          final ordered = [...regions]
-            ..sort((a, b) => labelPriority(b).compareTo(labelPriority(a)));
-          final labelVisible = <int, bool>{};
-          final placedLabels = <Offset>[];
+          // 겹친다고 바로 숨기는 대신 아래→위→오른쪽→왼쪽 순서로 빈자리를 찾고,
+          // 네 자리가 모두 차 있을 때만 숨긴다. 우선순위(마그넷 > 접수중 >
+          // 오픈예정 > 마감) 높은 지역이 먼저 자리를 고른다.
+          int labelPriority(RegionSummary r) {
+            if (visitedRegionIds.contains(r.id)) return 3;
+            return switch (r.statusCode.toUpperCase()) {
+              'APPLYING' => 2,
+              'PREPARING' => 1,
+              _ => 0,
+            };
+          }
+          final ordered = [...shownRegions]
+            ..sort((a, b) {
+              final byPriority = labelPriority(b).compareTo(labelPriority(a));
+              // 우선순위가 같으면 id로 고정 — 리스트 정렬이 불안정해도 배치가 튀지 않게.
+              return byPriority != 0 ? byPriority : a.id.compareTo(b.id);
+            });
+          final labelTopLeft = <int, Offset>{};
+          final placedRects = <Rect>[];
+          const labelHeight = 16.0;
           for (final r in ordered) {
             final o = Offset(px(pinOffset(r)), py(pinOffset(r)));
-            final collides = placedLabels.any((p) =>
-                (p.dx - o.dx).abs() < 58 && (p.dy - o.dy).abs() < 17);
-            labelVisible[r.id] = !collides;
-            if (!collides) placedLabels.add(o);
+            final labelWidth = r.name.length * 12.5 + 4;
+            final candidates = [
+              Offset(o.dx - labelWidth / 2, o.dy + 13), // 아래(기본)
+              Offset(o.dx - labelWidth / 2, o.dy - 13 - labelHeight), // 위
+              Offset(o.dx + 16, o.dy - labelHeight / 2), // 오른쪽
+              Offset(o.dx - 16 - labelWidth, o.dy - labelHeight / 2), // 왼쪽
+            ];
+            for (final candidate in candidates) {
+              final rect = Rect.fromLTWH(
+                      candidate.dx, candidate.dy, labelWidth, labelHeight)
+                  .inflate(2);
+              if (placedRects.any((p) => p.overlaps(rect))) continue;
+              placedRects.add(rect);
+              labelTopLeft[r.id] = candidate;
+              break;
+            }
           }
 
           return SizedBox(
@@ -333,40 +377,47 @@ class _MapPane extends StatelessWidget {
                     ]),
                   ),
                 ),
-              for (final r in regions)
+              // 핀 — 마그넷(다녀온 지역)이 다른 핀에 깔리지 않게 맨 나중에 그린다.
+              for (final r in [...shownRegions]
+                ..sort((a, b) => (visitedRegionIds.contains(a.id) ? 1 : 0)
+                    .compareTo(visitedRegionIds.contains(b.id) ? 1 : 0)))
                 Positioned(
-                  left: px(pinOffset(r)) - 45,
-                  top: py(pinOffset(r)) - (r.statusCode.toUpperCase() == 'APPLYING' ? 13 : 10),
+                  left: px(pinOffset(r)) - _pinVisualSize(r) / 2,
+                  top: py(pinOffset(r)) - _pinVisualSize(r) / 2,
                   child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
                     onTap: () => _openRegion(context, r),
-                    child: SizedBox(
-                      width: 90,
-                      child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        _RegionPinDot(
-                          statusCode: r.statusCode,
-                          visited: visitedRegionIds.contains(r.id),
-                        ),
-                        const SizedBox(height: 2),
-                        // 좁은 상자에 가두면 "태백 샘플권/역"처럼 글자 중간에서 끊긴다.
-                        if (labelVisible[r.id] ?? true)
-                          Text(r.name,
-                            maxLines: 1,
-                            softWrap: false,
-                            overflow: TextOverflow.visible,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: r.statusCode.toUpperCase() == 'APPLYING' ? 12 : 11,
-                              fontWeight: FontWeight.w900,
-                              color: switch (r.statusCode.toUpperCase()) {
-                                'APPLYING' => const Color(0xFF0F2A3E),
-                                'PREPARING' => const Color(0xFF1F7BB0),
-                                _ => AppColors.ink4,
-                              },
-                            )),
-                      ]),
+                    child: _RegionPinDot(
+                      statusCode: r.statusCode,
+                      visited: visitedRegionIds.contains(r.id),
+                      regionName: r.name,
                     ),
                   ),
                 ),
+              // 이름표 — 스마트 배치 좌표에 따로 그린다 (자리 못 찾은 지역은 핀 탭으로 상세).
+              for (final r in shownRegions)
+                if (labelTopLeft[r.id] != null)
+                  Positioned(
+                    left: labelTopLeft[r.id]!.dx,
+                    top: labelTopLeft[r.id]!.dy,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _openRegion(context, r),
+                      child: Text(r.name,
+                          maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.visible,
+                          style: TextStyle(
+                            fontSize: r.statusCode.toUpperCase() == 'APPLYING' ? 12 : 11,
+                            fontWeight: FontWeight.w900,
+                            color: switch (r.statusCode.toUpperCase()) {
+                              'APPLYING' => const Color(0xFF0F2A3E),
+                              'PREPARING' => const Color(0xFF1F7BB0),
+                              _ => AppColors.ink4,
+                            },
+                          )),
+                    ),
+                  ),
               if (meOffset != null)
                 Positioned(
                   left: px(meOffset) - 11,
@@ -387,8 +438,7 @@ class _MapPane extends StatelessWidget {
             _legend(AppColors.p500, '접수중 $applying'),
             _legend(AppColors.p300, '오픈예정 $preparing'),
             _legend(AppColors.gray, '마감'),
-            _legend(AppColors.coral, '내 위치'),
-            _legend(AppColors.gold, '다녀온 지역'),
+            _legend(AppColors.coral, '내 지역'),
           ],
         ),
         const SizedBox(height: 6),
@@ -404,33 +454,43 @@ class _MapPane extends StatelessWidget {
       ]);
 }
 
+/// 지역별 마그넷 도장 — 이미지가 준비된 지역만, 나머지는 별 도장 폴백.
+const _magnetAssets = <String, String>{
+  '고창': 'assets/magnet/gochang.png',
+  '완도': 'assets/magnet/wando.png',
+};
+
 /// 지도 위 지역 핀 — 다녀온 지역(정산 신청 이상 단계)은 파란 점 대신 도장 표시.
 class _RegionPinDot extends StatelessWidget {
-  const _RegionPinDot({required this.statusCode, required this.visited});
+  const _RegionPinDot({
+    required this.statusCode,
+    required this.visited,
+    required this.regionName,
+  });
   final String statusCode;
   final bool visited;
+  final String regionName;
 
   @override
   Widget build(BuildContext context) {
     final status = statusCode.toUpperCase();
     final applying = status == 'APPLYING';
-    final size = applying ? 26.0 : 20.0;
+    // 마감 핀은 존재감을 줄인다 — 접수중 26 > 오픈예정 20 > 마감 15.
+    final size = applying
+        ? 26.0
+        : status == 'CLOSED'
+            ? 15.0
+            : 20.0;
     if (visited) {
+      // 다녀온 도장 — 지역 마그넷, 아직 없는 지역은 공용 캐리어 마그넷.
+      // 핀(20~26px)보다 커지면 이웃 핀·라벨을 가리므로 접수중 핀 크기에 맞춘다.
       return Transform.rotate(
-        angle: -0.2,
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            // 다녀온 도장 — 노랑·주황 계열 (warning 토큰 기반).
-            color: AppColors.gold.withValues(alpha: .18),
-            shape: BoxShape.circle,
-            border: Border.all(color: AppColors.gold, width: 2.2),
-            boxShadow: const [
-              BoxShadow(color: Color(0x33000000), blurRadius: 4, offset: Offset(0, 2)),
-            ],
-          ),
-          child: Icon(Icons.star_rounded, size: size * 0.65, color: AppColors.gold),
+        angle: -0.12,
+        child: Image.asset(
+          _magnetAssets[regionName] ?? 'assets/magnet/default.png',
+          width: 34,
+          height: 34,
+          fit: BoxFit.contain,
         ),
       );
     }
@@ -524,8 +584,15 @@ class _UrgCard extends StatelessWidget {
             const SizedBox(height: 10),
             Row(children: [
               DdayChip(
-                dday == null ? '마감일 확인 필요' : (dday.$2 ? '마감 임박 D-${dday.$1}' : '마감 D-${dday.$1}'),
-                warn: dday?.$2 ?? false,
+                // 마감일이 지났으면 D-음수 대신 상태 문구로. (상태 갱신 지연 대비)
+                dday == null
+                    ? '마감일 확인 필요'
+                    : dday.$1 < 0
+                        ? '접수 마감'
+                        : dday.$1 == 0
+                            ? '오늘 마감'
+                            : (dday.$2 ? '마감 임박 D-${dday.$1}' : '마감 D-${dday.$1}'),
+                warn: dday != null && dday.$1 >= 0 && dday.$2,
               ),
               const Spacer(),
               const Text('신청 정보 보기',
@@ -607,11 +674,11 @@ class _SoonRow extends StatelessWidget {
   }
 }
 
+/// 커뮤니티 글 카드의 축약판 — 커뮤 글엔 제목이 없으니 본문을 그대로 보여주고
+/// 작성자·코스 첨부·좋아요 구성을 커뮤 카드와 맞춘다.
 class _PopCard extends StatelessWidget {
-  const _PopCard({required this.region, required this.title, required this.likes, required this.onTap});
-  final String region;
-  final String title;
-  final int likes;
+  const _PopCard({required this.post, required this.onTap});
+  final Post post;
   final VoidCallback onTap;
 
   @override
@@ -622,17 +689,31 @@ class _PopCard extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(color: AppColors.surf, borderRadius: BorderRadius.circular(16)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Pill(region),
+          Pill(post.region),
           const SizedBox(height: 8),
-          Text(title,
+          Text(post.text,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink9, height: 1.35)),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.ink7, height: 1.4)),
+          if (post.courseName != null) ...[
+            const SizedBox(height: 8),
+            Row(children: [
+              const Icon(Icons.route_outlined, size: 13, color: AppColors.p600),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(post.courseName!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.p600)),
+              ),
+            ]),
+          ],
+          const Spacer(),
           const SizedBox(height: 8),
           Row(children: [
             const Icon(Icons.favorite_rounded, size: 13, color: AppColors.ink4),
             const SizedBox(width: 5),
-            Text('$likes',
+            Text('${post.likes}',
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.ink5)),
           ]),
         ]),
@@ -657,24 +738,21 @@ class _SavedCourseCard extends StatelessWidget {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.5)),
           const Spacer(),
           if (courses.isNotEmpty)
-            Text('${courses.length}개',
+            Text('${courses.length}개 저장',
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink5)),
         ]),
         const SizedBox(height: 14),
         if (courses.isEmpty)
           const _EmptyBlock(message: '저장한 여행 코스가 없어요. 코스를 만들면 여기에 모여요.')
         else
-          for (final course in courses.take(2))
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: SurfRow(
-                icon: Icons.route_outlined,
-                title: course.title,
-                subtitle: '${course.regionName} · ${course.stops.length}개 장소',
-                onTap: () => Navigator.of(context)
-                    .push(MaterialPageRoute(builder: (_) => const CourseSavedScreen())),
-              ),
-            ),
+          // 최근 저장한 코스 1개만 — 나머지는 개수 표기와 탭으로 보관함에서.
+          SurfRow(
+            icon: Icons.route_outlined,
+            title: courses.first.title,
+            subtitle: '${courses.first.regionName} · ${courses.first.stops.length}개 장소',
+            onTap: () => Navigator.of(context)
+                .push(MaterialPageRoute(builder: (_) => const CourseSavedScreen())),
+          ),
       ]),
     );
   }
