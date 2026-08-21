@@ -110,10 +110,21 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
               if (r.digitalBenefitAvailable) ...[const SizedBox(width: 8), const Pill('디민증 중복혜택', tone: PillTone.mint)],
               const Spacer(),
               DdayChip(
-                dday == null
-                    ? (_isPreparing ? '오픈일 확인 필요' : '마감일 확인 필요')
-                    : (_isPreparing ? '오픈 D-${dday.$1}' : '마감 D-${dday.$1}'),
-                warn: !_isPreparing && (dday?.$2 ?? false),
+                // 마감된 지역·지난 날짜엔 D-음수를 만들지 않는다.
+                r.statusCode.toUpperCase() == 'CLOSED'
+                    ? '접수 마감'
+                    : dday == null
+                        ? (_isPreparing ? '오픈일 확인 필요' : '마감일 확인 필요')
+                        : dday.$1 < 0
+                            ? (_isPreparing ? '오픈 예정' : '접수 마감')
+                            : dday.$1 == 0
+                                ? (_isPreparing ? '오늘 오픈' : '오늘 마감')
+                                : (_isPreparing ? '오픈 D-${dday.$1}' : '마감 D-${dday.$1}'),
+                warn: !_isPreparing &&
+                    r.statusCode.toUpperCase() != 'CLOSED' &&
+                    dday != null &&
+                    dday.$1 >= 0 &&
+                    dday.$2,
               ),
             ]),
           ]),
