@@ -44,16 +44,10 @@ class _MyTripsTabState extends State<MyTripsTab> {
   Widget build(BuildContext context) {
     final controller = AppScope.of(context);
     final trips = controller.trips;
-    // 여행이 끝났지만 정산 전인 건을 "진행 중인 여행"에 두면
-    // 카드에 "여행 종료" 배지가 붙은 채로 진행 중이라고 말하게 된다. 따로 뺀다.
-    final active = trips
-        .where((t) => !t.settlementApplied && stageOf(t) != TripStageView.settle)
-        .toList()
+    // 진행 중 = 정산 신청 전 전부(여행 전·중·종료 대기). 배지가 단계를 말해주므로
+    // 섹션을 쪼개지 않고, 정산 신청까지 마친 여행만 지난 여행으로 내린다.
+    final active = trips.where((t) => !t.settlementApplied).toList()
       ..sort((a, b) => a.startDate.compareTo(b.startDate));
-    final settling = trips
-        .where((t) => !t.settlementApplied && stageOf(t) == TripStageView.settle)
-        .toList()
-      ..sort((a, b) => b.endDate.compareTo(a.endDate));
     final past = trips.where((t) => t.settlementApplied).toList()
       ..sort((a, b) => b.endDate.compareTo(a.endDate));
     final favCount = controller.currentUser?.favoriteRegions.length ?? 0;
@@ -105,18 +99,10 @@ class _MyTripsTabState extends State<MyTripsTab> {
             )
           else
             for (final trip in active) ...[
-              TripCard(trip: trip, onChanged: () => setState(() {})),
+              // 상세에서 체크리스트·증빙을 바꾸고 돌아오면 서버 값으로 다시 그린다.
+              TripCard(trip: trip, onChanged: _refresh),
               const SizedBox(height: 14),
             ],
-          if (settling.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            const SectionTitle('정산 준비 중'),
-            const SizedBox(height: 12),
-            for (final trip in settling) ...[
-              TripCard(trip: trip, onChanged: () => setState(() {})),
-              const SizedBox(height: 14),
-            ],
-          ],
           const SizedBox(height: 8),
           const SectionTitle('보관함'),
           const SizedBox(height: 12),
@@ -183,6 +169,15 @@ String durationLabelOf(TripSummary t) {
 /// 여행 단계 — 정산 신청 완료면 review, 아니면 날짜 기준.
 /// 여행 단계 판정 — 계약 0-2: 백엔드가 KST로 계산한 status를 신뢰한다.
 /// (기기 시계·타임존 오차 방지) 서버 값이 없거나 모르는 값이면 날짜 계산 폴백.
+/// 정산 마감 표기 — 음수 D-day("D--87")를 만들지 않는다.
+String _settlementDdayLabel(DateTime? deadline, DateTime today) {
+  if (deadline == null) return '여행 종료';
+  final left = DateUtils.dateOnly(deadline).difference(today).inDays;
+  if (left < 0) return '정산 마감 지남';
+  if (left == 0) return '정산 마감 오늘';
+  return '정산 마감 D-$left';
+}
+
 TripStageView stageOf(TripSummary t) {
   switch (t.status.toUpperCase()) {
     case 'BEFORE':
@@ -239,9 +234,7 @@ class TripCard extends StatelessWidget {
     final dday = switch (stage) {
       TripStageView.before => '출발 D-${start.difference(today).inDays}',
       TripStageView.during => 'Day ${today.difference(start).inDays + 1} / $totalDays',
-      _ => deadline == null
-          ? '여행 종료'
-          : '정산 마감 D-${DateUtils.dateOnly(deadline).difference(today).inDays}',
+      _ => _settlementDdayLabel(deadline, today),
     };
     final next = switch (stage) {
       TripStageView.before => '출발 전 준비하기',
