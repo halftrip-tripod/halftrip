@@ -16,10 +16,12 @@ RegionSummary _region({
   required String statusCode,
   required double top,
   required double left,
+  DateTime? applyDeadline,
 }) {
   return RegionSummary(
     id: id,
     name: name,
+    applyDeadline: applyDeadline,
     province: '전라남도',
     refundConditionAmount: 100000,
     mockBudgetRemaining: 50,
@@ -34,17 +36,27 @@ RegionSummary _region({
   );
 }
 
-/// 핀이 같은 자리에 겹치는 지역 셋 — 우선순위 라벨만 남는지 검증용.
+/// 핀이 같은 자리에 겹치는 지역 셋 — 라벨 스마트 배치(아래→위→오른쪽→왼쪽) 검증용.
 class _CollidingRegionsRepo extends MockTravelRepository {
   @override
   Future<List<RegionSummary>> getRegions({String? residence}) async => [
-        // 같은 좌표에 접수중 vs 마감 — 접수중 라벨만 보여야 한다.
+        // 같은 자리 5개 — 4방향까지는 배치되고 다섯 번째(우선순위 최하)만 숨는다.
         _region(id: 901, name: '가상접수중', statusCode: 'APPLYING', top: 50, left: 50),
-        _region(id: 902, name: '가상마감', statusCode: 'CLOSED', top: 51, left: 50),
-        // 멀리 떨어진 지역 — 겹치지 않으니 라벨이 보여야 한다.
-        _region(id: 903, name: '가상외딴곳', statusCode: 'CLOSED', top: 20, left: 80),
-        // 오픈예정 — 핀 색 상태 분기 검증용.
-        _region(id: 904, name: '가상오픈예정', statusCode: 'PREPARING', top: 70, left: 20),
+        _region(id: 902, name: '가상오픈예정', statusCode: 'PREPARING', top: 50.5, left: 50),
+        _region(id: 903, name: '가상마감A', statusCode: 'CLOSED', top: 50, left: 50.5),
+        _region(id: 904, name: '가상마감B', statusCode: 'CLOSED', top: 51, left: 50),
+        _region(id: 905, name: '가상마감C', statusCode: 'CLOSED', top: 50.5, left: 50.5),
+        // 멀리 떨어진 지역 — 겹치지 않으니 그대로 보인다.
+        _region(id: 906, name: '가상외딴곳', statusCode: 'CLOSED', top: 20, left: 80),
+        // 마감 후 2주 지난 지역 — 지도에서 내려가야 한다.
+        _region(
+          id: 907,
+          name: '가상만료',
+          statusCode: 'CLOSED',
+          top: 40,
+          left: 30,
+          applyDeadline: DateTime.now().subtract(const Duration(days: 30)),
+        ),
       ];
 }
 
@@ -59,7 +71,7 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets('겹치는 핀은 우선순위 높은 라벨만 남는다', (tester) async {
+  testWidgets('겹치는 라벨은 4방향으로 재배치되고 자리가 없을 때만 숨는다', (tester) async {
     final controller = AppController(repository: _CollidingRegionsRepo());
     await controller.loginWithCredentials(loginId: 'sample', password: '1234');
     await tester.pumpWidget(
@@ -71,11 +83,16 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     await tester.pump(const Duration(seconds: 1));
 
-    // 접수중 라벨은 보이고, 같은 자리 마감 라벨은 숨는다.
+    // 우선순위 높은 둘(접수중=아래, 오픈예정=위)은 반드시 배치된다.
     expect(find.text('가상접수중'), findsOneWidget);
-    expect(find.text('가상마감'), findsNothing);
+    expect(find.text('가상오픈예정'), findsOneWidget);
+    // 우선순위 최하는 4방향이 모두 막혀 숨는다. (중간 순위 A·B는
+    // 좌우 자리 여유에 따라 갈릴 수 있어 단정하지 않는다)
+    expect(find.text('가상마감C'), findsNothing);
     // 겹치지 않는 지역 라벨은 상태와 무관하게 보인다.
     expect(find.text('가상외딴곳'), findsOneWidget);
+    // 마감일 + 2주가 지난 지역은 핀·라벨 모두 지도에서 내려간다.
+    expect(find.text('가상만료'), findsNothing);
     expect(tester.takeException(), isNull);
     // testWidgets는 본문 종료 시 foundation 변수 원복을 검사한다.
     debugDefaultTargetPlatformOverride = null;

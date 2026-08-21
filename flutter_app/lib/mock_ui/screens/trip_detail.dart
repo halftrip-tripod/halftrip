@@ -97,7 +97,30 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   }
 
   /// 확정 코스 탭 — 수정 / 여행 등록 취소 / 보관함 삭제 를 고르는 시트.
-  Future<void> _openCourseActions(TripDetail detail, SavedCourse course) async {
+  /// 코스 상세 보기 — 코스함 상세와 같은 지도+DAY+타임라인, 편집은 우측 상단 연필.
+  void _openCourseView(TripDetail detail, SavedCourse course) {
+    Navigator.of(context)
+        .push(MaterialPageRoute(
+          builder: (_) => CourseViewScreen(
+            course: _asViewCourse(course),
+            editInAppBar: true,
+            onEdit: () => _push(PlannerScreen(tripId: widget.tripId)),
+            onMore: () async {
+              final action = await _openCourseActions(detail, course);
+              // 등록취소·삭제됐으면 이 코스 상세는 더 보여줄 게 없다 — 여행 상세로 복귀.
+              if ((action == 'unlink' || action == 'delete') && mounted) {
+                Navigator.of(context).pop();
+              }
+            },
+          ),
+        ))
+        .then((_) => setState(() {}));
+  }
+
+  /// SavedCourse(실모델) → 표시용 Course — 코스함과 같은 변환기 사용 (DAY·시간 보존).
+  mock.Course _asViewCourse(SavedCourse course) => courseFromSaved(course);
+
+  Future<String?> _openCourseActions(TripDetail detail, SavedCourse course) async {
     final action = await showAppSheet<String>(
       context,
       child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -143,7 +166,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         const SizedBox(height: 10),
       ]),
     );
-    if (!mounted || action == null) return;
+    if (!mounted || action == null) return null;
     final controller = AppScope.of(context);
     switch (action) {
       case 'edit':
@@ -161,6 +184,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           showMock(context, '코스를 코스함에서 삭제했어요.');
         }
     }
+    return action;
   }
 
   /// 코스 만들기 — 목업 1:1 코스 플로우(course_flow)를 실여행 프록시로 태우고,
@@ -198,12 +222,15 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       stops: [
         for (final stop in course.stops)
           SavedCourseStop(
-            placeId: 0,
+            placeId: stop.placeId ?? 0,
             name: stop.name,
-            address: '',
-            latitude: 0,
-            longitude: 0,
+            address: stop.address ?? '',
+            latitude: stop.latitude ?? 0,
+            longitude: stop.longitude ?? 0,
             sourceType: 'MANUAL',
+            // DAY·시간을 보존해야 코스함/여행 코스 보기에서 일차별 일정이 산다.
+            day: stop.day,
+            time: stop.time,
           ),
       ],
       createdAt: DateTime.now(),
@@ -217,12 +244,12 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           TripPlaceItem(
             id: 0,
             placeType: PlaceCategory.halfPrice,
-            referencePlaceId: 0,
+            referencePlaceId: course.stops[i].placeId ?? 0,
             placeName: course.stops[i].name,
-            address: '',
+            address: course.stops[i].address ?? '',
             visitOrder: i + 1,
-            latitude: null,
-            longitude: null,
+            latitude: course.stops[i].latitude,
+            longitude: course.stops[i].longitude,
             checked: false,
           ),
       ]);
@@ -291,7 +318,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
               title: course.title,
               subtitle: '${course.regionName} · ${course.stops.length}곳',
               tinted: true,
-              onTap: () => _openCourseActions(detail, course),
+              onTap: () => _openCourseView(detail, course),
             )
           else ...[
             OutlineButton(
@@ -353,29 +380,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Row(
                     children: [
-                      Container(
-                        width: 22,
-                        height: 22,
-                        decoration: BoxDecoration(
-                          color:
-                              _checklist[i].checked
-                                  ? AppColors.p500
-                                  : Colors.white,
-                          borderRadius: BorderRadius.circular(7),
-                          border:
-                              _checklist[i].checked
-                                  ? null
-                                  : Border.all(color: AppColors.line, width: 2),
-                        ),
-                        child:
-                            _checklist[i].checked
-                                ? const Icon(
-                                  Icons.check_rounded,
-                                  size: 15,
-                                  color: Colors.white,
-                                )
-                                : null,
-                      ),
+                      AppCheckbox(checked: _checklist[i].checked),
                       const SizedBox(width: 11),
                       Expanded(
                         child: Text(
@@ -571,7 +576,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       ),
       _DCard(
         title: '증빙 패키지',
-        sub: '인증샷 + 영수증 + 숙박확인서를 제출 규격 PDF로 자동 병합해요.',
+        sub: '인증샷 + 영수증 + 숙박확인서를 종류별 zip으로 정리해드려요.',
         children: [
           _NextLink(
             '증빙 패키지 만들기',
@@ -736,7 +741,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       '증빙 패키지 · 정산 신청',
       '여행 후',
       [
-        '여행이 끝나면 인증샷 + 영수증 + 숙박확인서를 제출 규격 PDF로 자동으로 묶어드려요.',
+        '여행이 끝나면 인증샷 + 영수증 + 숙박확인서를 종류별로 정리해 zip으로 묶어드려요.',
         '정산 신청은 여행 종료 다음날부터 7일 이내, 지자체 정산 페이지에서 해요.',
         '제출 후 심사를 거쳐 보통 1~2개월 뒤 지역화폐로 환급돼요.',
       ],
@@ -1136,24 +1141,7 @@ class _CheckLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final row = Row(
       children: [
-        // 미완료에도 체크를 그리면 완료와 구분이 안 돼 준비가 끝난 것으로 읽힌다.
-        Container(
-          width: 22,
-          height: 22,
-          decoration: BoxDecoration(
-            color: done ? AppColors.p500 : Colors.transparent,
-            borderRadius: BorderRadius.circular(7),
-            border: done ? null : Border.all(color: AppColors.ink4, width: 1.5),
-          ),
-          child:
-              done
-                  ? const Icon(
-                    Icons.check_rounded,
-                    size: 15,
-                    color: Colors.white,
-                  )
-                  : null,
-        ),
+        AppCheckbox(checked: done),
         const SizedBox(width: 11),
         Expanded(
           child: Text(

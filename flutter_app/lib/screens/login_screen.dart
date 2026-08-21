@@ -176,9 +176,9 @@ class _SocialButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: background,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         onTap: onPressed,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 16),

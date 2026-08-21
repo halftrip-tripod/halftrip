@@ -197,9 +197,21 @@ class AppState extends ChangeNotifier {
     final userId = _serverUserId;
     final serverId = p.serverId;
     if (repository != null && userId != null && serverId != null) {
-      if (like) repository.toggleCommunityLike(serverId, userId).catchError((_) {});
+      // 화면은 먼저 +1 해둔 상태(낙관적 반영) — 서버 저장이 실패하면 조용히
+      // 사라지는 대신 즉시 되돌려서 화면과 서버가 어긋난 채 남지 않게 한다.
+      if (like) {
+        repository.toggleCommunityLike(serverId, userId).then((_) {}).catchError((_) {
+          p.likedByMe = !p.likedByMe;
+          p.likes += p.likedByMe ? 1 : -1;
+          notifyListeners();
+        });
+      }
       if (save) {
-        repository.toggleCommunityBookmark(serverId, userId).catchError((_) {});
+        repository.toggleCommunityBookmark(serverId, userId).then((_) {}).catchError((_) {
+          p.savedByMe = !p.savedByMe;
+          p.saves += p.savedByMe ? 1 : -1;
+          notifyListeners();
+        });
       }
     } else {
       persistCommunity();

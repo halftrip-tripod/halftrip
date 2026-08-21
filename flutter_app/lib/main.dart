@@ -96,6 +96,7 @@ class _RootGate extends StatefulWidget {
 
 class _RootGateState extends State<_RootGate> {
   bool _splashDone = false;
+  bool _restoreSettled = false;
 
   @override
   void initState() {
@@ -104,6 +105,17 @@ class _RootGateState extends State<_RootGate> {
     Future.delayed(const Duration(milliseconds: 1800), () {
       if (mounted) setState(() => _splashDone = true);
     });
+    // 스플래시 동안 저장된 세션으로 자동 로그인 시도. 서버가 느리면(콜드 스타트)
+    // 8초까지만 스플래시를 잡아두고 로그인 화면을 먼저 연다 — 복원이 뒤늦게
+    // 성공하면 컨트롤러 알림으로 메인에 자동 진입한다.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AppScope.of(context)
+          .restoreSession()
+          .timeout(const Duration(seconds: 8), onTimeout: () => false)
+          .whenComplete(() {
+        if (mounted) setState(() => _restoreSettled = true);
+      });
+    });
   }
 
   @override
@@ -111,7 +123,7 @@ class _RootGateState extends State<_RootGate> {
     final controller = AppScope.of(context);
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 450),
-      child: !_splashDone
+      child: !_splashDone || !_restoreSettled
           ? const SplashScreen()
           : KeyedSubtree(
               key: const ValueKey('root'),

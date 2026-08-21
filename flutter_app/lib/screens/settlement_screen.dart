@@ -5,7 +5,8 @@ import '../core/app_scope.dart';
 import '../models/app_models.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui/app_card.dart';
-import 'submission_package_screen.dart';
+import '../widgets/ui/app_checkbox.dart';
+import '../widgets/ui/app_confirm_dialog.dart';
 
 /// 정산 신청 — 제출서류 체크 + 외부 정산 페이지 이동 + "신청 완료" 자가 표시.
 /// (환급 완료는 외부라 앱이 모름 — 앱이 아는 마지막 상태 = 정산 신청 완료)
@@ -18,10 +19,48 @@ class SettlementScreen extends StatefulWidget {
   State<SettlementScreen> createState() => _SettlementScreenState();
 }
 
-class _SettlementScreenState extends State<SettlementScreen> {
+class _SettlementScreenState extends State<SettlementScreen>
+    with WidgetsBindingObserver {
   Future<TripDetail>? _future;
   bool _initialized = false;
   bool _busy = false;
+
+  /// 외부 정산 페이지로 나갔다가 돌아왔는지 — 복귀 시 1회성 완료 확인 팝업용.
+  bool _awaitingSiteReturn = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !_awaitingSiteReturn) return;
+    _awaitingSiteReturn = false;
+    _askIfSettlementDone();
+  }
+
+  Future<void> _askIfSettlementDone() async {
+    final detail = await _future;
+    if (!mounted || detail == null || detail.trip.settlementApplied) return;
+    final done = await showAppConfirmDialog(
+      context,
+      title: '정산 신청을 완료했나요?',
+      message: '지자체 정산 페이지에서 신청을 마쳤다면 이 여행도 완료로 표시할게요.',
+      cancelLabel: '아직이에요',
+      confirmLabel: '네, 완료했어요',
+    );
+    if (done && mounted) {
+      await _applySettlement();
+    }
+  }
 
   static const Map<String, String> _settlementUrlsByRegion = {
     '평창': 'https://www.wandotrip.kr/bbs/apply_date.php',
@@ -58,7 +97,10 @@ class _SettlementScreenState extends State<SettlementScreen> {
     if (mounted && !launched) {
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('$regionName 정산 페이지를 열지 못했어요.')));
+      return;
     }
+    // 외부 페이지에서 돌아오면 "신청 완료했나요?" 1회 확인.
+    _awaitingSiteReturn = true;
   }
 
   Future<void> _applySettlement() async {
@@ -168,7 +210,7 @@ class _SettlementScreenState extends State<SettlementScreen> {
       TripDetail detail, int authCount, bool hasLodging) {
     final goal = detail.trip.refundConditionAmount;
     return [
-      if (authCount < 2) '관광지 인증샷',
+      if (authCount < (detail.trip.authRequiredCount ?? 2)) '관광지 인증샷',
       if (detail.receipts.isEmpty) '영수증',
       if (goal > 0 && detail.trip.totalSpentAmount < goal) '최소 소비금액',
       if (!hasLodging) '숙박확인서',
@@ -180,32 +222,18 @@ class _SettlementScreenState extends State<SettlementScreen> {
   Future<void> _confirmThenOpenSite(
       TripDetail detail, List<String> missing) async {
     if (missing.isNotEmpty) {
-      final proceed = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('아직 빠진 증빙이 있어요'),
-          content: Text('${missing.join(' · ')}가 준비되지 않았어요.\n'
-              '이대로 제출하면 반려될 수 있어요. 그래도 진행할까요?'),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('증빙 마저 준비하기')),
-            TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('그래도 진행')),
-          ],
-        ),
+      final proceed = await showAppConfirmDialog(
+        context,
+        title: '아직 빠진 증빙이 있어요',
+        message: '${missing.join(' · ')}가 준비되지 않았어요.\n'
+            '이대로 제출하면 반려될 수 있어요. 그래도 진행할까요?',
+        cancelLabel: '증빙 마저 준비하기',
+        confirmLabel: '그래도 진행',
+        destructive: true,
       );
-      if (proceed != true) return;
+      if (!proceed) return;
     }
     await _openSettlementSite(detail.trip.regionName);
-  }
-
-  Future<void> _openSubmission(TripDetail detail) async {
-    await Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => SubmissionPackageScreen(
-            tripId: widget.tripId, detail: detail, showSettlementButton: false)));
-    await _reload();
   }
 
   @override
@@ -224,6 +252,7 @@ class _SettlementScreenState extends State<SettlementScreen> {
           final authCount = detail.uploadedFiles
               .where((f) => f.fileCategory == FileCategory.authPhoto)
               .length;
+          final requiredAuth = detail.trip.authRequiredCount ?? 2;
           final hasLodging = detail.uploadedFiles
                   .any((f) => f.fileCategory == FileCategory.lodgingConfirmation) ||
               detail.lodgingInfo?.uploadedFileId != null;
@@ -267,8 +296,8 @@ class _SettlementScreenState extends State<SettlementScreen> {
                       const SizedBox(height: 12),
                       _CheckItem(
                           label: '관광지 인증샷',
-                          value: '${authCount.clamp(0, 2)}/2곳',
-                          done: authCount >= 2),
+                          value: '${authCount.clamp(0, requiredAuth)}/$requiredAuth곳',
+                          done: authCount >= requiredAuth),
                       _CheckItem(
                           label: '영수증 · 소비',
                           value: '${detail.receipts.length}건',
@@ -278,17 +307,6 @@ class _SettlementScreenState extends State<SettlementScreen> {
                           value: hasLodging ? '완료' : '미작성',
                           done: hasLodging,
                           last: true),
-                      const SizedBox(height: 14),
-                      OutlinedButton.icon(
-                        onPressed: () => _openSubmission(detail),
-                        icon: const Icon(Icons.folder_zip_outlined, size: 18),
-                        label: const Text('증빙 패키지 보기'),
-                        style: OutlinedButton.styleFrom(
-                            minimumSize: const Size(0, 48),
-                            shape: RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(AppRadius.field))),
-                      ),
                     ],
                   ),
                 ),
@@ -311,6 +329,7 @@ class _SettlementScreenState extends State<SettlementScreen> {
           final authCount = detail.uploadedFiles
               .where((f) => f.fileCategory == FileCategory.authPhoto)
               .length;
+          final requiredAuth = detail.trip.authRequiredCount ?? 2;
           final hasLodging = detail.uploadedFiles
                   .any((f) => f.fileCategory == FileCategory.lodgingConfirmation) ||
               detail.lodgingInfo?.uploadedFileId != null;
@@ -340,7 +359,8 @@ class _SettlementScreenState extends State<SettlementScreen> {
                           style: TextStyle(
                               color: AppColors.p600,
                               fontWeight: FontWeight.w800,
-                              decoration: TextDecoration.underline)),
+                              decoration: TextDecoration.underline,
+                              decorationColor: AppColors.p600)),
                     ]),
                     style: TextStyle(fontFamily: 'Pretendard', fontSize: 13),
                   ),
@@ -371,25 +391,13 @@ class _CheckItem extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.only(top: 8, bottom: last ? 0 : 8),
       child: Row(children: [
-        // 미완료에 체크를 그리면 준비가 끝난 것으로 읽힌다.
-        Container(
-          width: 22,
-          height: 22,
-          decoration: BoxDecoration(
-              color: done ? AppColors.p500 : Colors.transparent,
-              shape: BoxShape.circle,
-              border:
-                  done ? null : Border.all(color: AppColors.ink4, width: 1.5)),
-          child: done
-              ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
-              : null,
-        ),
+        AppCheckbox(checked: done),
         const SizedBox(width: 12),
         Text(label,
             style: const TextStyle(
                 fontFamily: 'Pretendard',
                 fontSize: 14,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
                 color: AppColors.ink9)),
         const Spacer(),
         Text(value,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/app_scope.dart';
+import '../mock_ui/screens/region_detail.dart';
 import '../models/app_models.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui/app_card.dart';
@@ -59,6 +60,11 @@ class _FavoriteRegionsScreenState extends State<FavoriteRegionsScreen> {
                   final region = favorites[i];
                   return AppCard(
                     padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+                    // 카드 탭 = 지역 상세 (★ 버튼은 해제 전용으로 그대로).
+                    onTap: () => Navigator.of(context)
+                        .push(MaterialPageRoute(
+                            builder: (_) => RegionDetailScreen(region: region)))
+                        .then((_) => setState(() {})),
                     child: Row(
                       children: [
                         Container(

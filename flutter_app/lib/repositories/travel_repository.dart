@@ -150,7 +150,13 @@ abstract class TravelRepository {
   );
   Future<List<RegionSummary>> addFavoriteRegion(int userId, int regionId);
   Future<List<RegionSummary>> removeFavoriteRegion(int userId, int regionId);
-  Future<String> downloadMergedPdf(int tripId, List<int> uploadedFileIds);
+  /// 증빙 파일들을 하나의 PDF로 병합해 저장하고 경로를 돌려준다.
+  /// [fileName]을 주면 그 이름으로 저장한다(미지정 시 trip-{id}-documents.pdf).
+  Future<String> downloadMergedPdf(
+    int tripId,
+    List<int> uploadedFileIds, {
+    String? fileName,
+  });
 
   /// 출발 준비 체크리스트 조회 — GET /api/trips/{tripId}/checklist (핸드오프 E).
   Future<List<ChecklistItem>> getTripChecklist(int tripId);

@@ -1,10 +1,18 @@
+import 'dart:io';
+
+import 'package:archive/archive.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../core/app_scope.dart';
+import '../utils/browser_file_download.dart';
 import '../models/app_models.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui/app_card.dart';
+import '../widgets/ui/app_checkbox.dart';
+import '../widgets/ui/app_confirm_dialog.dart';
 import 'settlement_screen.dart';
 
 /// 증빙 패키지 — 인증샷+영수증+숙박확인서를 제출 규격으로 묶어 정산 신청으로 연결.
@@ -27,6 +35,7 @@ class SubmissionPackageScreen extends StatelessWidget {
     final authCount = detail.uploadedFiles
         .where((f) => f.fileCategory == FileCategory.authPhoto)
         .length;
+    final requiredAuth = detail.trip.authRequiredCount ?? 2;
     final receiptCount = detail.receipts.length;
     final hasLodging = detail.uploadedFiles
             .any((f) => f.fileCategory == FileCategory.lodgingConfirmation) ||
@@ -34,11 +43,12 @@ class SubmissionPackageScreen extends StatelessWidget {
     final spent = detail.trip.totalSpentAmount;
     final goal = detail.trip.refundConditionAmount;
     final spentOk = goal <= 0 || spent >= goal;
+    // 정산 누리집은 사진·영수증을 낱장으로 업로드한다 — 원본을 종류별로 묶은 zip이 기본.
     final fileName = '${detail.trip.regionName}_반값여행_증빙팩.zip';
 
     // 하나라도 비면 패키지를 "완성"으로 부르지 않는다. 빈 증빙을 제출하면 반려된다.
     final missing = <String>[
-      if (authCount < 2) '관광지 인증샷',
+      if (authCount < requiredAuth) '관광지 인증샷',
       if (receiptCount == 0) '영수증',
       if (!spentOk) '최소 소비금액',
       if (!hasLodging) '숙박확인서',
@@ -50,7 +60,8 @@ class SubmissionPackageScreen extends StatelessWidget {
       backgroundColor: AppColors.bg,
       appBar: AppBar(title: const Text('증빙 패키지')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+        // 증빙 계열 화면(인증샷·영수증·정산)과 같은 여백.
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
         children: [
           RichText(
             text: TextSpan(
@@ -72,7 +83,7 @@ class SubmissionPackageScreen extends StatelessWidget {
                       const TextSpan(text: '아직 준비되지 않은\n'),
                       TextSpan(
                           text: '증빙 ${missing.length}가지',
-                          style: const TextStyle(color: AppColors.warning)),
+                          style: const TextStyle(color: AppColors.p600)),
                       const TextSpan(text: '가 있어요'),
                     ],
             ),
@@ -94,8 +105,8 @@ class SubmissionPackageScreen extends StatelessWidget {
             child: Column(children: [
               _CheckItem(
                   label: '관광지 인증샷',
-                  value: '${authCount.clamp(0, 2)}/2곳 · $authCount장',
-                  done: authCount >= 2),
+                  value: '${authCount.clamp(0, requiredAuth)}/$requiredAuth곳 · $authCount장',
+                  done: authCount >= requiredAuth),
               // 영수증 건수와 소비 금액은 서로 다른 조건이라 한 줄에 묶으면
               // "0건인데 12만원"처럼 앞뒤가 안 맞는 문구가 된다.
               _CheckItem(
@@ -162,14 +173,14 @@ class SubmissionPackageScreen extends StatelessWidget {
                 ),
               ]),
               const SizedBox(height: 14),
-              // 정본 .btn-outline — 보조 톤(surf 배경·ink7 글자·p600 아이콘). 최종액션이 아니라 미리보기라 primary 아님.
+              // 정본 .btn-outline — 보조 톤(surf 배경·ink7 글자·p600 아이콘). 최종액션이 아니라 준비물이라 primary 아님.
               TextButton.icon(
-                // 증빙 파일이 하나도 없으면 병합할 것이 없다.
-                onPressed: hasAnyFile ? () => _downloadPackage(context) : null,
-                icon: const Icon(Icons.description_outlined,
+                // 증빙 파일이 하나도 없으면 묶을 것이 없다.
+                onPressed: hasAnyFile ? () => _downloadZip(context) : null,
+                icon: const Icon(Icons.folder_zip_outlined,
                     size: 16, color: AppColors.p600),
                 label: Text(
-                    hasAnyFile ? '패키지 미리보기 · 다운로드' : '증빙을 1개 이상 올려야 만들 수 있어요',
+                    hasAnyFile ? '증빙 zip 다운로드' : '증빙을 1개 이상 올려야 만들 수 있어요',
                     style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
@@ -178,7 +189,7 @@ class SubmissionPackageScreen extends StatelessWidget {
                     minimumSize: const Size(double.infinity, 46),
                     backgroundColor: AppColors.surf,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14))),
+                        borderRadius: BorderRadius.circular(18))),
               ),
             ]),
           ),
@@ -206,45 +217,80 @@ class SubmissionPackageScreen extends StatelessWidget {
   Future<void> _goToSettlement(BuildContext context, List<String> missing) async {
     final navigator = Navigator.of(context);
     if (missing.isNotEmpty) {
-      final proceed = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('아직 빠진 증빙이 있어요'),
-          content: Text('${missing.join(' · ')}가 준비되지 않았어요.\n'
-              '이대로 제출하면 반려될 수 있어요. 그래도 진행할까요?'),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('증빙 마저 준비하기')),
-            TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('그래도 진행')),
-          ],
-        ),
+      final proceed = await showAppConfirmDialog(
+        context,
+        title: '아직 빠진 증빙이 있어요',
+        message: '${missing.join(' · ')}가 준비되지 않았어요.\n'
+            '이대로 제출하면 반려될 수 있어요. 그래도 진행할까요?',
+        cancelLabel: '증빙 마저 준비하기',
+        confirmLabel: '그래도 진행',
+        destructive: true,
       );
-      if (proceed != true) return;
+      if (!proceed) return;
     }
     await navigator.push(
         MaterialPageRoute(builder: (_) => SettlementScreen(tripId: tripId)));
   }
 
-  Future<void> _downloadPackage(BuildContext context) async {
+  /// 원본 증빙을 종류별 폴더로 묶은 zip — 정산 누리집이 낱장 업로드 방식이라,
+  /// PC에서 풀어 그대로 항목별로 올릴 수 있게 한다. 서명 파일은 제출물이 아니라 제외.
+  Future<void> _downloadZip(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
     final controller = AppScope.of(context);
-    final fileIds = detail.uploadedFiles.map((f) => f.id).toList();
-    if (fileIds.isEmpty) {
-      messenger.showSnackBar(
-          const SnackBar(content: Text('병합할 증빙 파일이 아직 없어요.')));
+    final files = detail.uploadedFiles
+        .where((f) => f.fileCategory != FileCategory.signature)
+        .toList();
+    if (files.isEmpty) {
+      messenger
+          .showSnackBar(const SnackBar(content: Text('묶을 증빙 파일이 아직 없어요.')));
       return;
     }
+    final zipName = '${detail.trip.regionName}_반값여행_증빙팩.zip';
     try {
-      final path = await controller.runTask(
-          () => controller.repository.downloadMergedPdf(tripId, fileIds));
-      messenger.showSnackBar(SnackBar(content: Text('증빙 패키지를 생성했어요: $path')));
+      final path = await controller.runTask(() async {
+        final archive = Archive();
+        final counters = <FileCategory, int>{};
+        for (final file in files) {
+          final bytes = await controller.repository.downloadUploadedFileBytes(
+            tripId: tripId,
+            uploadedFileId: file.id,
+          );
+          final index = (counters[file.fileCategory] ?? 0) + 1;
+          counters[file.fileCategory] = index;
+          final entry = _zipEntryName(file, index);
+          archive.addFile(ArchiveFile(entry, bytes.length, bytes));
+        }
+        final zipBytes = ZipEncoder().encode(archive)!;
+        if (kIsWeb) {
+          await downloadFileBytes(zipBytes, zipName,
+              mimeType: 'application/zip');
+          return '브라우저 다운로드: $zipName';
+        }
+        final directory = await getApplicationDocumentsDirectory();
+        final out = File('${directory.path}/$zipName');
+        await out.writeAsBytes(zipBytes);
+        return out.path;
+      });
+      messenger.showSnackBar(SnackBar(content: Text('증빙 zip을 만들었어요: $path')));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('패키지 생성에 실패했어요: $e')));
+      messenger.showSnackBar(SnackBar(content: Text('zip 생성에 실패했어요: $e')));
     }
   }
+
+  String _zipEntryName(UploadedFileItem file, int index) {
+    final name = file.originalFileName;
+    final ext = name.contains('.')
+        ? name.split('.').last.toLowerCase()
+        : (file.mimeType.contains('pdf') ? 'pdf' : 'jpg');
+    return switch (file.fileCategory) {
+      FileCategory.authPhoto => '인증샷/인증샷_$index.$ext',
+      FileCategory.receiptImage => '영수증/영수증_$index.$ext',
+      FileCategory.lodgingConfirmation => '숙박확인서/숙박확인서_$index.$ext',
+      FileCategory.generatedPdf => '숙박확인서/숙박확인서_작성본_$index.$ext',
+      FileCategory.signature => '기타/서명_$index.$ext',
+    };
+  }
+
 }
 
 class _CheckItem extends StatelessWidget {
@@ -264,25 +310,13 @@ class _CheckItem extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.only(top: 8, bottom: last ? 0 : 8),
       child: Row(children: [
-        // 미완료에 체크를 그리면 준비가 끝난 것으로 읽혀 빈 증빙을 제출하게 된다.
-        Container(
-          width: 22,
-          height: 22,
-          decoration: BoxDecoration(
-            color: done ? AppColors.p500 : Colors.transparent,
-            shape: BoxShape.circle,
-            border: done ? null : Border.all(color: AppColors.ink4, width: 1.5),
-          ),
-          child: done
-              ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
-              : null,
-        ),
+        AppCheckbox(checked: done),
         const SizedBox(width: 12),
         Text(label,
             style: const TextStyle(
                 fontFamily: 'Pretendard',
                 fontSize: 14,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
                 color: AppColors.ink9)),
         const Spacer(),
         Text(value,

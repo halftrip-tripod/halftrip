@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart'
     hide NotificationSettings;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/app_models.dart';
@@ -34,6 +35,13 @@ class AppController extends ChangeNotifier {
   static const _selectedCoursesKey = 'selected_course_ids_by_trip_v1';
   static const _pendingYoutubeJobsKey = 'pending_youtube_jobs_v1';
   static const _appliedTripsKey = 'applied_trip_ids_v1';
+
+  // 로그인 세션 영속화 — 토큰은 일반 SharedPreferences가 아니라 secure storage에.
+  // (Android Keystore 암호화 / iOS Keychain. 웹은 브라우저 저장소 기반)
+  static const _sessionTokenKey = 'session_auth_token_v1';
+  static const _sessionUserIdKey = 'session_user_id_v1';
+  static const _sessionProviderKey = 'session_provider_v1';
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
 
   final navigatorKey = GlobalKey<NavigatorState>();
   final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
@@ -82,6 +90,78 @@ class AppController extends ChangeNotifier {
     await _syncFcmToken();
   }
 
+  /// 로그인 성공 직후 세션(토큰·userId)을 secure storage에 남긴다.
+  /// 저장 실패는 삼킨다 — 이번 세션 로그인 자체는 유효하므로.
+  Future<void> _persistSession({String provider = 'LOCAL'}) async {
+    final repo = _repository;
+    final user = currentUser;
+    if (repo is! ApiTravelRepository || user == null) return;
+    final token = repo.authToken;
+    if (token == null || token.isEmpty) return;
+    try {
+      await _secureStorage.write(key: _sessionTokenKey, value: token);
+      await _secureStorage.write(key: _sessionUserIdKey, value: '${user.id}');
+      await _secureStorage.write(key: _sessionProviderKey, value: provider);
+      debugPrint('[세션] 저장 완료 userId=${user.id}');
+    } catch (error) {
+      debugPrint('[세션] 저장 실패: $error');
+    }
+  }
+
+  /// 저장된 세션 파기 — 로그아웃·탈퇴·토큰 만료 시.
+  Future<void> clearPersistedSession() async {
+    try {
+      await _secureStorage.delete(key: _sessionTokenKey);
+      await _secureStorage.delete(key: _sessionUserIdKey);
+      await _secureStorage.delete(key: _sessionProviderKey);
+    } catch (_) {}
+  }
+
+  /// 앱 부팅 시 저장된 세션으로 자동 로그인. 성공하면 true.
+  ///
+  /// 토큰 유효성은 getUser 호출이 검증한다 — 401/403(만료·위조)이면 세션을
+  /// 지우고, 네트워크 오류면 남겨둬서 다음 부팅에 다시 시도한다.
+  Future<bool> restoreSession() async {
+    final repo = _repository;
+    if (repo is! ApiTravelRepository) return false;
+    String? token;
+    String? userIdRaw;
+    try {
+      token = await _secureStorage.read(key: _sessionTokenKey);
+      userIdRaw = await _secureStorage.read(key: _sessionUserIdKey);
+    } catch (error) {
+      debugPrint('[세션] 저장소 읽기 실패: $error');
+      return false;
+    }
+    final userId = int.tryParse(userIdRaw ?? '');
+    if (token == null || token.isEmpty || userId == null) {
+      debugPrint('[세션] 저장된 세션 없음');
+      return false;
+    }
+    repo.adoptToken(token);
+    try {
+      currentUser = await repo.getUser(userId);
+      trips = await repo.getTrips(userId);
+      await _loadLocalDashboardData();
+      await _syncFcmToken();
+      await _attachCommunityIfServer();
+      // 소셜 가입 도중(거주지 입력 전) 종료된 계정은 온보딩부터 이어간다.
+      needsResidenceSetup = currentUser!.residence.trim().isEmpty;
+      notifyListeners();
+      debugPrint('[세션] 복원 성공 userId=$userId');
+      return true;
+    } catch (error) {
+      repo.clearSession();
+      currentUser = null;
+      debugPrint('[세션] 복원 실패: $error');
+      final message = error.toString();
+      if (message.contains('401') || message.contains('403')) {
+        await clearPersistedSession();
+      }
+      return false;
+    }
+  }
+
   /// 실 소셜 로그인 — SDK 액세스 토큰을 서버로 검증. 거주지 필요 여부는 서버 응답을 따른다.
   Future<void> loginWithSocial(LoginProvider provider, String accessToken) async {
     await _runBusy(() async {
@@ -90,6 +170,8 @@ class AppController extends ChangeNotifier {
         accessToken: accessToken,
       );
       currentUser = result.user;
+      // 저장은 로그인 확정 즉시 — 뒤 단계(FCM·커뮤 연결)가 실패해도 세션은 남게.
+      await _persistSession(provider: provider.name.toUpperCase());
       trips = await _repository.getTrips(result.user.id);
       await _loadLocalDashboardData();
       await _syncFcmToken();
@@ -105,6 +187,7 @@ class AppController extends ChangeNotifier {
       trips = await _repository.getTrips(authUser.id);
       await _loadLocalDashboardData();
       await _syncFcmToken();
+      await _persistSession(provider: provider.name.toUpperCase());
       await _attachCommunityIfServer();
       // 소셜 가입은 거주지 입력 온보딩을 거치도록 한다.
       needsResidenceSetup = true;
@@ -172,6 +255,7 @@ class AppController extends ChangeNotifier {
     await repository.deleteAccount(user.id);
     final preferences = await SharedPreferences.getInstance();
     await preferences.clear();
+    await clearPersistedSession();
     savedCourses = const [];
     selectedCourseIdsByTrip = const <int, String>{};
     pendingYoutubeCourseJobs = const [];
@@ -181,6 +265,8 @@ class AppController extends ChangeNotifier {
   void logout() {
     mock.AppState.I.detachCommunityServer();
     _repository.clearSession();
+    // 기기에 남긴 세션도 함께 파기 (완료를 기다릴 필요는 없음).
+    unawaited(clearPersistedSession());
     currentUser = null;
     trips = const [];
     needsResidenceSetup = false;
@@ -197,6 +283,7 @@ class AppController extends ChangeNotifier {
         password: password,
       );
       currentUser = await _repository.getUser(authUser.id);
+      await _persistSession();
       trips = await _repository.getTrips(authUser.id);
       await _loadLocalDashboardData();
       await _syncFcmToken();
@@ -216,6 +303,7 @@ class AppController extends ChangeNotifier {
         residence: residence,
       );
       currentUser = await _repository.getUser(authUser.id);
+      await _persistSession();
       trips = await _repository.getTrips(authUser.id);
       await _loadLocalDashboardData();
       await _syncFcmToken();

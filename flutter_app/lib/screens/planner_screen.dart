@@ -284,7 +284,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
                                 horizontal: 12, vertical: 12),
                             decoration: BoxDecoration(
                               color: isHighlighted ? AppColors.p50 : Colors.white,
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(18),
                               boxShadow: AppShadows.soft,
                             ),
                             child: Row(

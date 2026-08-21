@@ -532,9 +532,9 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
           border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+              borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
           focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(18),
               borderSide: const BorderSide(color: AppColors.p500, width: 1.5)),
         ),
       ),
@@ -595,7 +595,7 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(18),
           ),
           child: Row(children: [
             Expanded(
@@ -984,7 +984,7 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
       padding: const EdgeInsets.fromLTRB(16, 15, 12, 15),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: AppShadows.soft,
       ),
       child: Row(children: [
@@ -1032,18 +1032,7 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
     );
   }
 
-  Widget _checkBox(bool on) {
-    return Container(
-      width: 24,
-      height: 24,
-      decoration: BoxDecoration(
-        color: on ? AppColors.p500 : Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: on ? AppColors.p500 : AppColors.line, width: 2),
-      ),
-      child: on ? const Icon(Icons.check_rounded, size: 16, color: Colors.white) : null,
-    );
-  }
+  Widget _checkBox(bool on) => AppCheckbox(checked: on);
 
   Widget _checkCard(LodgingFormFieldItem field) {
     final on = _checkboxValues[field.key] ?? false;
@@ -1056,7 +1045,7 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
         padding: const EdgeInsets.fromLTRB(16, 15, 12, 15),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           boxShadow: AppShadows.soft,
         ),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1141,7 +1130,7 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: AppShadows.soft,
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1243,7 +1232,7 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: AppColors.surf,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(color: AppColors.line),
             ),
             child: boxChild,
@@ -1360,7 +1349,7 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.warning.withValues(alpha: .09),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1452,9 +1441,9 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
               : null,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
           border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+              borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
           focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(18),
               borderSide: const BorderSide(color: AppColors.p500, width: 1.5)),
         ),
       ),
@@ -1541,7 +1530,7 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
                 decoration: BoxDecoration(
                   color:
                       _layoutEditMode ? const Color(0xFFEFF6FF) : Colors.white,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(18),
                   border: Border.all(
                     color:
                         _layoutEditMode

@@ -594,7 +594,7 @@ class _YoutubeTravelPlanScreenState extends State<YoutubeTravelPlanScreen> {
                           DecoratedBox(
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(18),
                               boxShadow: const [
                                 BoxShadow(
                                     color: Color(0x0F1B3A5B),
@@ -798,7 +798,7 @@ class _MobilePlannerHeader extends StatelessWidget {
           DecoratedBox(
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(18),
               boxShadow: const [
                 BoxShadow(
                     color: Color(0x0F1B3A5B),

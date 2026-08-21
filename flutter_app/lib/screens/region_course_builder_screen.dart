@@ -613,7 +613,7 @@ class _AiPreferenceSection extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                 decoration: BoxDecoration(
                   color: AppColors.surf,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(18),
                 ),
                 child: Row(
                   children: [
@@ -765,7 +765,7 @@ class _ManualBuilderSection extends StatelessWidget {
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
                             color: isHighlighted ? AppColors.p50 : Colors.white,
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(18),
                             boxShadow: AppShadows.soft,
                           ),
                           child: Row(
@@ -893,7 +893,7 @@ class _PlannerEditorSection extends StatelessWidget {
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(18),
                     boxShadow: AppShadows.soft,
                   ),
                   child: Row(

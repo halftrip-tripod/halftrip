@@ -31,7 +31,7 @@
   - ⚠ 마감 직전에는 이메일 변경이 실시간 반영되지 않을 수 있음 → 수정 필요 시 미리 변경
 - **절차**:
   1. 제출 항목 및 기능설명서 양식 확인 → [기능설명서 양식 다운로드](https://drive.google.com/file/d/1mZ5t_w0Rx21QQ5JOQ5uBMgtn0laixkAF/view?usp=sharing)
-  2. 자료 제출 절차 안내 매뉴얼 확인 (**8/10 업로드 예정, 필독**) 후 제출
+  2. [자료 제출 절차 안내 매뉴얼](https://drive.google.com/file/d/140IdldqAGRvwmmX8Q88LkuM0CsdjtsY5/view?usp=drive_link) 확인 (**필독**) 후 제출 — 8/10 업로드 완료
   - 예비심사 합격팀만 1차 심사자료 제출 가능
 
 ---
@@ -70,7 +70,7 @@
   - 인증키를 통해 **개발 기간 내 API별 호출 건수** 및 서비스 내 활용 내역을 확인함
 - (선택) 활용 API 중 대표 1개에 대해 운영계정 신청 여부 체크
 - 활용한 공사 OpenAPI 목록
-- 참고: [공공데이터포털 인증키 확인 및 운영계정 신청방법 매뉴얼](https://drive.google.com/file/d/1CuSVdcTHhjdbbLNBGwdY5VtHuotEmzC4/view?usp=sharing) (**사전 준비 필요, 필독**)
+- 참고: [공공데이터포털 인증키 확인 및 운영계정 신청방법 매뉴얼](https://drive.google.com/file/d/1iAy4zLbWT4gWbc7PkW2mujdQBFD-2-BC/view?usp=sharing) (**사전 준비 필요, 필독**) *(8월에 링크 갱신됨)*
 
 #### ⑤ 기능설명서 첨부
 
@@ -87,6 +87,23 @@
 | 4. 데이터 활용 (한국관광공사 OpenAPI) | ① 개발에 활용한 공사 OpenAPI 리스트 |
 | 5. [선택] 데이터 활용 (기타) | ① 기타 API·파일데이터 |
 | 6. 서비스 차별성 & 발전계획 | ① 차별성 ② 발전계획 |
+
+- **파일 제한: PDF 1건, 10MB 이하.** 페이지 수 제한은 명시 없음 (양식 기본 9슬라이드 구성)
+- 핵심 기능 흐름도 슬라이드는 기능당 1장, 필요 시 슬라이드 복사(Ctrl+D)로 추가 — 최대 5개 기능까지
+- 선택 항목(지역특화·기타 데이터)은 해당 없으면 **슬라이드 삭제** / 가이드 문구·노란 박스는 작성 후 삭제
+- OpenAPI 리스트 슬라이드는 5칸(API명+상세설명), 기타 데이터 슬라이드는 3칸
+- 양식 zip 안에 PPTX(작성용) + PDF(참고용) 동봉 — PPTX로 작성 후 PDF 변환
+
+### 3-3. 제출 화면 세부 (8/10 업로드 매뉴얼 기준)
+
+- 제출 3단계: ① 개인정보 동의·유의사항 확인(팀 전원 확인 동의 포함) → ② 자료 입력 → ③ 제출 완료(등록 이메일로 확인 메일 발송)
+- 앱 URL 입력 필드는 **안드로이드 앱스토어 URL / iOS 앱스토어 URL / 서비스 URL** 각각 존재
+- **서비스 관련 기타 자료**: ZIP 1건, 50MB 이하 첨부 가능 (SW/기타 유형용이지만 필드 존재)
+- **서비스 인증키: 최소 1건 ~ 최대 3건** 세트(인코딩키+디코딩키) 입력, 운영계정 전환 신청한 키 1건에 신청여부 체크
+  - ⚠ data.go.kr `마이페이지 > Open API > 인증키 발급현황`에는 **인코딩키만** 보임 → 메인 마이페이지의 `개인 API 인증키`에서 인증키 복사(Encoding)/(Decoding) 버튼으로 둘 다 복사
+- **활용 OpenAPI 서비스**: 체크박스 목록에서 실제 활용한 공사 API를 **모두** 선택 (1건 이상 필수, 미활용 시 심사 제외)
+- 팀원 정보는 콘텐츠랩 회원가입 완료된 팀원만 회원 조회로 추가 가능
+- 제출 기간 내 무제한 수정 가능(접수확인 → 심사자료 제출 버튼), 기간 종료 후 불가
 
 ---
 
@@ -183,7 +200,7 @@
 | 7 | 지역 특화 여부 결정 (가점 2점) — 특화 지역명 확정 | 전원(기획) | ☐ |
 | 8 | 기능설명서 작성 (지정 양식, 핵심기능 최대 5개 + 흐름도, 이미지 1+3~5장, PDF) | 규희(팀장) | ☐ |
 | 9 | 팀원 전원 투어라즈 회원가입 + 참가 계정 이메일 확인 | 전원 | ☐ |
-| 10 | 8/10 업로드되는 제출 매뉴얼 확인 | 규희(팀장) | ☐ |
+| 10 | [제출 절차 매뉴얼](https://drive.google.com/file/d/140IdldqAGRvwmmX8Q88LkuM0CsdjtsY5/view?usp=drive_link) 확인 (8/10 업로드 완료) | 규희(팀장) | ☐ |
 | 11 | 콘텐츠랩 제출 (마감 9/21 16:00 — 여유 있게 제출) | 규희(팀장) | ☐ |
 
 ---
@@ -195,7 +212,8 @@
 | 공식 공지 페이지 (노션) | https://lowly-polyanthus-1fb.notion.site/2026-36b5dce406e380e0a3d1f80525667a11 |
 | 제출처 (한국관광 콘텐츠랩) | https://api.visitkorea.or.kr/ |
 | 기능설명서 양식 | https://drive.google.com/file/d/1mZ5t_w0Rx21QQ5JOQ5uBMgtn0laixkAF/view?usp=sharing |
-| 인증키 확인·운영계정 신청 매뉴얼 | https://drive.google.com/file/d/1CuSVdcTHhjdbbLNBGwdY5VtHuotEmzC4/view?usp=sharing |
+| 인증키 확인·운영계정 신청 매뉴얼 | https://drive.google.com/file/d/1iAy4zLbWT4gWbc7PkW2mujdQBFD-2-BC/view?usp=sharing |
+| 자료 제출 절차 안내 매뉴얼 (8/10 업로드) | https://drive.google.com/file/d/140IdldqAGRvwmmX8Q88LkuM0CsdjtsY5/view?usp=drive_link |
 | OT 다시보기 영상 | https://youtu.be/tzLYWpHQ7f0 |
 | OT 발표자료 & OpenAPI 가이드 (Drive) | https://drive.google.com/drive/folders/1vo7XeAwC-8hFwHsNagvoa_2wqQS9lBE8 |
 | 교육 영상 1 — 웹·앱 개발 기초(바이브 코딩) | https://youtu.be/UfqEWfnDnRk |
