@@ -33,7 +33,8 @@ class _AuthPhotoUploadScreenState extends State<AuthPhotoUploadScreen> {
   List<PlaceItem> _places = const [];
   int? _selectedPlaceId;
 
-  static const _required = 2;
+  // 지역 공고의 요구 개소(서버 authRequiredCount). 데이터 전이면 2곳 폴백.
+  int _required = 2;
 
   @override
   void didChangeDependencies() {
@@ -46,6 +47,7 @@ class _AuthPhotoUploadScreenState extends State<AuthPhotoUploadScreen> {
   Future<TripDetail> _loadDetail() async {
     final controller = AppScope.of(context);
     final detail = await controller.repository.getTripDetail(widget.tripId);
+    _required = detail.trip.authRequiredCount ?? 2;
     await _hydratePreviews(detail);
     if (_places.isEmpty) {
       try {
@@ -53,7 +55,16 @@ class _AuthPhotoUploadScreenState extends State<AuthPhotoUploadScreen> {
           detail.trip.regionId,
           residence: controller.currentUser?.residence,
         );
-        _places = region.halfPricePlaces;
+        // 인정 관광지가 수십 개인 지역도 있어 전체를 늘어놓으면 고르기 어렵다.
+        // 여행에 등록한 코스의 관광지만 추리고, 코스가 없으면 전체 목록 폴백.
+        final courseHalfPriceIds = detail.selectedPlaces
+            .where((p) => p.placeType == PlaceCategory.halfPrice)
+            .map((p) => p.referencePlaceId)
+            .toSet();
+        final fromCourse = region.halfPricePlaces
+            .where((p) => courseHalfPriceIds.contains(p.id))
+            .toList();
+        _places = fromCourse.isNotEmpty ? fromCourse : region.halfPricePlaces;
         _selectedPlaceId ??= _places.isNotEmpty ? _places.first.id : null;
       } catch (_) {
         // 관광지 목록 실패 시 placeId 없이(위치검증 생략) 진행.
@@ -403,6 +414,16 @@ class _ReviewBanner extends StatelessWidget {
     final ok = review.approved;
     final bg = ok ? const Color(0xFFE7F7EE) : AppColors.coralTint;
     final fg = ok ? const Color(0xFF1B8E4B) : AppColors.coralDeep;
+    // 제목은 실제로 실패한 항목을 가리킨다 — 아래 체크 목록과 어긋나면 안 된다.
+    final failedLabels = <String>[
+      if (review.locationVerified == false) '위치',
+      if (review.withinTripPeriod == false) '촬영 시각',
+      if (review.detectedPeopleCount < review.requiredPeopleCount) '인원',
+      if (!(review.facesClear && review.backgroundVisible)) '얼굴·배경',
+    ];
+    final failTitle = failedLabels.isEmpty
+        ? '자동 인증을 통과하지 못했어요'
+        : '${failedLabels.join(' · ')} 확인이 필요해요';
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -415,7 +436,7 @@ class _ReviewBanner extends StatelessWidget {
         const SizedBox(width: 10),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(ok ? '인증 완료됐어요' : '얼굴·배경 확인이 필요해요',
+            Text(ok ? '인증 완료됐어요' : failTitle,
                 style: TextStyle(
                     fontFamily: 'Pretendard',
                     fontSize: 14.5,

@@ -762,10 +762,14 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
-  Future<String> downloadMergedPdf(int tripId, List<int> uploadedFileIds) {
+  Future<String> downloadMergedPdf(
+    int tripId,
+    List<int> uploadedFileIds, {
+    String? fileName,
+  }) {
     final uri = _uri('/integrations/pdf/merge/$tripId')
         .replace(query: uploadedFileIds.map((id) => 'uploadedFileIds=$id').join('&'));
-    return _downloadFromUri(uri, 'trip-$tripId-documents.pdf');
+    return _downloadFromUri(uri, fileName ?? 'trip-$tripId-documents.pdf');
   }
 
   // ── 커뮤니티 ──

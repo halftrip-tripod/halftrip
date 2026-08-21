@@ -1782,7 +1782,7 @@ class MockTravelRepository implements TravelRepository {
 
   @override
   Future<String> downloadMergedPdf(
-      int tripId, List<int> uploadedFileIds) async {
+      int tripId, List<int> uploadedFileIds, {String? fileName}) async {
     final directory = await getApplicationDocumentsDirectory();
     final file = File('${directory.path}/trip-$tripId-mock-bundle.txt');
     final payload = {

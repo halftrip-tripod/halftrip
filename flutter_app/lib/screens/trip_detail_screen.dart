@@ -4,6 +4,7 @@ import '../core/app_scope.dart';
 import '../models/app_models.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui/app_card.dart';
+import '../widgets/ui/app_checkbox.dart';
 import '../widgets/ui/pill.dart';
 import 'auth_photo_upload_screen.dart';
 import 'lodging_form_screen.dart';
@@ -184,7 +185,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   /// 디자인: 목업 여행 상세 가이드 시트.
   static const _taskGuides = [
     (Icons.photo_camera_outlined, '관광지 인증샷 (EXIF)', '여행 중', [
-      '지정관광지 2곳 이상에서 인증샷을 찍어야 해요.',
+      '지역이 정한 지정관광지 개소(보통 2곳) 이상에서 인증샷을 찍어야 해요.',
       '기본 카메라로 촬영해 위치·시간(GPS·EXIF) 정보가 남아야 자동 인증돼요.',
       '신청 대표자와 일행 얼굴, 배경이 함께 나오게 찍어주세요.',
       '캡처·SNS 저장본은 촬영 정보가 지워져 인증이 어려워요.',
@@ -201,7 +202,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       '선결제한 경우 숙소 이용 완료 내역서와 결제 영수증을 함께 준비하세요.',
     ]),
     (Icons.description_outlined, '증빙 패키지 · 정산 신청', '여행 후', [
-      '여행이 끝나면 인증샷 + 영수증 + 숙박확인서를 제출 규격 PDF로 자동으로 묶어드려요.',
+      '여행이 끝나면 인증샷 + 영수증 + 숙박확인서를 종류별로 정리해 zip으로 묶어드려요.',
       '정산 신청은 여행 종료 다음날부터 7일 이내, 지자체 정산 페이지에서 해요.',
       '제출 후 심사를 거쳐 보통 1~2개월 뒤 지역화폐로 환급돼요.',
     ]),
@@ -308,6 +309,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     final authCount = detail.uploadedFiles
         .where((f) => f.fileCategory == FileCategory.authPhoto)
         .length;
+    final authRequired = detail.trip.authRequiredCount ?? 2;
     final spent = detail.trip.totalSpentAmount;
     final goal = detail.trip.refundConditionAmount;
     final course = AppScope.of(context).selectedCourseForTrip(detail.trip.id);
@@ -317,8 +319,9 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         child: Column(children: [
           _GaugeRow(
               label: '관광지 인증샷',
-              valueText: '${authCount.clamp(0, 2)} / 2곳',
-              ratio: (authCount / 2).clamp(0.0, 1.0),
+              valueText:
+                  '${authCount.clamp(0, authRequired)} / $authRequired곳',
+              ratio: (authCount / authRequired).clamp(0.0, 1.0),
               green: true),
           const SizedBox(height: 14),
           _NextBar(
@@ -369,6 +372,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     final authCount = detail.uploadedFiles
         .where((f) => f.fileCategory == FileCategory.authPhoto)
         .length;
+    final authRequired = detail.trip.authRequiredCount ?? 2;
     final approvedReceipt = detail.receipts
         .any((r) => r.reviewStatus == ReceiptReviewStatus.approved);
     final hasLodging = detail.uploadedFiles
@@ -379,8 +383,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         title: '증빙 자료 준비',
         child: Column(children: [
           _CheckRow(
-              label: '관광지 인증샷 $authCount/2 · EXIF 검증',
-              checked: authCount >= 2,
+              label: '관광지 인증샷 $authCount/$authRequired · EXIF 검증',
+              checked: authCount >= authRequired,
               onTap: () => _push(AuthPhotoUploadScreen(tripId: widget.tripId))),
           _CheckRow(
               label: '영수증 OCR · 소비 ${_man(detail.trip.totalSpentAmount)}',
@@ -396,7 +400,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       const SizedBox(height: 14),
       _SectionCard(
         title: '증빙 패키지',
-        subtitle: '인증샷 + 영수증 + 숙박확인서를 제출 규격 PDF로 자동 병합해요.',
+        subtitle: '인증샷 + 영수증 + 숙박확인서를 종류별 zip으로 정리해드려요.',
         child: _NextBar(
             label: '증빙 패키지 만들기',
             onTap: () => _openSubmission(detail)),
@@ -901,20 +905,7 @@ class _CheckRow extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 7),
         child: Row(children: [
-          Container(
-            width: 22,
-            height: 22,
-            decoration: BoxDecoration(
-              color: checked ? AppColors.p500 : AppColors.white,
-              shape: BoxShape.circle,
-              border: checked
-                  ? null
-                  : Border.all(color: AppColors.gray, width: 1.6),
-            ),
-            child: checked
-                ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
-                : null,
-          ),
+          AppCheckbox(checked: checked),
           const SizedBox(width: 12),
           Expanded(
             child: Text(label,

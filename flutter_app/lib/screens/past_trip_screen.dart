@@ -1,16 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../core/app_scope.dart';
 import '../mock_ui/screens/community.dart' show CommunityWriteScreen;
-import '../mock_ui/screens/my_trips_tab.dart' show regionEmojiOf;
 import '../mock_ui/widgets/region_art.dart';
 import '../mock_ui/state/app_state.dart' as mock;
 import '../mock_ui/theme/app_colors.dart';
 import '../mock_ui/widgets/ui.dart';
 import '../models/app_models.dart';
 import 'planner_screen.dart';
-import 'submission_package_screen.dart';
 
 /// 지난 여행 상세 — 목업 past_trip 1:1, 데이터는 TripDetail(실 repository).
 /// 후기는 커뮤니티 백엔드(핸드오프 J) 전까지 미작성 상태만 존재한다.
@@ -42,7 +39,6 @@ class _PastTripScreenState extends State<PastTripScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final won = NumberFormat('#,###');
     return FutureBuilder<TripDetail>(
       future: _future,
       builder: (context, snapshot) {
@@ -55,12 +51,6 @@ class _PastTripScreenState extends State<PastTripScreen> {
         final detail = snapshot.data!;
         final trip = detail.trip;
         final course = AppScope.of(context).selectedCourseForTrip(trip.id);
-        final authCount = detail.uploadedFiles
-            .where((f) => f.fileCategory == FileCategory.authPhoto)
-            .length;
-        final hasLodging = detail.uploadedFiles
-                .any((f) => f.fileCategory == FileCategory.lodgingConfirmation) ||
-            detail.lodgingInfo?.uploadedFileId != null;
         final nights = trip.endDate.difference(trip.startDate).inDays;
 
         return DetailScaffold(
@@ -108,26 +98,6 @@ class _PastTripScreenState extends State<PastTripScreen> {
             _MyReviewCard(
               regionName: trip.regionName,
               onChanged: () => setState(() {}),
-            ),
-            // 여행 기록
-            AppCard(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('여행 기록',
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.3)),
-                const SizedBox(height: 8),
-                _RecordRow(icon: Icons.photo_camera_outlined, label: '관광지 인증샷', value: '$authCount장'),
-                _RecordRow(
-                    icon: Icons.credit_card_rounded,
-                    label: '영수증',
-                    value: '${detail.receipts.length}건 · ${won.format(trip.totalSpentAmount)}원'),
-                _RecordRow(icon: Icons.bed_outlined, label: '숙박확인서', value: hasLodging ? '1건' : '없음'),
-                const SizedBox(height: 8),
-                OutlineButton('제출한 증빙 패키지 보기',
-                    icon: Icons.description_outlined,
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => SubmissionPackageScreen(
-                            tripId: trip.id, detail: detail, showSettlementButton: false)))),
-              ]),
             ),
             // 환급
             AppCard(
@@ -234,28 +204,5 @@ class _MyReviewCard extends StatelessWidget {
   }
 }
 
-class _RecordRow extends StatelessWidget {
-  const _RecordRow({required this.icon, required this.label, required this.value});
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(children: [
-        Icon(icon, size: 20, color: AppColors.ink5),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(label,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink7)),
-        ),
-        Text(value,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink9)),
-      ]),
-    );
-  }
-}
 
 String _d(DateTime d) => '${d.month}.${d.day}';
