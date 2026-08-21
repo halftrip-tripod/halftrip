@@ -140,7 +140,7 @@ class _MakeCard extends StatelessWidget {
             height: 54,
             decoration: BoxDecoration(
               color: iconBg,
-              borderRadius: BorderRadius.circular(17),
+              borderRadius: BorderRadius.circular(18),
             ),
             child: Icon(icon, size: 27, color: iconFg),
           ),

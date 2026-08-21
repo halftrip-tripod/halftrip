@@ -526,9 +526,9 @@ class _YoutubeCourseAnalysisScreenState
                         foregroundColor: AppColors.p600,
                         elevation: 0,
                         shadowColor: Colors.transparent,
-                        minimumSize: const Size.fromHeight(52),
+                        minimumSize: const Size.fromHeight(54),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
+                            borderRadius: BorderRadius.circular(18)),
                         textStyle:
                             const TextStyle(fontWeight: FontWeight.w800),
                       ),
@@ -543,9 +543,9 @@ class _YoutubeCourseAnalysisScreenState
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.p500,
                         foregroundColor: Colors.white,
-                        minimumSize: const Size.fromHeight(52),
+                        minimumSize: const Size.fromHeight(54),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
+                            borderRadius: BorderRadius.circular(18)),
                         textStyle:
                             const TextStyle(fontWeight: FontWeight.w900),
                       ),
@@ -719,7 +719,7 @@ class _TimelineStopTile extends StatelessWidget {
     const primary = AppColors.p500;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(18),
       child: IntrinsicHeight(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,

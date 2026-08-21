@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 
+// 체크박스 정본 — 실화면·목업 공용이라 디자인 시스템(lib/widgets/ui/)에 둔다.
+export '../../widgets/ui/app_checkbox.dart';
+
 /// 흰 카드 (라운드 24 · 테두리 없음 · card 그림자).
 class AppCard extends StatelessWidget {
   const AppCard({

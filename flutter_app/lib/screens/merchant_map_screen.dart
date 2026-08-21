@@ -245,7 +245,7 @@ class _MerchantRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
           color: highlighted ? AppColors.p50 : Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           boxShadow: AppShadows.soft,
         ),
         child: Row(children: [

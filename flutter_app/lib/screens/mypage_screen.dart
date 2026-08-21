@@ -180,11 +180,11 @@ class _MyPageScreenState extends State<MyPageScreen> {
                         side: const BorderSide(color: AppColors.line, width: 1.5),
                         foregroundColor: AppColors.ink7,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14))),
+                            borderRadius: BorderRadius.circular(18))),
                     child: const Text('취소',
                         style: TextStyle(
                             fontFamily: 'Pretendard',
-                            fontSize: 14.5,
+                            fontSize: 15,
                             fontWeight: FontWeight.w800)),
                   ),
                 ),
@@ -196,11 +196,11 @@ class _MyPageScreenState extends State<MyPageScreen> {
                         minimumSize: const Size(0, 48),
                         backgroundColor: AppColors.coralDeep,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14))),
+                            borderRadius: BorderRadius.circular(18))),
                     child: const Text('탈퇴하기',
                         style: TextStyle(
                             fontFamily: 'Pretendard',
-                            fontSize: 14.5,
+                            fontSize: 15,
                             fontWeight: FontWeight.w800)),
                   ),
                 ),
@@ -223,7 +223,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('탈퇴 처리에 실패했어요. 잠시 후 다시 시도하거나 rbgml4059@naver.com으로 요청해 주세요.')));
+          content: Text('탈퇴 처리에 실패했어요. 잠시 후 다시 시도하거나 jhm0350@gmail.com으로 요청해 주세요.')));
     }
   }
 
@@ -255,11 +255,11 @@ class _MyPageScreenState extends State<MyPageScreen> {
                         side: const BorderSide(color: AppColors.line, width: 1.5),
                         foregroundColor: AppColors.ink7,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14))),
+                            borderRadius: BorderRadius.circular(18))),
                     child: const Text('취소',
                         style: TextStyle(
                             fontFamily: 'Pretendard',
-                            fontSize: 14.5,
+                            fontSize: 15,
                             fontWeight: FontWeight.w800)),
                   ),
                 ),
@@ -270,11 +270,11 @@ class _MyPageScreenState extends State<MyPageScreen> {
                     style: FilledButton.styleFrom(
                         minimumSize: const Size(0, 48),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14))),
+                            borderRadius: BorderRadius.circular(18))),
                     child: const Text('로그아웃',
                         style: TextStyle(
                             fontFamily: 'Pretendard',
-                            fontSize: 14.5,
+                            fontSize: 15,
                             fontWeight: FontWeight.w800)),
                   ),
                 ),
@@ -499,8 +499,10 @@ class _MenuRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fg = danger ? AppColors.danger : AppColors.ink9;
-    return InkWell(
+    // InkWell 사각 호버가 라운드 카드와 어긋나 보여 목업 UI 관례대로 효과 없이 탭만.
+    return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         child: Row(
