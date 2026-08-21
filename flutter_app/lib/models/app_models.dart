@@ -1640,6 +1640,8 @@ class SavedCourseStop {
     required this.latitude,
     required this.longitude,
     required this.sourceType,
+    this.day = 1,
+    this.time = '',
   });
 
   final int placeId;
@@ -1649,6 +1651,11 @@ class SavedCourseStop {
   final double longitude;
   final String sourceType;
 
+  /// 생성 결과의 일차·시간 — 코스함/여행 코스 보기에서 DAY별 일정을 살리기 위해 보존.
+  /// (예전 저장분엔 없어서 day 1 폴백)
+  final int day;
+  final String time;
+
   factory SavedCourseStop.fromJson(Map<String, dynamic> json) {
     return SavedCourseStop(
       placeId: json['placeId'] as int? ?? 0,
@@ -1657,6 +1664,8 @@ class SavedCourseStop {
       latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
       sourceType: json['sourceType'] as String? ?? 'PLACE',
+      day: json['day'] as int? ?? 1,
+      time: json['time'] as String? ?? '',
     );
   }
 
@@ -1667,6 +1676,8 @@ class SavedCourseStop {
         'latitude': latitude,
         'longitude': longitude,
         'sourceType': sourceType,
+        'day': day,
+        'time': time,
       };
 }
 

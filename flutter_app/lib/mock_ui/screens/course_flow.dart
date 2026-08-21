@@ -14,6 +14,75 @@ import '../state/app_state.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui.dart';
 
+// ───────────────────────── 코스 영속화 변환 (목업 Course ↔ 실스토어 SavedCourse)
+// 코스의 원본 저장소는 controller.savedCourses(기기 영속) 하나다. 목업 Course는
+// 화면 표시용 뷰모델일 뿐 — 코스함·여행 코스 보기 모두 실스토어에서 변환해 그린다.
+
+/// 목업 Course 스톱 → 영속 스톱. DAY·시간을 보존해야 다시 열었을 때 일정이 산다.
+List<SavedCourseStop> savedStopsFromCourse(List<CourseStop> stops) => [
+      for (final s in stops)
+        SavedCourseStop(
+          placeId: s.placeId ?? 0,
+          name: s.name,
+          address: s.address ?? '',
+          latitude: s.latitude ?? 0,
+          longitude: s.longitude ?? 0,
+          sourceType: s.refund ? 'HALF_PRICE' : 'MERCHANT',
+          day: s.day,
+          time: s.time,
+        ),
+    ];
+
+/// 영속 SavedCourse → 표시용 Course.
+Course courseFromSaved(
+  SavedCourse saved, {
+  CourseSource source = CourseSource.manual,
+  String savedAgo = '',
+}) {
+  var emoji = '🗺️';
+  for (final r in AppState.I.regions) {
+    if (r.name == saved.regionName) {
+      emoji = r.emoji;
+      break;
+    }
+  }
+  final dayCount = saved.stops.map((s) => s.day).toSet().length;
+  return Course(
+    emoji: emoji,
+    region: saved.regionName,
+    province: '',
+    title: saved.title,
+    source: source,
+    durationLabel: dayCount >= 2 ? '${dayCount - 1}박 $dayCount일' : '당일치기',
+    placeCount: saved.stops.length,
+    refundOk: false,
+    savedAgo: savedAgo,
+    stops: [
+      for (final s in saved.stops)
+        CourseStop(
+          day: s.day,
+          time: s.time,
+          emoji: switch (s.sourceType.toUpperCase()) {
+            'MERCHANT' => '🍽️',
+            'DIGITAL_TOUR_CARD' => '🎫',
+            _ => '🏞️',
+          },
+          name: s.name,
+          tag: switch (s.sourceType.toUpperCase()) {
+            'MERCHANT' => '가맹점',
+            'DIGITAL_TOUR_CARD' => '디지털 관광주민증',
+            _ => '관광지',
+          },
+          refund: s.sourceType.toUpperCase() != 'MERCHANT',
+          latitude: s.latitude == 0 ? null : s.latitude,
+          longitude: s.longitude == 0 ? null : s.longitude,
+          address: s.address.isEmpty ? null : s.address,
+          placeId: s.placeId == 0 ? null : s.placeId,
+        ),
+    ],
+  );
+}
+
 // ───────────────────────── AI 코스 생성 유틸 (실서버 후보 → 일정 배치)
 
 const _day1Slots = ['10:00', '12:30', '14:30', '18:00'];
@@ -1028,16 +1097,17 @@ class _CourseSimScreenState extends State<CourseSimScreen> {
             icon: Icons.refresh_rounded,
             onTap: () => showMock(context, '취향을 반영해 코스를 다시 생성했어요. (목업)'),
           ),
-          PrimaryButton('내 코스함에 저장', icon: Icons.bookmark_rounded, onTap: () {
+          PrimaryButton('내 코스함에 저장', icon: Icons.bookmark_rounded, onTap: () async {
+            final courseStops = stops.isEmpty ? gangjinStops() : stops;
             final c = Course(
               emoji: region.emoji, region: region.name, province: region.province,
               title: '${region.name} 환급 보장 코스', source: CourseSource.ai,
               durationLabel: nights == 0 ? '당일치기' : '$nights박 ${nights + 1}일',
-              placeCount: stops.length, refundOk: true, savedAgo: '방금 저장',
-              stops: stops.isEmpty ? gangjinStops() : stops,
+              placeCount: courseStops.length, refundOk: true, savedAgo: '방금 저장',
+              stops: courseStops,
             );
-            AppState.I.addCourse(c);
             if (forTrip != null) {
+              // 여행 연결 경로 — 여행 상세(_openCourseCreate)가 실스토어 저장까지 맡는다.
               forTrip!.course = c;
               AppState.I.update();
               // 여행 상세 → 코스 만들기 → (시뮬) 스택이므로 두 번 pop = 여행 상세 복귀.
@@ -1046,6 +1116,28 @@ class _CourseSimScreenState extends State<CourseSimScreen> {
               showMock(context, '코스를 저장하고 ${forTrip!.name} 여행에 연결했어요.');
               return;
             }
+            // 코스함 경로 — 원본은 실스토어(기기 영속)에 저장. 지역 id는 이름으로 해석.
+            final controller = AppScope.of(context);
+            var regionId = 0;
+            try {
+              final regions = await controller.repository.getRegions();
+              for (final r in regions) {
+                if (r.name == region.name) {
+                  regionId = r.id;
+                  break;
+                }
+              }
+            } catch (_) {}
+            await controller.saveCourse(SavedCourse(
+              id: 'gen-${DateTime.now().millisecondsSinceEpoch}',
+              regionId: regionId,
+              regionName: region.name,
+              title: c.title,
+              preferences: const [],
+              stops: savedStopsFromCourse(courseStops),
+              createdAt: DateTime.now(),
+            ));
+            if (!context.mounted) return;
             Navigator.of(context).pushReplacement(
                 MaterialPageRoute(builder: (_) => const CourseSavedScreen()));
             showMock(context, '코스를 코스함에 저장했어요.');
@@ -1281,34 +1373,125 @@ class _TimelineSection extends StatelessWidget {
   }
 }
 
-/// 코스 보기 (읽기 전용) — 저장 코스·여행 코스에서 진입, 편집은 CTA로.
+/// 코스 보기 (읽기 전용) — 저장 코스·여행 코스에서 진입.
+/// 지도·DAY 토글·타임라인 연동은 생성 결과 화면(CourseSimScreen)과 같은 구성.
+/// 편집 진입: 코스함에서는 하단 풀버튼, 여행 상세에서 열 땐(editInAppBar) 우측 상단 연필.
 class CourseViewScreen extends StatefulWidget {
-  const CourseViewScreen({super.key, required this.course});
+  const CourseViewScreen({
+    super.key,
+    required this.course,
+    this.editInAppBar = false,
+    this.onEdit,
+    this.onMore,
+    this.onEdited,
+  });
   final Course course;
+  final bool editInAppBar;
+
+  /// 편집 동작 교체 — 여행 코스는 목업 편집기 대신 여행 계획표(PlannerScreen)로 보낸다.
+  final VoidCallback? onEdit;
+
+  /// 우측 상단 ⋯ — 여행 코스의 등록취소·코스함삭제 시트.
+  final VoidCallback? onMore;
+
+  /// 기본 편집기(CourseEditScreen)에서 돌아온 뒤 호출 — 실스토어에 변경을 반영할 때 쓴다.
+  final VoidCallback? onEdited;
 
   @override
   State<CourseViewScreen> createState() => _CourseViewScreenState();
 }
 
 class _CourseViewScreenState extends State<CourseViewScreen> {
+  /// 지도에 표시할 일차 (1박2일이면 DAY 1/2 토글).
+  int _mapDay = 1;
+
+  /// 상세 일정에서 탭한 장소 — 지도를 그 핀으로 이동시키고 정보창을 연다.
+  int? _focusStopId;
+
+  void _openEdit() {
+    if (widget.onEdit != null) {
+      widget.onEdit!();
+      return;
+    }
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => CourseEditScreen(course: widget.course)))
+        .then((_) {
+      widget.onEdited?.call();
+      if (mounted) setState(() {});
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = widget.course;
+    final days = c.stops.map((s) => s.day).toSet().toList()..sort();
+    final mapStops =
+        c.stops.where((s) => days.length < 2 || s.day == _mapDay).toList();
     return DetailScaffold(
       title: c.title,
-      cta: CtaBar(children: [
-        PrimaryButton('코스 편집하기', icon: Icons.edit_rounded, onTap: () {
-          Navigator.of(context)
-              .push(MaterialPageRoute(builder: (_) => CourseEditScreen(course: c)))
-              .then((_) => setState(() {}));
-        }),
-      ]),
+      actions: widget.editInAppBar
+          ? [
+              IconButton(
+                icon: const Icon(Icons.edit_rounded, size: 21),
+                tooltip: '코스 수정',
+                onPressed: _openEdit,
+              ),
+              if (widget.onMore != null)
+                IconButton(
+                  icon: const Icon(Icons.more_horiz_rounded, size: 22),
+                  tooltip: '더보기',
+                  onPressed: widget.onMore,
+                ),
+            ]
+          : null,
+      cta: widget.editInAppBar
+          ? null
+          : CtaBar(children: [
+              PrimaryButton('코스 편집하기', icon: Icons.edit_rounded, onTap: _openEdit),
+            ]),
       children: [
         if (c.refundOk)
           const FitBanner(
               title: '이 코스로 환급 조건 100% 충족', subtitle: '지정관광지 2곳 · 1박 숙박 · 인정 결제 포함'),
-        if (c.stops.isNotEmpty) _buildStopsMap(context, c.stops),
-        _TimelineSection(stops: c.stops),
+        // 지도 + 일차 토글 + 일정을 한 덩어리로 — 스캐폴드 기본 간격이 사이에 안 끼게.
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (c.stops.isNotEmpty) ...[
+            _buildStopsMap(context, mapStops, focusId: _focusStopId),
+            if (days.length >= 2) ...[
+              const SizedBox(height: 8),
+              Center(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    for (final d in days) ...[
+                      if (d != days.first) const SizedBox(width: 8),
+                      _DayChip(
+                        label: 'DAY $d',
+                        active: _mapDay == d,
+                        onTap: () => setState(() {
+                          _mapDay = d;
+                          _focusStopId = null;
+                        }),
+                      ),
+                    ],
+                  ]),
+                ),
+              ),
+            ],
+            const SizedBox(height: 10),
+          ],
+          _TimelineSection(
+            stops: c.stops,
+            selectedStopId: _focusStopId,
+            onStopTap: (s) {
+              if (s.latitude == null || s.longitude == null) return;
+              setState(() {
+                if (days.length >= 2) _mapDay = s.day;
+                _focusStopId = s.placeId ?? s.name.hashCode;
+              });
+            },
+          ),
+        ]),
       ],
     );
   }
@@ -1405,18 +1588,36 @@ class CourseSavedScreen extends StatefulWidget {
 class _CourseSavedScreenState extends State<CourseSavedScreen> {
   int _filter = 0;
 
+  /// 저장 시각 표기 — 목업의 savedAgo 문자열을 실데이터로 대체.
+  String _savedAgo(DateTime createdAt) {
+    final diff = DateTime.now().difference(createdAt);
+    if (diff.inMinutes < 1) return '방금 저장';
+    if (diff.inHours < 1) return '${diff.inMinutes}분 전 저장';
+    if (diff.inDays < 1) return '${diff.inHours}시간 전 저장';
+    return '${diff.inDays}일 전 저장';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final s = AppState.I;
+    final controller = AppScope.of(context);
+    // 원본은 실스토어(기기 영속) — 새로고침해도 남는 목록. 목업 코스는 안 섞는다.
+    final savedList = controller.savedCourses;
     // 칩 순서는 지역 마스터 순서로 고정 — 코스 저장 순서에 따라 튀지 않게.
-    final regions = s.regions
+    final regions = AppState.I.regions
         .map((r) => r.name)
-        .where((name) => s.courses.any((c) => c.region == name))
+        .where((name) => savedList.any((c) => c.regionName == name))
         .toList();
-    final labels = ['전체 ${s.courses.length}', for (final r in regions) '$r ${s.courses.where((c) => c.region == r).length}'];
+    for (final c in savedList) {
+      if (!regions.contains(c.regionName)) regions.add(c.regionName);
+    }
+    final labels = [
+      '전체 ${savedList.length}',
+      for (final r in regions)
+        '$r ${savedList.where((c) => c.regionName == r).length}'
+    ];
     final list = _filter == 0
-        ? s.courses
-        : s.courses.where((c) => c.region == regions[_filter - 1]).toList();
+        ? savedList
+        : savedList.where((c) => c.regionName == regions[_filter - 1]).toList();
 
     return DetailScaffold(
       title: '저장 코스함',
@@ -1431,13 +1632,56 @@ class _CourseSavedScreenState extends State<CourseSavedScreen> {
       ],
       children: [
         CatChips(labels: labels, selected: _filter, onChanged: (i) => setState(() => _filter = i)),
-        for (final c in list)
-          AppCard(
+        if (savedList.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(color: AppColors.surf, borderRadius: BorderRadius.circular(18)),
+            child: const Text('저장한 코스가 없어요. 우측 상단 +로 코스를 만들어보세요.',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink5, height: 1.5)),
+          ),
+        for (final saved in list)
+          _savedCourseCard(context, controller, saved),
+      ],
+    );
+  }
+
+  Widget _savedCourseCard(
+      BuildContext context, dynamic controller, SavedCourse saved) {
+    final c = courseFromSaved(saved, savedAgo: _savedAgo(saved.createdAt));
+    return _SavedCourseCardBody(
+      course: c,
+      onTap: () => Navigator.of(context)
+          .push(MaterialPageRoute(
+              builder: (_) => CourseViewScreen(
+                    course: c,
+                    onEdited: () => controller.saveCourse(SavedCourse(
+                      id: saved.id,
+                      regionId: saved.regionId,
+                      regionName: saved.regionName,
+                      title: c.title,
+                      preferences: saved.preferences,
+                      stops: savedStopsFromCourse(c.stops),
+                      createdAt: saved.createdAt,
+                    )),
+                  )))
+          .then((_) => setState(() {})),
+    );
+  }
+}
+
+class _SavedCourseCardBody extends StatelessWidget {
+  const _SavedCourseCardBody({required this.course, required this.onTap});
+  final Course course;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = course;
+    return AppCard(
             radius: 22,
             padding: const EdgeInsets.all(18),
-            onTap: () => Navigator.of(context)
-                .push(MaterialPageRoute(builder: (_) => CourseViewScreen(course: c)))
-                .then((_) => setState(() {})),
+            onTap: onTap,
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
                 EmojiBox(c.emoji, size: 46, fontSize: 23),
@@ -1494,9 +1738,7 @@ class _CourseSavedScreenState extends State<CourseSavedScreen> {
                 const Icon(Icons.chevron_right_rounded, size: 17, color: AppColors.p600),
               ]),
             ]),
-          ),
-      ],
-    );
+          );
   }
 }
 
