@@ -30,6 +30,15 @@ class ApiTravelRepository implements TravelRepository {
     _authToken = null;
   }
 
+  /// 세션 영속화용 — 현재 토큰 조회. (secure storage 저장은 AppController 책임)
+  String? get authToken => _authToken;
+
+  /// 앱 재시작 시 secure storage에 보관해둔 토큰을 다시 채운다.
+  /// 유효성은 이어지는 getUser 호출이 검증한다(만료면 401).
+  void adoptToken(String token) {
+    _authToken = token;
+  }
+
   Map<String, String> _headers({bool json = true}) {
     return {
       if (json) 'Content-Type': 'application/json',
