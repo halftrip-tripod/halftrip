@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -23,6 +25,20 @@ android {
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.tourism.travelmvp.travel_support_mvp"
+        // Google Maps 키 — android/local.properties(GOOGLE_MAP_API_KEY=...)에서 읽음. 커밋 금지 영역.
+        val localProperties = Properties()
+        rootProject.file("local.properties").let { f ->
+            if (f.exists()) f.inputStream().use { localProperties.load(it) }
+        }
+        manifestPlaceholders["GOOGLE_MAP_API_KEY"] =
+            localProperties.getProperty("GOOGLE_MAP_API_KEY") ?: ""
+        // 소셜 로그인 키 — local.properties에서 읽음(커밋 금지). 미설정이면 빈 값(앱에서 안내만 노출).
+        manifestPlaceholders["KAKAO_NATIVE_APP_KEY"] =
+            localProperties.getProperty("KAKAO_NATIVE_APP_KEY") ?: ""
+        manifestPlaceholders["NAVER_CLIENT_ID"] =
+            localProperties.getProperty("NAVER_CLIENT_ID") ?: ""
+        manifestPlaceholders["NAVER_CLIENT_SECRET"] =
+            localProperties.getProperty("NAVER_CLIENT_SECRET") ?: ""
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -31,11 +47,37 @@ android {
         versionName = flutter.versionName
     }
 
+    // 릴리즈 서명 키 — android/key.properties(커밋 금지)에서 읽는다. 파일이 없으면
+    // 디버그 키로 폴백해 로컬 `flutter run --release`가 계속 되게 한다(스토어 업로드는 불가).
+    val keystoreProperties = Properties()
+    val keystorePropertiesFile = rootProject.file("key.properties")
+    val hasReleaseKeystore = keystorePropertiesFile.exists()
+    if (hasReleaseKeystore) {
+        keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+    }
+
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }

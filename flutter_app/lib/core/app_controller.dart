@@ -5,10 +5,14 @@ import 'package:firebase_messaging/firebase_messaging.dart'
     hide NotificationSettings;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/app_models.dart';
+import '../repositories/mock_travel_repository.dart';
+import '../repositories/api_travel_repository.dart';
 import '../repositories/travel_repository.dart';
+import '../mock_ui/state/app_state.dart' as mock;
 import '../screens/youtube_course_analysis_screen.dart';
 
 class AppController extends ChangeNotifier {
@@ -19,18 +23,25 @@ class AppController extends ChangeNotifier {
   bool isBusy = false;
   String? errorMessage;
   AppUser? currentUser;
+  // 소셜 신규 가입 직후 거주지 입력 온보딩이 필요한지 여부.
+  bool needsResidenceSetup = false;
   List<TripSummary> trips = const [];
   List<SavedCourse> savedCourses = const [];
   Map<int, String> selectedCourseIdsByTrip = const <int, String>{};
   List<PendingYoutubeCourseJob> pendingYoutubeCourseJobs = const [];
-  Set<int> preopenAlertRegionIds = const <int>{};
   Set<int> appliedTripIds = const <int>{};
 
   static const _savedCoursesKey = 'saved_courses_v1';
   static const _selectedCoursesKey = 'selected_course_ids_by_trip_v1';
   static const _pendingYoutubeJobsKey = 'pending_youtube_jobs_v1';
-  static const _preopenAlertsKey = 'preopen_alert_regions_v1';
   static const _appliedTripsKey = 'applied_trip_ids_v1';
+
+  // 로그인 세션 영속화 — 토큰은 일반 SharedPreferences가 아니라 secure storage에.
+  // (Android Keystore 암호화 / iOS Keychain. 웹은 브라우저 저장소 기반)
+  static const _sessionTokenKey = 'session_auth_token_v1';
+  static const _sessionUserIdKey = 'session_user_id_v1';
+  static const _sessionProviderKey = 'session_provider_v1';
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
 
   final navigatorKey = GlobalKey<NavigatorState>();
   final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
@@ -79,6 +90,96 @@ class AppController extends ChangeNotifier {
     await _syncFcmToken();
   }
 
+  /// 로그인 성공 직후 세션(토큰·userId)을 secure storage에 남긴다.
+  /// 저장 실패는 삼킨다 — 이번 세션 로그인 자체는 유효하므로.
+  Future<void> _persistSession({String provider = 'LOCAL'}) async {
+    final repo = _repository;
+    final user = currentUser;
+    if (repo is! ApiTravelRepository || user == null) return;
+    final token = repo.authToken;
+    if (token == null || token.isEmpty) return;
+    try {
+      await _secureStorage.write(key: _sessionTokenKey, value: token);
+      await _secureStorage.write(key: _sessionUserIdKey, value: '${user.id}');
+      await _secureStorage.write(key: _sessionProviderKey, value: provider);
+      debugPrint('[세션] 저장 완료 userId=${user.id}');
+    } catch (error) {
+      debugPrint('[세션] 저장 실패: $error');
+    }
+  }
+
+  /// 저장된 세션 파기 — 로그아웃·탈퇴·토큰 만료 시.
+  Future<void> clearPersistedSession() async {
+    try {
+      await _secureStorage.delete(key: _sessionTokenKey);
+      await _secureStorage.delete(key: _sessionUserIdKey);
+      await _secureStorage.delete(key: _sessionProviderKey);
+    } catch (_) {}
+  }
+
+  /// 앱 부팅 시 저장된 세션으로 자동 로그인. 성공하면 true.
+  ///
+  /// 토큰 유효성은 getUser 호출이 검증한다 — 401/403(만료·위조)이면 세션을
+  /// 지우고, 네트워크 오류면 남겨둬서 다음 부팅에 다시 시도한다.
+  Future<bool> restoreSession() async {
+    final repo = _repository;
+    if (repo is! ApiTravelRepository) return false;
+    String? token;
+    String? userIdRaw;
+    try {
+      token = await _secureStorage.read(key: _sessionTokenKey);
+      userIdRaw = await _secureStorage.read(key: _sessionUserIdKey);
+    } catch (error) {
+      debugPrint('[세션] 저장소 읽기 실패: $error');
+      return false;
+    }
+    final userId = int.tryParse(userIdRaw ?? '');
+    if (token == null || token.isEmpty || userId == null) {
+      debugPrint('[세션] 저장된 세션 없음');
+      return false;
+    }
+    repo.adoptToken(token);
+    try {
+      currentUser = await repo.getUser(userId);
+      trips = await repo.getTrips(userId);
+      await _loadLocalDashboardData();
+      await _syncFcmToken();
+      await _attachCommunityIfServer();
+      // 소셜 가입 도중(거주지 입력 전) 종료된 계정은 온보딩부터 이어간다.
+      needsResidenceSetup = currentUser!.residence.trim().isEmpty;
+      notifyListeners();
+      debugPrint('[세션] 복원 성공 userId=$userId');
+      return true;
+    } catch (error) {
+      repo.clearSession();
+      currentUser = null;
+      debugPrint('[세션] 복원 실패: $error');
+      final message = error.toString();
+      if (message.contains('401') || message.contains('403')) {
+        await clearPersistedSession();
+      }
+      return false;
+    }
+  }
+
+  /// 실 소셜 로그인 — SDK 액세스 토큰을 서버로 검증. 거주지 필요 여부는 서버 응답을 따른다.
+  Future<void> loginWithSocial(LoginProvider provider, String accessToken) async {
+    await _runBusy(() async {
+      final result = await _repository.socialLogin(
+        provider: provider,
+        accessToken: accessToken,
+      );
+      currentUser = result.user;
+      // 저장은 로그인 확정 즉시 — 뒤 단계(FCM·커뮤 연결)가 실패해도 세션은 남게.
+      await _persistSession(provider: provider.name.toUpperCase());
+      trips = await _repository.getTrips(result.user.id);
+      await _loadLocalDashboardData();
+      await _syncFcmToken();
+      await _attachCommunityIfServer();
+      needsResidenceSetup = result.needsResidence;
+    });
+  }
+
   Future<void> login(LoginProvider provider) async {
     await _runBusy(() async {
       final authUser = await _repository.mockLogin(provider);
@@ -86,7 +187,90 @@ class AppController extends ChangeNotifier {
       trips = await _repository.getTrips(authUser.id);
       await _loadLocalDashboardData();
       await _syncFcmToken();
+      await _persistSession(provider: provider.name.toUpperCase());
+      await _attachCommunityIfServer();
+      // 소셜 가입은 거주지 입력 온보딩을 거치도록 한다.
+      needsResidenceSetup = true;
     });
+  }
+
+  /// 실서버 모드면 커뮤니티 화면(AppState)의 데이터 소스를 서버로 전환한다.
+  Future<void> _attachCommunityIfServer() async {
+    final user = currentUser;
+    if (user == null || _repository is! ApiTravelRepository) {
+      return;
+    }
+    await mock.AppState.I.attachCommunityServer(_repository, user.id);
+  }
+
+  /// 거주지 온보딩 완료 — 현재 사용자 거주지를 갱신하고 메인으로 진입한다.
+  void completeResidenceSetup(String residence) {
+    currentUser = currentUser?.copyWith(residence: residence);
+    needsResidenceSetup = false;
+    notifyListeners();
+  }
+
+  /// 거주지 변경 — 마이페이지에서 온보딩 완료 후 거주지만 갱신한다.
+  /// (온보딩 진입 플래그를 건드리지 않아 completeResidenceSetup과 구분된다.)
+  Future<void> updateResidence(String residence) async {
+    final user = currentUser;
+    if (user == null) return;
+    // 낙관 갱신 후 서버 동기화 — 거주지 API(핸드오프 K) 배포 전에는 실패해도 로컬 유지.
+    currentUser = user.copyWith(residence: residence);
+    notifyListeners();
+    try {
+      final updated = await repository.updateResidence(user.id, residence);
+      currentUser = currentUser?.copyWith(residence: updated.residence);
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  /// 프로필 편집 — 닉네임·아바타 프리셋 변경. 낙관 갱신 + 서버 동기화(핸드오프 K).
+  Future<void> updateProfile({String? nickname, String? avatarPreset}) async {
+    final user = currentUser;
+    if (user == null) return;
+    final trimmed = nickname?.trim();
+    final effectiveNickname =
+        (trimmed != null && trimmed.isNotEmpty) ? trimmed : null;
+    currentUser = user.copyWith(
+      nickname: effectiveNickname,
+      avatarPreset: avatarPreset,
+    );
+    notifyListeners();
+    try {
+      await repository.updateProfile(
+        user.id,
+        nickname: effectiveNickname,
+        avatarPreset: avatarPreset,
+      );
+    } catch (_) {}
+  }
+
+  /// 로그아웃 — 세션 상태를 비우고 로그인 화면으로 되돌린다.
+  /// 회원 탈퇴 — 서버 계정 삭제 후 기기 저장 데이터(코스·커뮤 글 등)까지 파기.
+  /// 백엔드 DELETE 미배포 상태면 실패를 그대로 던진다(화면에서 안내).
+  Future<void> deleteAccount() async {
+    final user = currentUser;
+    if (user == null) return;
+    await repository.deleteAccount(user.id);
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.clear();
+    await clearPersistedSession();
+    savedCourses = const [];
+    selectedCourseIdsByTrip = const <int, String>{};
+    pendingYoutubeCourseJobs = const [];
+    logout();
+  }
+
+  void logout() {
+    mock.AppState.I.detachCommunityServer();
+    _repository.clearSession();
+    // 기기에 남긴 세션도 함께 파기 (완료를 기다릴 필요는 없음).
+    unawaited(clearPersistedSession());
+    currentUser = null;
+    trips = const [];
+    needsResidenceSetup = false;
+    notifyListeners();
   }
 
   Future<void> loginWithCredentials({
@@ -99,28 +283,27 @@ class AppController extends ChangeNotifier {
         password: password,
       );
       currentUser = await _repository.getUser(authUser.id);
+      await _persistSession();
       trips = await _repository.getTrips(authUser.id);
       await _loadLocalDashboardData();
       await _syncFcmToken();
+      await _attachCommunityIfServer();
     });
   }
 
   Future<void> signUpWithCredentials({
-    required String name,
     required String loginId,
     required String password,
-    required String phoneNumber,
     required String residence,
   }) async {
     await _runBusy(() async {
       final authUser = await _repository.localSignUp(
-        name: name,
         loginId: loginId,
         password: password,
-        phoneNumber: phoneNumber,
         residence: residence,
       );
       currentUser = await _repository.getUser(authUser.id);
+      await _persistSession();
       trips = await _repository.getTrips(authUser.id);
       await _loadLocalDashboardData();
       await _syncFcmToken();
@@ -135,6 +318,21 @@ class AppController extends ChangeNotifier {
     await _runBusy(() async {
       trips = await _repository.getTrips(user.id);
     }, resetError: false);
+    await _pruneStaleCourseSelections();
+  }
+
+  /// 존재하지 않는 여행을 가리키는 확정 코스 매핑 제거.
+  /// mock 여행 id가 재사용될 때 이전 세션의 로컬 저장 매핑이 새 여행에 붙는 것을 막는다.
+  Future<void> _pruneStaleCourseSelections() async {
+    final validIds = trips.map((t) => t.id).toSet();
+    final pruned = {
+      for (final entry in selectedCourseIdsByTrip.entries)
+        if (validIds.contains(entry.key)) entry.key: entry.value,
+    };
+    if (pruned.length == selectedCourseIdsByTrip.length) return;
+    selectedCourseIdsByTrip = pruned;
+    await _persistLocalDashboardData();
+    notifyListeners();
   }
 
   Future<AppUser> refreshCurrentUser() async {
@@ -179,17 +377,42 @@ class AppController extends ChangeNotifier {
     }, resetError: false);
   }
 
-  Future<void> togglePreopenAlertRegion(int regionId) async {
-    final next = {...preopenAlertRegionIds};
-    if (next.contains(regionId)) {
-      next.remove(regionId);
-    } else {
-      next.add(regionId);
-    }
-    preopenAlertRegionIds = next;
-    await _persistLocalDashboardData();
-    notifyListeners();
-  }
+  List<SavedCourse> _demoSavedCourses() => [
+        SavedCourse(
+          id: 'demo_gangjin_course',
+          regionId: 2,
+          regionName: '강진',
+          title: '강진 미식 1박2일 코스',
+          preferences: const ['맛집', '자연', '문화'],
+          stops: const [
+            SavedCourseStop(
+              placeId: 2,
+              name: '강진만 생태공원',
+              address: '전라남도 강진군 강진만길 20',
+              latitude: 34.575,
+              longitude: 126.78,
+              sourceType: 'PLACE',
+            ),
+            SavedCourseStop(
+              placeId: 3,
+              name: '가우도 출렁다리',
+              address: '전라남도 강진군 대구면 저두리',
+              latitude: 34.6,
+              longitude: 126.81,
+              sourceType: 'PLACE',
+            ),
+            SavedCourseStop(
+              placeId: 4,
+              name: '다산초당',
+              address: '전라남도 강진군 도암면 만덕리',
+              latitude: 34.58,
+              longitude: 126.74,
+              sourceType: 'PLACE',
+            ),
+          ],
+          createdAt: DateTime(2026, 7, 6),
+        ),
+      ];
 
   Future<void> saveCourse(SavedCourse course) async {
     final next = [...savedCourses];
@@ -279,6 +502,23 @@ class AppController extends ChangeNotifier {
     final next = {...selectedCourseIdsByTrip};
     next[tripId] = courseId;
     selectedCourseIdsByTrip = next;
+    await _persistLocalDashboardData();
+    notifyListeners();
+  }
+
+  /// 여행의 확정 코스 등록을 취소한다 (코스 자체는 코스함에 남는다).
+  Future<void> unselectCourseForTrip(int tripId) async {
+    final next = {...selectedCourseIdsByTrip}..remove(tripId);
+    selectedCourseIdsByTrip = next;
+    await _persistLocalDashboardData();
+    notifyListeners();
+  }
+
+  /// 코스함에서 코스를 삭제한다. 이 코스를 확정 코스로 쓰던 여행의 연결도 함께 해제.
+  Future<void> deleteSavedCourse(String courseId) async {
+    savedCourses = [...savedCourses]..removeWhere((item) => item.id == courseId);
+    selectedCourseIdsByTrip = {...selectedCourseIdsByTrip}
+      ..removeWhere((_, id) => id == courseId);
     await _persistLocalDashboardData();
     notifyListeners();
   }
@@ -438,6 +678,11 @@ class AppController extends ChangeNotifier {
     savedCourses = rawCourses
         .map((item) => SavedCourse.fromJson(jsonDecode(item) as Map<String, dynamic>))
         .toList();
+    // mock 모드 데모: 저장 코스가 비어 있으면 시연용 코스를 채워
+    // 홈 저장 코스 카드가 목업과 동일한 상태로 시작하게 한다.
+    if (savedCourses.isEmpty && _repository is MockTravelRepository) {
+      savedCourses = _demoSavedCourses();
+    }
     final rawSelectedCourseIds = preferences.getString(_selectedCoursesKey);
     if (rawSelectedCourseIds == null || rawSelectedCourseIds.isEmpty) {
       selectedCourseIdsByTrip = const <int, String>{};
@@ -455,10 +700,6 @@ class AppController extends ChangeNotifier {
           ),
         )
         .toList();
-    preopenAlertRegionIds = (preferences.getStringList(_preopenAlertsKey) ?? const [])
-        .map(int.tryParse)
-        .whereType<int>()
-        .toSet();
     appliedTripIds = (preferences.getStringList(_appliedTripsKey) ?? const [])
         .map(int.tryParse)
         .whereType<int>()
@@ -482,10 +723,6 @@ class AppController extends ChangeNotifier {
     await preferences.setStringList(
       _pendingYoutubeJobsKey,
       pendingYoutubeCourseJobs.map((item) => jsonEncode(item.toJson())).toList(),
-    );
-    await preferences.setStringList(
-      _preopenAlertsKey,
-      preopenAlertRegionIds.map((item) => item.toString()).toList(),
     );
     await preferences.setStringList(
       _appliedTripsKey,
@@ -528,6 +765,22 @@ class AppController extends ChangeNotifier {
           action: SnackBarAction(
             label: '보기',
             onPressed: () => _openYoutubeJob(jobId),
+          ),
+        ),
+      );
+      return;
+    }
+    // 커뮤니티·리마인더 등 일반 푸시 — 안드로이드는 포그라운드에서 시스템 알림을
+    // 자동 표시하지 않으므로 앱 사용 중에는 스낵바로 대신 보여준다.
+    final title = message.notification?.title;
+    if (title != null && title.isNotEmpty) {
+      final body = message.notification?.body;
+      scaffoldMessengerKey.currentState?.showSnackBar(
+        SnackBar(
+          content: Text(
+            body == null || body.isEmpty ? title : '$title\n$body',
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       );

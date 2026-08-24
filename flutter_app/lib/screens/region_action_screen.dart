@@ -4,13 +4,15 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/app_scope.dart';
 import '../data/region_guides.dart';
 import '../models/app_models.dart';
-import '../widgets/app_shell.dart';
+import '../theme/app_colors.dart';
+import '../widgets/ui/app_card.dart';
+import '../widgets/ui/pill.dart';
 
+/// 지역 상세 (S1-2, 신청 판단 허브) — 디자인: halftrip-design/region-detail.html
+/// 히어로 + 환급 조건 요약 + 정산 규칙 아코디언 + 디민증·지역화폐 + 하단 CTA.
+/// 오픈예정 지역은 신청 대신 오픈 알림 CTA (관심·알림 API 연동).
 class RegionActionScreen extends StatefulWidget {
-  const RegionActionScreen({
-    super.key,
-    required this.region,
-  });
+  const RegionActionScreen({super.key, required this.region});
 
   final RegionSummary region;
 
@@ -19,27 +21,24 @@ class RegionActionScreen extends StatefulWidget {
 }
 
 class _RegionActionScreenState extends State<RegionActionScreen> {
-  Future<void> _toggleBenefitAlert() async {
+  final Set<int> _openSections = {0};
+
+  bool get _isPreparing =>
+      widget.region.statusCode.toUpperCase() == 'PREPARING';
+
+  Future<void> _toggleOpenAlert() async {
     final controller = AppScope.of(context);
-    final wasEnabled =
-        controller.preopenAlertRegionIds.contains(widget.region.id);
-
-    await controller.togglePreopenAlertRegion(widget.region.id);
-
-    if (!mounted) {
-      return;
-    }
-
+    final wasEnabled = controller.currentUser?.favoriteRegions
+            .any((item) => item.id == widget.region.id) ??
+        false;
+    await controller.toggleFavoriteRegion(widget.region);
+    if (!mounted) return;
     setState(() {});
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          wasEnabled
-              ? '알림을 해제했습니다.'
-              : '혜택 오픈 시 알림을 보내드립니다!',
-        ),
-      ),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(wasEnabled
+          ? '${widget.region.name} 오픈 알림을 해제했어요.'
+          : '${widget.region.name} 접수가 열리면 바로 알려드릴게요!'),
+    ));
   }
 
   Future<void> _openApplyLink() async {
@@ -50,474 +49,531 @@ class _RegionActionScreenState extends State<RegionActionScreen> {
       );
       return;
     }
-
     await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
   }
 
-  Future<void> _showComingSoon() async {
-    if (!mounted) {
+  Future<void> _openDigitalCardLink() async {
+    final url = widget.region.digitalTourCardApplyUrl.trim();
+    if (url.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('발급 페이지 연결을 준비 중이에요.')),
+      );
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('준비중입니다.')),
-    );
+    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
   }
 
   @override
   Widget build(BuildContext context) {
     final controller = AppScope.of(context);
-    final alertEnabled =
-        controller.preopenAlertRegionIds.contains(widget.region.id);
-    final guide = settlementGuideFor(widget.region.name);
-    final summaryRows = _buildSummaryRows(widget.region, guide);
+    final region = widget.region;
+    final guide = settlementGuideFor(region.name);
+    final guideText = _joinGuideBullets(guide);
+    final isFavorite = controller.currentUser?.favoriteRegions
+            .any((item) => item.id == region.id) ??
+        false;
+    final alertEnabled = isFavorite;
 
-    return AppShell(
-      title: '지역 상세',
-      modeName: controller.modeName,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      appBar: AppBar(title: Text(region.name)),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
         children: [
-          _RegionHeroCard(
-            region: widget.region,
-            alertEnabled: alertEnabled,
-            onToggleAlert: _toggleBenefitAlert,
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: _openApplyLink,
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF16A34A),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
-              ),
-              child: const Text(
-                '반값여행 신청하러 가기',
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 16,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 22),
-          _DetailSectionTitle(
-            title: '환급 조건',
-            subtitle: guide.summary,
-          ),
-          const SizedBox(height: 12),
-          _RuleTable(rows: summaryRows),
-          if (widget.region.digitalBenefitAvailable) ...[
-            const SizedBox(height: 22),
-            const _DetailSectionTitle(
-              title: '디지털 관광주민증 혜택',
-              subtitle: '혜택 적용 가능 (중복 혜택)',
-            ),
-            const SizedBox(height: 10),
-            _DigitalBenefitCard(
-              regionName: widget.region.name,
-              onPressed: _showComingSoon,
-            ),
-          ],
-          const SizedBox(height: 22),
-          const _DetailSectionTitle(
-            title: '지역화폐 앱 안내',
-            subtitle: '지역화폐 앱으로 결제 및 사용 내역을 관리할 수 있어요.',
-          ),
-          const SizedBox(height: 10),
-          _LocalCurrencyCard(
-            regionName: widget.region.name,
-            appName: _localCurrencyAppName(widget.region.name),
-            description: _localCurrencyDescription(widget.region.name),
-            onPressed: _showComingSoon,
-          ),
-          const SizedBox(height: 22),
-          SectionCard(
-            title: '상세 정산 규칙',
-            subtitle: '실제 신청 전에 아래 항목을 꼭 확인해 주세요.',
+          // HERO
+          AppCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _GuideHeader(deadline: guide.deadline),
-                const SizedBox(height: 16),
-                for (final section in guide.sections) ...[
-                  _GuideSection(section: section),
-                  const SizedBox(height: 14),
-                ],
-                if (guide.note != null && guide.note!.trim().isNotEmpty)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF7ED),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color(0xFFFED7AA)),
+                Row(
+                  children: [
+                    Container(
+                      width: 64,
+                      height: 64,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.p50,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(_regionEmoji(region.name),
+                          style: const TextStyle(fontSize: 34)),
                     ),
-                    child: Text(
-                      guide.note!,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: const Color(0xFF9A3412),
-                            fontWeight: FontWeight.w600,
-                            height: 1.55,
+                    const SizedBox(width: 14),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          region.name,
+                          style: const TextStyle(
+                            fontFamily: 'Pretendard',
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.ink9,
+                            letterSpacing: -1,
                           ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          region.province,
+                          style: const TextStyle(
+                            fontFamily: 'Pretendard',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.ink4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Pill(
+                      region.statusLabel,
+                      tone: switch (region.statusCode.toUpperCase()) {
+                        'APPLYING' => PillTone.sky,
+                        'CLOSED' => PillTone.gray,
+                        _ => PillTone.gold,
+                      },
+                    ),
+                    if (region.digitalBenefitAvailable) ...[
+                      const SizedBox(width: 8),
+                      const Pill('디민증 중복혜택', tone: PillTone.mint),
+                    ],
+                    const Spacer(),
+                    _BudgetChip(remaining: region.mockBudgetRemaining.clamp(0, 100)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          // 오픈 전 안내 — 조건은 공고 기준으로 미리 공개
+          if (_isPreparing) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.p50,
+                borderRadius: BorderRadius.circular(AppRadius.field),
+              ),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.campaign_outlined, size: 20, color: AppColors.p600),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '아직 접수 전이에요. 아래 조건은 지자체 사업 공고 기준 — 미리 확인하고 오픈되면 바로 신청하세요.',
+                      style: TextStyle(
+                        fontFamily: 'Pretendard',
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.ink5,
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          // 환급 조건 요약
+          _DCard(
+            title: '환급 조건 요약',
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                decoration: BoxDecoration(
+                  color: AppColors.p50,
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '50%',
+                      style: TextStyle(
+                        fontFamily: 'Pretendard',
+                        fontSize: 25,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.p600,
+                        letterSpacing: -1.2,
+                        height: 1,
+                      ),
+                    ),
+                    SizedBox(width: 9),
+                    Text(
+                      '여행경비 환급',
+                      style: TextStyle(
+                        fontFamily: 'Pretendard',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.ink7,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _Kv('결제 수단', _paymentSummary(region.name, guideText)),
+              _Kv('인증 조건', _proofSummary(region.name, guideText)),
+              _Kv('최소 소비', _minSpendSummary(region.name, guideText)),
+              _Kv('1인 최대 환급', '${_formatWon(region.refundConditionAmount)}원'),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // 상세 정산 규칙 (아코디언)
+          _DCard(
+            title: '상세 정산 규칙',
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+                decoration: BoxDecoration(
+                  color: AppColors.p50,
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: AppShadows.soft,
+                      ),
+                      child: const Icon(Icons.schedule_rounded,
+                          size: 19, color: AppColors.p600),
+                    ),
+                    const SizedBox(width: 11),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '정산 신청 기한',
+                            style: TextStyle(
+                              fontFamily: 'Pretendard',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.p600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            guide.deadline,
+                            style: const TextStyle(
+                              fontFamily: 'Pretendard',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.ink9,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              for (var i = 0; i < guide.sections.length; i++)
+                _accordion(i, guide.sections[i]),
+              if (guide.note != null && guide.note!.trim().isNotEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF6E9),
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Text(
+                    guide.note!,
+                    style: const TextStyle(
+                      fontFamily: 'Pretendard',
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF9A6800),
+                      height: 1.55,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          // 디민증
+          if (region.digitalBenefitAvailable) ...[
+            const SizedBox(height: 16),
+            _DCard(
+              title: '디지털 관광주민증 혜택',
+              children: [
+                const Text(
+                  '반값여행 + 디민증 중복 혜택 가능',
+                  style: TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.mintDeep,
+                  ),
+                ),
+                Text(
+                  '${region.name} 관광주민증 제시 시 일부 가맹점에서 추가 할인 혜택을 받을 수 있어요.',
+                  style: const TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.ink5,
+                    height: 1.45,
+                  ),
+                ),
+                _OutlineAction(
+                  icon: Icons.badge_outlined,
+                  trailing: Icons.open_in_new_rounded,
+                  label: '관광주민증 발급받으러 가기',
+                  onTap: _openDigitalCardLink,
+                ),
+              ],
+            ),
+          ],
+          // 지역화폐
+          const SizedBox(height: 16),
+          _DCard(
+            title: '지역화폐 앱 안내',
+            children: [
+              Text(
+                _localCurrencyAppName(region.name),
+                style: const TextStyle(
+                  fontFamily: 'Pretendard',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.ink9,
+                ),
+              ),
+              Text(
+                _localCurrencyDescription(region.name),
+                style: const TextStyle(
+                  fontFamily: 'Pretendard',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.ink5,
+                  height: 1.45,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      // 하단 CTA — 접수중: 별표+신청 / 오픈예정: 오픈 알림
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(20, 12, 20, 26),
+        child: _isPreparing
+            ? FilledButton.icon(
+                onPressed: _toggleOpenAlert,
+                icon: Icon(
+                  alertEnabled
+                      ? Icons.notifications_active_rounded
+                      : Icons.notifications_none_rounded,
+                  size: 19,
+                ),
+                label: Text(alertEnabled ? '오픈 알림 신청됨 ✓' : '오픈 알림 받기'),
+              )
+            : Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => controller.toggleFavoriteRegion(region),
+                    child: Container(
+                      width: 54,
+                      height: 54,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: AppShadows.soft,
+                      ),
+                      child: Icon(
+                        isFavorite
+                            ? Icons.star_rounded
+                            : Icons.star_outline_rounded,
+                        size: 24,
+                        color:
+                            isFavorite ? AppColors.warning : AppColors.ink5,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: _openApplyLink,
+                      child: const Text('신청하러 가기'),
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _accordion(int index, RegionRuleSection section) {
+    final open = _openSections.contains(index);
+    return Column(
+      children: [
+        if (index > 0) const Divider(height: 1, color: AppColors.line),
+        InkWell(
+          onTap: () => setState(
+              () => open ? _openSections.remove(index) : _openSections.add(index)),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            child: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: AppColors.p50,
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Icon(_sectionIcon(section.title),
+                      size: 18, color: AppColors.p600),
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Text(
+                    section.title,
+                    style: const TextStyle(
+                      fontFamily: 'Pretendard',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.ink9,
+                    ),
+                  ),
+                ),
+                AnimatedRotation(
+                  turns: open ? 0.25 : 0,
+                  duration: const Duration(milliseconds: 180),
+                  child: const Icon(Icons.chevron_right_rounded,
+                      color: AppColors.ink4),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (open)
+          Padding(
+            padding: const EdgeInsets.only(left: 45, bottom: 14, right: 2),
+            child: Column(
+              children: [
+                for (final bullet in section.bullets)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 5,
+                          height: 5,
+                          margin: const EdgeInsets.only(top: 7),
+                          decoration: const BoxDecoration(
+                              color: AppColors.p400, shape: BoxShape.circle),
+                        ),
+                        const SizedBox(width: 9),
+                        Expanded(
+                          child: Text(
+                            bullet,
+                            style: const TextStyle(
+                              fontFamily: 'Pretendard',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.ink7,
+                              height: 1.5,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  List<_RuleRowData> _buildSummaryRows(
-    RegionSummary region,
-    RegionSettlementGuide guide,
-  ) {
-    final guideText = _joinGuideBullets(guide);
-    return [
-      _RuleRowData(
-        label: '결제 수단',
-        value: _paymentSummary(region.name, guideText),
-      ),
-      _RuleRowData(
-        label: '인증 조건',
-        value: _proofSummary(region.name, guideText),
-      ),
-      _RuleRowData(
-        label: '최소 소비금액',
-        value: _minSpendSummary(region.name, guideText),
-      ),
-      const _RuleRowData(
-        label: '환급 비율',
-        value: '50%',
-        valueColor: Color(0xFF16A34A),
-      ),
-      _RuleRowData(
-        label: '1인 최대 환급액',
-        value: '${_formatWon(region.refundConditionAmount)}원',
-      ),
-    ];
-  }
-}
-
-class _RegionHeroCard extends StatelessWidget {
-  const _RegionHeroCard({
-    required this.region,
-    required this.alertEnabled,
-    required this.onToggleAlert,
-  });
-
-  final RegionSummary region;
-  final bool alertEnabled;
-  final VoidCallback onToggleAlert;
-
-  @override
-  Widget build(BuildContext context) {
-    final assetPath = _regionHeroAsset(region.name);
-    final remaining = region.mockBudgetRemaining.clamp(0, 100);
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(28),
-      child: AspectRatio(
-        aspectRatio: 1.16,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (assetPath != null)
-              Image.asset(
-                assetPath,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _HeroFallback(region: region),
-              )
-            else
-              _HeroFallback(region: region),
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0x1A000000),
-                    Color(0x33000000),
-                    Color(0xB8000000),
-                  ],
-                ),
-              ),
-            ),
-            Positioned(
-              top: 14,
-              right: 14,
-              child: Material(
-                color: Colors.black.withValues(alpha: 0.26),
-                borderRadius: BorderRadius.circular(999),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(999),
-                  onTap: onToggleAlert,
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Icon(
-                      alertEnabled
-                          ? Icons.notifications_active_rounded
-                          : Icons.notifications_none_rounded,
-                      color: alertEnabled
-                          ? const Color(0xFFFFE082)
-                          : Colors.white,
-                      size: 24,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 18,
-              right: 18,
-              bottom: 18,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    region.province,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.92),
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    region.name,
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                        ),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      _OverlayBadge(
-                        label: _statusLabel(region.statusCode),
-                        backgroundColor: _statusBackground(region.statusCode),
-                        foregroundColor: _statusForeground(region.statusCode),
-                      ),
-                      const SizedBox(width: 8),
-                      _OverlayBadge(
-                        label: '잔여 예산 $remaining%',
-                        backgroundColor: Colors.black.withValues(alpha: 0.34),
-                        foregroundColor: Colors.white,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HeroFallback extends StatelessWidget {
-  const _HeroFallback({required this.region});
-
-  final RegionSummary region;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFB9E3FF), Color(0xFF5EA8F5)],
-        ),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            right: 18,
-            top: 18,
-            child: Text(
-              _regionEmoji(region.name),
-              style: const TextStyle(fontSize: 56),
-            ),
-          ),
-          Positioned(
-            left: 18,
-            bottom: 22,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Text(
-                '배경 사진 파일을 넣으면\n자동으로 지역 카드에 적용됩니다.',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  height: 1.35,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _OverlayBadge extends StatelessWidget {
-  const _OverlayBadge({
-    required this.label,
-    required this.backgroundColor,
-    required this.foregroundColor,
-  });
-
-  final String label;
-  final Color backgroundColor;
-  final Color foregroundColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: foregroundColor,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-}
-
-class _DetailSectionTitle extends StatelessWidget {
-  const _DetailSectionTitle({
-    required this.title,
-    required this.subtitle,
-  });
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w900,
-                color: const Color(0xFF0F172A),
-              ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          subtitle,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: const Color(0xFF64748B),
-                height: 1.45,
-              ),
-        ),
       ],
     );
   }
 }
 
-class _RuleTable extends StatelessWidget {
-  const _RuleTable({required this.rows});
+IconData _sectionIcon(String title) {
+  if (title.contains('인증') || title.contains('사진')) {
+    return Icons.photo_camera_outlined;
+  }
+  if (title.contains('결제') || title.contains('경비') || title.contains('소비')) {
+    return Icons.credit_card_rounded;
+  }
+  if (title.contains('숙박')) return Icons.bed_outlined;
+  return Icons.description_outlined;
+}
 
-  final List<_RuleRowData> rows;
+/// 지역상세 카드 (제목 + 컨텐츠, 13px 간격).
+class _DCard extends StatelessWidget {
+  const _DCard({required this.title, required this.children});
+  final String title;
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0D0F172A),
-            blurRadius: 16,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
+    return AppCard(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (var i = 0; i < rows.length; i++)
-            _RuleTableRow(
-              row: rows[i],
-              isLast: i == rows.length - 1,
+          Text(
+            title,
+            style: const TextStyle(
+              fontFamily: 'Pretendard',
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+              color: AppColors.ink9,
+              letterSpacing: -0.3,
             ),
+          ),
+          for (final child in children) ...[const SizedBox(height: 13), child],
         ],
       ),
     );
   }
 }
 
-class _RuleTableRow extends StatelessWidget {
-  const _RuleTableRow({
-    required this.row,
-    required this.isLast,
-  });
-
-  final _RuleRowData row;
-  final bool isLast;
+class _Kv extends StatelessWidget {
+  const _Kv(this.k, this.v);
+  final String k;
+  final String v;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        border: isLast
-            ? null
-            : const Border(
-                bottom: BorderSide(color: Color(0xFFE5E7EB)),
-              ),
+      padding: const EdgeInsets.only(top: 12),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: AppColors.line)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 118,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-            decoration: const BoxDecoration(
-              color: Color(0xFFFAFBFC),
-              border: Border(
-                right: BorderSide(color: Color(0xFFE5E7EB)),
-              ),
-            ),
+          SizedBox(
+            width: 88,
             child: Text(
-              row.label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF475569),
-                    fontWeight: FontWeight.w700,
-                  ),
+              k,
+              style: const TextStyle(
+                fontFamily: 'Pretendard',
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.ink5,
+              ),
             ),
           ),
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-              child: Text(
-                row.value,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: row.valueColor ?? const Color(0xFF0F172A),
-                      fontWeight: row.valueColor != null
-                          ? FontWeight.w900
-                          : FontWeight.w700,
-                      height: 1.4,
-                    ),
+            child: Text(
+              v,
+              style: const TextStyle(
+                fontFamily: 'Pretendard',
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AppColors.ink9,
+                height: 1.4,
               ),
             ),
           ),
@@ -527,370 +583,90 @@ class _RuleTableRow extends StatelessWidget {
   }
 }
 
-class _DigitalBenefitCard extends StatelessWidget {
-  const _DigitalBenefitCard({
-    required this.regionName,
-    required this.onPressed,
-  });
-
-  final String regionName;
-  final VoidCallback onPressed;
+class _BudgetChip extends StatelessWidget {
+  const _BudgetChip({required this.remaining});
+  final int remaining;
 
   @override
   Widget build(BuildContext context) {
+    final urgent = remaining < 35;
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0D0F172A),
-            blurRadius: 16,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '혜택 적용 가능 (중복 혜택)',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: const Color(0xFF16A34A),
-                  fontWeight: FontWeight.w900,
-                ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '$regionName 관광주민증 제시 시 일부 가맹점 할인 혜택',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF64748B),
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
-          const SizedBox(height: 14),
-          OutlinedButton(
-            onPressed: onPressed,
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(48),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-            child: const Text(
-              '관광주민증 발급받으러 가기',
-              style: TextStyle(fontWeight: FontWeight.w800),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LocalCurrencyCard extends StatelessWidget {
-  const _LocalCurrencyCard({
-    required this.regionName,
-    required this.appName,
-    required this.description,
-    required this.onPressed,
-  });
-
-  final String regionName;
-  final String appName;
-  final String description;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0D0F172A),
-            blurRadius: 16,
-            offset: Offset(0, 8),
-          ),
-        ],
+        color: urgent ? const Color(0xFFFEECEC) : AppColors.p100,
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '지역화폐 앱 안내',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        color: const Color(0xFF0F172A),
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  description,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xFF64748B),
-                      ),
-                ),
-                const SizedBox(height: 14),
-                OutlinedButton(
-                  onPressed: onPressed,
-                  style: OutlinedButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: const Text(
-                    '앱 바로가기',
-                    style: TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                ),
-              ],
-            ),
+          Icon(
+            urgent ? Icons.local_fire_department_rounded : Icons.savings_outlined,
+            size: 14,
+            color: urgent ? AppColors.danger : AppColors.p700,
           ),
-          const SizedBox(width: 12),
-          _LocalCurrencyVisual(
-            regionName: regionName,
-            appName: appName,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LocalCurrencyVisual extends StatelessWidget {
-  const _LocalCurrencyVisual({
-    required this.regionName,
-    required this.appName,
-  });
-
-  final String regionName;
-  final String appName;
-
-  @override
-  Widget build(BuildContext context) {
-    if (regionName == '영암') {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: Image.asset(
-          'assets/localmoney/youngam.jpg',
-          width: 102,
-          height: 112,
-          fit: BoxFit.cover,
-        ),
-      );
-    }
-
-    return Container(
-      width: 102,
-      height: 112,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFF1F8FF), Color(0xFFDCEEFF)],
-        ),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Positioned(
-            top: 14,
-            child: Icon(
-              Icons.phone_android_rounded,
-              size: 38,
-              color: const Color(0xFF2563EB).withValues(alpha: 0.9),
-            ),
-          ),
-          Positioned(
-            left: 10,
-            right: 10,
-            bottom: 18,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 10,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Text(
-                appName,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Color(0xFF1E3A8A),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  height: 1.2,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _GuideHeader extends StatelessWidget {
-  const _GuideHeader({required this.deadline});
-
-  final String deadline;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEEF4FF),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFD7E5FF)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: const Color(0xFF2563EB).withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(
-              Icons.schedule_rounded,
-              color: Color(0xFF2563EB),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '신청 기한',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: const Color(0xFF2563EB),
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  deadline,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: const Color(0xFF0F172A),
-                        fontWeight: FontWeight.w900,
-                      ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _GuideSection extends StatelessWidget {
-  const _GuideSection({required this.section});
-
-  final RegionRuleSection section;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+          const SizedBox(width: 5),
           Text(
-            section.title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                ),
-          ),
-          const SizedBox(height: 12),
-          for (final bullet in section.bullets)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 6,
-                    height: 6,
-                    margin: const EdgeInsets.only(top: 8),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF2563EB),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      bullet,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: const Color(0xFF334155),
-                            height: 1.55,
-                          ),
-                    ),
-                  ),
-                ],
-              ),
+            '잔여 예산 $remaining%',
+            style: TextStyle(
+              fontFamily: 'Pretendard',
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: urgent ? AppColors.danger : AppColors.p700,
             ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _RuleRowData {
-  const _RuleRowData({
+class _OutlineAction extends StatelessWidget {
+  const _OutlineAction({
+    required this.icon,
     required this.label,
-    required this.value,
-    this.valueColor,
+    required this.onTap,
+    this.trailing,
   });
 
+  final IconData icon;
   final String label;
-  final String value;
-  final Color? valueColor;
+  final IconData? trailing;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        decoration: BoxDecoration(
+          color: AppColors.surf,
+          borderRadius: BorderRadius.circular(AppRadius.chip),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 16, color: AppColors.p600),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: const TextStyle(
+                fontFamily: 'Pretendard',
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: AppColors.ink7,
+              ),
+            ),
+            if (trailing != null) ...[
+              const SizedBox(width: 6),
+              Icon(trailing, size: 15, color: AppColors.ink4),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
-
-String _statusLabel(String statusCode) => switch (statusCode.toUpperCase()) {
-      'APPLYING' => '접수중',
-      'CLOSED' => '1차 마감',
-      _ => '오픈예정',
-    };
-
-Color _statusBackground(String statusCode) => switch (statusCode.toUpperCase()) {
-      'APPLYING' => const Color(0xFFE8FFF1),
-      'CLOSED' => const Color(0xFFF3F4F6),
-      _ => const Color(0xFFEAF1FF),
-    };
-
-Color _statusForeground(String statusCode) => switch (statusCode.toUpperCase()) {
-      'APPLYING' => const Color(0xFF16A34A),
-      'CLOSED' => const Color(0xFF6B7280),
-      _ => const Color(0xFF2563EB),
-    };
 
 String _formatWon(int amount) {
   final digits = amount.toString();
@@ -904,46 +680,6 @@ String _formatWon(int amount) {
   }
   return buffer.toString();
 }
-
-String _regionEmoji(String regionName) => switch (regionName) {
-      '평창' => '🏔️',
-      '횡성' => '🥩',
-      '영월' => '⛪',
-      '제천' => '🌊',
-      '거창' => '🌉',
-      '고창' => '🪨',
-      '합천' => '🍁',
-      '영광' => '🌅',
-      '밀양' => '🏯',
-      '영암' => '🧗',
-      '하동' => '🍵',
-      '강진' => '🪵',
-      '남해' => '🌉',
-      '해남' => '🌊',
-      '고흥' => '🌺',
-      '완도' => '🏝️',
-      _ => '🧳',
-    };
-
-String? _regionHeroAsset(String regionName) => switch (regionName) {
-      '평창' => 'assets/region_hero/pyeongchang.jpg',
-      '횡성' => 'assets/region_hero/hoengseong.jpg',
-      '영월' => 'assets/region_hero/yeongwol.jpg',
-      '제천' => 'assets/region_hero/jecheon.jpg',
-      '거창' => 'assets/region_hero/geochang.jpg',
-      '고창' => 'assets/region_hero/gochang.jpg',
-      '합천' => 'assets/region_hero/hapcheon.jpg',
-      '영광' => 'assets/region_hero/yeonggwang.jpg',
-      '밀양' => 'assets/region_hero/miryang.jpg',
-      '영암' => 'assets/region_hero/yeongam.jpg',
-      '하동' => 'assets/region_hero/hadong.jpg',
-      '강진' => 'assets/region_hero/gangjin.jpg',
-      '남해' => 'assets/region_hero/namhae.jpg',
-      '해남' => 'assets/region_hero/haenam.jpg',
-      '고흥' => 'assets/region_hero/goheung.jpg',
-      '완도' => 'assets/region_hero/wando.jpg',
-      _ => null,
-    };
 
 String _joinGuideBullets(RegionSettlementGuide guide) =>
     guide.sections.expand((section) => section.bullets).join(' ');
@@ -981,10 +717,7 @@ String _minSpendSummary(String regionName, String guideText) {
   if (guideText.contains('최소 소비액(여행경비) 5만원')) {
     return '50,000원 이상';
   }
-  if (guideText.contains('10만 원') || guideText.contains('10만원')) {
-    return '100,000원 이상';
-  }
-  return '조건 확인 필요';
+  return '지역 공고 기준 확인';
 }
 
 String _localCurrencyAppName(String regionName) => switch (regionName) {
@@ -1000,10 +733,10 @@ String _localCurrencyAppName(String regionName) => switch (regionName) {
       '영암' => '월출페이',
       '하동' => '하동반값여행 상품권',
       '강진' => '강진사랑상품권 Chak',
-      '남해' => '비플페이 반반남해',
-      '해남' => '해남사랑상품권 Chak',
-      '고흥' => '고흥사랑상품권 Chak',
-      '완도' => '완도 지역화폐 안내',
+      '남해' => '남해사랑상품권',
+      '해남' => '해남사랑상품권',
+      '고흥' => '고흥사랑상품권',
+      '완도' => '완도사랑상품권',
       _ => '지역화폐 앱',
     };
 
@@ -1020,9 +753,27 @@ String _localCurrencyDescription(String regionName) => switch (regionName) {
       '영암' => '월출페이 이용내역 상세 화면으로 정산에 활용해요.',
       '하동' => '하동반값여행 상품권 제로페이 전자영수증이 필요해요.',
       '강진' => '강진사랑상품권 Chak 거래내역을 확인할 수 있어요.',
-      '남해' => '비플페이 반반남해 상품권 거래내역을 확인해 주세요.',
-      '해남' => '카드, 현금영수증, CHAK 거래내역을 함께 준비해 주세요.',
-      '고흥' => '고흥사랑상품권 Chak 거래내역이 정산 기준입니다.',
-      '완도' => '완도 지역화폐와 카드 결제 영수증 기준을 확인해 보세요.',
-      _ => '지역별 정산에 필요한 지역화폐 앱 안내입니다.',
+      _ => '지역화폐 거래내역을 정산 증빙으로 활용할 수 있어요.',
     };
+
+String _regionEmoji(String regionName) {
+  const map = <String, String>{
+    '평창': '🏔️',
+    '횡성': '🥩',
+    '영월': '🌊',
+    '제천': '⛰️',
+    '거창': '🌿',
+    '고창': '🏛️',
+    '합천': '🌄',
+    '영광': '🐟',
+    '밀양': '🏞️',
+    '영암': '🏎️',
+    '하동': '🍃',
+    '강진': '🍲',
+    '남해': '🌴',
+    '해남': '🌾',
+    '고흥': '🚀',
+    '완도': '🏝️',
+  };
+  return map[regionName] ?? '📍';
+}

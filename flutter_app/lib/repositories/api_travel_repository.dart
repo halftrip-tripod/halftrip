@@ -16,8 +16,43 @@ class ApiTravelRepository implements TravelRepository {
 
   final AppConfig config;
 
+  /// 로그인 응답으로 받은 인증 토큰.
+  ///
+  /// 이게 없으면 서버는 `?userId=` 만 보고 요청을 처리할 수밖에 없어 번호만 바꾸면
+  /// 남의 자원이 열린다. 앱을 다시 켜면 로그인부터 다시 하므로 메모리에만 들고 있는다.
+  String? _authToken;
+
   @override
   String get modeName => 'API Mode';
+
+  @override
+  void clearSession() {
+    _authToken = null;
+  }
+
+  /// 세션 영속화용 — 현재 토큰 조회. (secure storage 저장은 AppController 책임)
+  String? get authToken => _authToken;
+
+  /// 앱 재시작 시 secure storage에 보관해둔 토큰을 다시 채운다.
+  /// 유효성은 이어지는 getUser 호출이 검증한다(만료면 401).
+  void adoptToken(String token) {
+    _authToken = token;
+  }
+
+  Map<String, String> _headers({bool json = true}) {
+    return {
+      if (json) 'Content-Type': 'application/json',
+      if (_authToken != null) 'Authorization': 'Bearer $_authToken',
+    };
+  }
+
+  /// 로그인·회원가입 응답에서 토큰을 꺼내 보관한다. 이후 모든 요청에 실려 나간다.
+  void _rememberToken(Map<String, dynamic> data) {
+    final token = data['token'] as String?;
+    if (token != null && token.isNotEmpty) {
+      _authToken = token;
+    }
+  }
 
   Uri _uri(String path, [Map<String, dynamic>? query]) {
     final base = Uri.parse(config.apiBaseUrl);
@@ -37,7 +72,7 @@ class ApiTravelRepository implements TravelRepository {
     Map<String, dynamic>? body,
     Map<String, dynamic>? query,
   }) async {
-    final headers = {'Content-Type': 'application/json'};
+    final headers = _headers();
     late http.Response response;
     final uri = _uri(path, query);
     switch (method) {
@@ -53,6 +88,13 @@ class ApiTravelRepository implements TravelRepository {
         break;
       case 'PUT':
         response = await http.put(
+          uri,
+          headers: headers,
+          body: jsonEncode(body ?? const {}),
+        );
+        break;
+      case 'PATCH':
+        response = await http.patch(
           uri,
           headers: headers,
           body: jsonEncode(body ?? const {}),
@@ -84,7 +126,7 @@ class ApiTravelRepository implements TravelRepository {
     String fileName, {
     Map<String, dynamic>? query,
   }) async {
-    final response = await http.get(_uri(path, query));
+    final response = await http.get(_uri(path, query), headers: _headers(json: false));
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('다운로드 실패: ${response.body}');
     }
@@ -122,6 +164,29 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<SocialLoginResult> socialLogin({
+    required LoginProvider provider,
+    required String accessToken,
+  }) async {
+    final response = await _jsonRequest(
+      'POST',
+      '/auth/social-login',
+      body: {
+        'provider': provider.wireName,
+        'accessToken': accessToken,
+      },
+    );
+    final data = response['data'] as Map<String, dynamic>;
+    _rememberToken(data);
+    final user = await getUser(data['userId'] as int);
+    return SocialLoginResult(
+      user: user,
+      newUser: data['newUser'] as bool? ?? false,
+      needsResidence: data['needsResidence'] as bool? ?? false,
+    );
+  }
+
+  @override
   Future<AppUser> mockLogin(LoginProvider provider) async {
     final response = await _jsonRequest(
       'POST',
@@ -135,6 +200,7 @@ class ApiTravelRepository implements TravelRepository {
       },
     );
     final data = response['data'] as Map<String, dynamic>;
+    _rememberToken(data);
     return getUser(data['userId'] as int);
   }
 
@@ -152,35 +218,65 @@ class ApiTravelRepository implements TravelRepository {
       },
     );
     final data = response['data'] as Map<String, dynamic>;
+    _rememberToken(data);
     return getUser(data['userId'] as int);
   }
 
   @override
   Future<AppUser> localSignUp({
-    required String name,
     required String loginId,
     required String password,
-    required String phoneNumber,
     required String residence,
   }) async {
     final response = await _jsonRequest(
       'POST',
       '/auth/signup',
       body: {
-        'name': name,
         'loginId': loginId,
         'password': password,
-        'phoneNumber': phoneNumber,
         'residence': residence,
       },
     );
     final data = response['data'] as Map<String, dynamic>;
+    _rememberToken(data);
     return getUser(data['userId'] as int);
   }
 
   @override
   Future<AppUser> getUser(int userId) async {
     final response = await _jsonRequest('GET', '/users/$userId');
+    return AppUser.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<void> deleteAccount(int userId) async {
+    await _jsonRequest('DELETE', '/users/$userId');
+  }
+
+  @override
+  Future<AppUser> updateResidence(int userId, String residence) async {
+    final response = await _jsonRequest(
+      'PATCH',
+      '/users/$userId/residence',
+      body: {'residence': residence},
+    );
+    return AppUser.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<AppUser> updateProfile(
+    int userId, {
+    String? nickname,
+    String? avatarPreset,
+  }) async {
+    final response = await _jsonRequest(
+      'PATCH',
+      '/users/$userId/profile',
+      body: {
+        if (nickname != null) 'nickname': nickname,
+        if (avatarPreset != null) 'avatarPreset': avatarPreset,
+      },
+    );
     return AppUser.fromJson(response['data'] as Map<String, dynamic>);
   }
 
@@ -313,7 +409,7 @@ class ApiTravelRepository implements TravelRepository {
   @override
   Future<CreateYoutubeCourseJobResponse> createYoutubeCourseJob({
     required int userId,
-    required int tripId,
+    int? tripId,
     required int regionId,
     required String youtubeUrl,
   }) async {
@@ -322,7 +418,7 @@ class ApiTravelRepository implements TravelRepository {
       '/youtube-course-jobs',
       body: {
         'userId': userId,
-        'tripId': tripId,
+        if (tripId != null) 'tripId': tripId,
         'regionId': regionId,
         'youtubeUrl': youtubeUrl,
       },
@@ -338,6 +434,30 @@ class ApiTravelRepository implements TravelRepository {
     return YoutubeCourseJobItem.fromJson(
       response['data'] as Map<String, dynamic>,
     );
+  }
+
+  @override
+  Future<GooglePlaceDetailItem?> searchGooglePlaceDetail({
+    required String placeName,
+    required String address,
+    required double latitude,
+    required double longitude,
+  }) async {
+    final response = await _jsonRequest(
+      'POST',
+      '/google-places/search',
+      body: {
+        'placeName': placeName,
+        'address': address,
+        'latitude': latitude,
+        'longitude': longitude,
+      },
+    );
+    final data = response['data'];
+    if (data is! Map<String, dynamic>) {
+      return null;
+    }
+    return GooglePlaceDetailItem.fromJson(data);
   }
 
   @override
@@ -406,6 +526,7 @@ class ApiTravelRepository implements TravelRepository {
       'POST',
       _uri('/trips/$tripId/uploaded-files', {'category': category.wireName}),
     );
+    request.headers.addAll(_headers(json: false));
     request.files.add(
       http.MultipartFile.fromBytes(
         'file',
@@ -426,10 +547,12 @@ class ApiTravelRepository implements TravelRepository {
   Future<AuthPhotoReviewResult> analyzeAuthPhoto({
     required int tripId,
     required int uploadedFileId,
+    int? placeId,
   }) async {
     final response = await _jsonRequest(
       'POST',
       '/trips/$tripId/auth-photos/analyze/$uploadedFileId',
+      query: placeId == null ? null : {'placeId': placeId},
       body: const {},
     );
     return AuthPhotoReviewResult.fromJson(
@@ -552,11 +675,25 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
+  String? getLodgingFormRenderedPdfUrl(int tripId) {
+    return _uri('/integrations/lodging-form/$tripId/pdf').toString();
+  }
+
+  @override
   Future<String> downloadLodgingFormPdf(int tripId) {
     return _downloadToDocuments(
       '/integrations/lodging-form/$tripId/pdf',
       'trip-$tripId-lodging-form.pdf',
     );
+  }
+
+  @override
+  Future<Uint8List> fetchLodgingFormPdfBytes(int tripId) async {
+    final response = await http.get(_uri('/integrations/lodging-form/$tripId/pdf'));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('숙박확인서 PDF 불러오기 실패: ${response.body}');
+    }
+    return response.bodyBytes;
   }
 
   @override
@@ -569,11 +706,18 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
-  Future<void> applySettlement(int tripId) async {
+  Future<void> applySettlement(
+    int tripId, {
+    String? applicantName,
+    String? phoneNumber,
+  }) async {
     await _jsonRequest(
       'POST',
       '/trips/$tripId/settlement-apply',
-      body: const {},
+      body: {
+        if (applicantName != null) 'applicantName': applicantName,
+        if (phoneNumber != null) 'phoneNumber': phoneNumber,
+      },
     );
   }
 
@@ -618,9 +762,232 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
-  Future<String> downloadMergedPdf(int tripId, List<int> uploadedFileIds) {
+  Future<String> downloadMergedPdf(
+    int tripId,
+    List<int> uploadedFileIds, {
+    String? fileName,
+  }) {
     final uri = _uri('/integrations/pdf/merge/$tripId')
         .replace(query: uploadedFileIds.map((id) => 'uploadedFileIds=$id').join('&'));
-    return _downloadFromUri(uri, 'trip-$tripId-documents.pdf');
+    return _downloadFromUri(uri, fileName ?? 'trip-$tripId-documents.pdf');
+  }
+
+  // ── 커뮤니티 ──
+
+  @override
+  Future<List<CommunityPostData>> getCommunityFeed({int? userId}) async {
+    final response = await _jsonRequest('GET', '/community/posts',
+        query: userId == null ? null : {'userId': userId});
+    return ((response['data'] as List<dynamic>?) ?? const [])
+        .map((e) => CommunityPostData.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<CommunityPostData> createCommunityPost({
+    required int userId,
+    required String type,
+    String? regionName,
+    String? title,
+    required String body,
+    List<String> photos = const [],
+    String? courseName,
+    String? courseMeta,
+    List<SavedCourseStop> courseStops = const [],
+    int? tripId,
+    required String visibility,
+  }) async {
+    final response = await _jsonRequest('POST', '/community/posts', body: {
+      'userId': userId,
+      'type': type,
+      if (regionName != null) 'regionName': regionName,
+      if (title != null) 'title': title,
+      'body': body,
+      'photos': photos,
+      if (courseName != null) 'courseName': courseName,
+      if (courseMeta != null) 'courseMeta': courseMeta,
+      if (courseStops.isNotEmpty)
+        'courseStops': courseStops.map((s) => s.toJson()).toList(),
+      if (tripId != null) 'tripId': tripId,
+      'visibility': visibility,
+    });
+    return CommunityPostData.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<void> toggleCommunityLike(int postId, int userId) async {
+    await _jsonRequest('POST', '/community/posts/$postId/like',
+        query: {'userId': userId}, body: const {});
+  }
+
+  @override
+  Future<void> toggleCommunityBookmark(int postId, int userId) async {
+    await _jsonRequest('POST', '/community/posts/$postId/bookmark',
+        query: {'userId': userId}, body: const {});
+  }
+
+  @override
+  Future<void> updateCommunityVisibility(
+      int postId, int userId, String visibility) async {
+    await _jsonRequest('PATCH', '/community/posts/$postId',
+        body: {'userId': userId, 'visibility': visibility});
+  }
+
+  @override
+  Future<CommunityPostData> updateCommunityPost({
+    required int postId,
+    required int userId,
+    String? type,
+    String? regionName,
+    String? title,
+    String? body,
+    List<String>? photos,
+    String? courseName,
+    String? courseMeta,
+    List<SavedCourseStop>? courseStops,
+    bool clearCourse = false,
+    String? visibility,
+  }) async {
+    final response = await _jsonRequest('PATCH', '/community/posts/$postId', body: {
+      'userId': userId,
+      if (type != null) 'type': type,
+      if (regionName != null) 'regionName': regionName,
+      if (title != null) 'title': title,
+      if (body != null) 'body': body,
+      if (photos != null) 'photos': photos,
+      if (courseName != null) 'courseName': courseName,
+      if (courseMeta != null) 'courseMeta': courseMeta,
+      if (courseStops != null && courseStops.isNotEmpty)
+        'courseStops': courseStops.map((s) => s.toJson()).toList(),
+      if (clearCourse) 'clearCourse': true,
+      if (visibility != null) 'visibility': visibility,
+    });
+    return CommunityPostData.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<void> deleteCommunityPost(int postId, int userId) async {
+    await _jsonRequest('DELETE', '/community/posts/$postId',
+        query: {'userId': userId});
+  }
+
+  @override
+  Future<List<CommunityCommentData>> getCommunityComments(int postId,
+      {int? userId}) async {
+    final response = await _jsonRequest('GET', '/community/posts/$postId/comments',
+        query: userId == null ? null : {'userId': userId});
+    return ((response['data'] as List<dynamic>?) ?? const [])
+        .map((e) => CommunityCommentData.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<CommunityCommentData> addCommunityComment(
+      int postId, int userId, String body,
+      {int? parentId, int? mentionUserId}) async {
+    final response = await _jsonRequest('POST', '/community/posts/$postId/comments',
+        body: {
+          'userId': userId,
+          'body': body,
+          if (parentId != null) 'parentId': parentId,
+          if (mentionUserId != null) 'mentionUserId': mentionUserId,
+        });
+    return CommunityCommentData.fromJson(
+        response['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<void> toggleCommunityCommentLike(int commentId, int userId) async {
+    await _jsonRequest('POST', '/community/comments/$commentId/like',
+        query: {'userId': userId}, body: const {});
+  }
+
+  @override
+  Future<void> deleteCommunityComment(int commentId, int userId) async {
+    await _jsonRequest('DELETE', '/community/comments/$commentId',
+        query: {'userId': userId});
+  }
+
+  @override
+  Future<void> reportCommunity({
+    required int userId,
+    required String targetType,
+    required int targetId,
+    String? reason,
+  }) async {
+    await _jsonRequest('POST', '/community/reports', body: {
+      'userId': userId,
+      'targetType': targetType,
+      'targetId': targetId,
+      if (reason != null) 'reason': reason,
+    });
+  }
+
+  @override
+  Future<CommunityMyPosts> getMyCommunityPosts(int userId) async {
+    final response = await _jsonRequest('GET', '/community/users/$userId/posts');
+    return CommunityMyPosts.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<List<CommunityPostData>> getMyCommunityBookmarks(int userId) async {
+    final response =
+        await _jsonRequest('GET', '/community/users/$userId/bookmarks');
+    return ((response['data'] as List<dynamic>?) ?? const [])
+        .map((e) => CommunityPostData.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<List<ChecklistItem>> getTripChecklist(int tripId) async {
+    final response = await _jsonRequest('GET', '/trips/$tripId/checklist');
+    return _parseChecklist(response['data']);
+  }
+
+  /// 서버 응답은 `{tripId, doneCount, total, items:[...]}` 래핑 — items만 꺼낸다.
+  List<ChecklistItem> _parseChecklist(dynamic data) {
+    final items = data is Map<String, dynamic>
+        ? (data['items'] as List<dynamic>? ?? const [])
+        : (data as List<dynamic>? ?? const []);
+    return items
+        .map((item) => ChecklistItem.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<List<ChecklistItem>> updateTripChecklist(
+    int tripId,
+    List<ChecklistItem> items,
+  ) async {
+    final response = await _jsonRequest(
+      'PUT',
+      '/trips/$tripId/checklist',
+      body: {'items': items.map((item) => item.toJson()).toList()},
+    );
+    return _parseChecklist(response['data']);
+  }
+
+  @override
+  Future<List<AppNotification>> getNotifications(int userId) async {
+    // 쿼리는 query 파라미터로 — 경로에 ?를 넣으면 _uri()가 %3F로 인코딩해 CORS preflight가 깨진다.
+    final response = await _jsonRequest(
+      'GET',
+      '/notifications',
+      query: {'userId': userId},
+    );
+    final items = response['data'] as List<dynamic>? ?? [];
+    return items
+        .map((item) => AppNotification.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<void> markAllNotificationsRead(int userId) async {
+    await _jsonRequest(
+      'POST',
+      '/notifications/read-all',
+      query: {'userId': userId},
+      body: const {},
+    );
   }
 }

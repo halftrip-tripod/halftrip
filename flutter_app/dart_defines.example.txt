@@ -2,5 +2,15 @@ API_BASE_URL=https://halftrip-springboot.onrender.com/api
 FASTAPI_BASE_URL=https://halftrip-fastapi.onrender.com
 USE_MOCK_LOGIN=true
 USE_MOCK_API=false
-MAP_PROVIDER=kakao
+# 지도: kakao | google | mock. 구글 전환 결정(2026-07-14) — 키 값은 단톡 공유, 커밋 금지.
+MAP_PROVIDER=google
 KAKAO_MAP_APP_KEY=
+GOOGLE_MAP_API_KEY=
+# Android 네이티브 지도는 android/local.properties에 GOOGLE_MAP_API_KEY=... 한 줄 추가 필요
+# 소셜 로그인 (2026-08-05, 키는 하민 개발자 계정 발급 후 단톡 공유 — 커밋 금지)
+# USE_MOCK_LOGIN=false일 때 동작. dart-define 2개 + android/local.properties 3줄 필요:
+#   KAKAO_NATIVE_APP_KEY= (dart-define + local.properties 양쪽)
+#   KAKAO_JAVASCRIPT_KEY= (dart-define, 웹 데모용 — 카카오 콘솔에 도메인 등록 필요)
+#   local.properties: NAVER_CLIENT_ID= / NAVER_CLIENT_SECRET=
+KAKAO_NATIVE_APP_KEY=
+KAKAO_JAVASCRIPT_KEY=

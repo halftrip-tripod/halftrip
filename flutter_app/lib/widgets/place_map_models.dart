@@ -13,6 +13,16 @@ class PlaceMapMarkerData {
     this.roadAddress,
     this.categoryName,
     this.placeUrl,
+    this.websiteUri,
+    this.internationalPhoneNumber,
+    this.rating,
+    this.userRatingCount,
+    this.businessStatus,
+    this.priceLevel,
+    this.types = const [],
+    this.openingHours = const [],
+    this.editorialSummary,
+    this.googlePlaceDetails = const {},
   });
 
   final int id;
@@ -28,6 +38,16 @@ class PlaceMapMarkerData {
   final String? roadAddress;
   final String? categoryName;
   final String? placeUrl;
+  final String? websiteUri;
+  final String? internationalPhoneNumber;
+  final double? rating;
+  final int? userRatingCount;
+  final String? businessStatus;
+  final String? priceLevel;
+  final List<String> types;
+  final List<String> openingHours;
+  final String? editorialSummary;
+  final Map<String, dynamic> googlePlaceDetails;
 }
 
 class PlaceMapRoutePoint {

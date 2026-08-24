@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 
 import '../models/app_models.dart';
+import '../utils/profile_presets.dart';
 import 'travel_repository.dart';
 
 class MockTravelRepository implements TravelRepository {
@@ -14,6 +15,20 @@ class MockTravelRepository implements TravelRepository {
 
   @override
   String get modeName => 'Mock Mode';
+
+  @override
+  void clearSession() {
+    // mock 모드는 서버 토큰을 들고 있지 않아 버릴 것이 없다.
+  }
+
+  @override
+  Future<SocialLoginResult> socialLogin({
+    required LoginProvider provider,
+    required String accessToken,
+  }) async {
+    final user = await mockLogin(provider);
+    return SocialLoginResult(user: user, newUser: false, needsResidence: false);
+  }
 
   late AppUser _user;
   String _localLoginId = 'sample';
@@ -26,6 +41,7 @@ class MockTravelRepository implements TravelRepository {
   final Map<int, LodgingInfo> _tripLodging = {};
   final Map<int, List<int>> _uploadedFileBytesById = {};
   final Map<String, YoutubeCourseJobItem> _youtubeJobs = {};
+  late List<AppNotification> _notifications = _seedNotifications();
   int _nextTripId = 10;
   int _nextTripPlaceId = 100;
   int _nextUploadedFileId = 1000;
@@ -54,146 +70,226 @@ class MockTravelRepository implements TravelRepository {
         PlaceItem(
           id: 1001,
           name: '완도해양치유센터',
-          address: '상세주소 확인 예정',
+          address: '전라남도 완도군 완도읍 장보고대로 335',
           description: '완도반값여행 대상 관광지. TODO: Kakao Places API로 주소/좌표 검증 후 저장.',
-          latitude: null,
-          longitude: null,
+          latitude: 34.3100,
+          longitude: 126.7470,
           eligibleForRefund: true,
+          openingHours: null,
+          admissionFee: null,
+          phone: null,
+          paymentMethods: [],
+          digitalDiscountText: null,
         ),
         PlaceItem(
           id: 1002,
           name: '완도타워',
-          address: '상세주소 확인 예정',
+          address: '전라남도 완도군 완도읍 장보고대로 330',
           description: '완도반값여행 대상 관광지. TODO: Kakao Places API로 주소/좌표 검증 후 저장.',
-          latitude: null,
-          longitude: null,
+          latitude: 34.3240,
+          longitude: 126.7400,
           eligibleForRefund: true,
+          openingHours: null,
+          admissionFee: null,
+          phone: null,
+          paymentMethods: [],
+          digitalDiscountText: null,
         ),
         PlaceItem(
           id: 1003,
           name: '완도청해진유적지',
-          address: '상세주소 확인 예정',
+          address: '전라남도 완도군 완도읍 청해진로 1455',
           description: '완도반값여행 대상 관광지. TODO: Kakao Places API로 주소/좌표 검증 후 저장.',
-          latitude: null,
-          longitude: null,
+          latitude: 34.3380,
+          longitude: 126.7180,
           eligibleForRefund: true,
+          openingHours: null,
+          admissionFee: null,
+          phone: null,
+          paymentMethods: [],
+          digitalDiscountText: null,
         ),
         PlaceItem(
           id: 1004,
           name: '국립완도난대수목원',
-          address: '상세주소 확인 예정',
+          address: '전라남도 완도군 군외면 초평1길 156',
           description: '완도반값여행 대상 관광지. TODO: Kakao Places API로 주소/좌표 검증 후 저장.',
-          latitude: null,
-          longitude: null,
+          latitude: 34.3520,
+          longitude: 126.7080,
           eligibleForRefund: true,
+          openingHours: null,
+          admissionFee: null,
+          phone: null,
+          paymentMethods: [],
+          digitalDiscountText: null,
         ),
         PlaceItem(
           id: 1005,
           name: '보길도 윤선도 원림',
-          address: '상세주소 확인 예정',
+          address: '전라남도 완도군 보길면 부황길 57',
           description: '완도반값여행 대상 관광지. TODO: Kakao Places API로 주소/좌표 검증 후 저장.',
-          latitude: null,
-          longitude: null,
+          latitude: 34.3680,
+          longitude: 126.7000,
           eligibleForRefund: true,
+          openingHours: null,
+          admissionFee: null,
+          phone: null,
+          paymentMethods: [],
+          digitalDiscountText: null,
         ),
         PlaceItem(
           id: 1006,
           name: '슬로시티 청산도',
           address: '상세주소 확인 예정',
           description: '완도반값여행 대상 관광지. TODO: Kakao Places API로 주소/좌표 검증 후 저장.',
-          latitude: null,
-          longitude: null,
+          latitude: 34.1836,
+          longitude: 126.8664,
           eligibleForRefund: true,
+          openingHours: null,
+          admissionFee: null,
+          phone: null,
+          paymentMethods: [],
+          digitalDiscountText: null,
         ),
         PlaceItem(
           id: 1007,
           name: '청해포구 촬영장',
           address: '상세주소 확인 예정',
           description: '완도반값여행 대상 관광지. TODO: Kakao Places API로 주소/좌표 검증 후 저장.',
-          latitude: null,
-          longitude: null,
+          latitude: 34.3595,
+          longitude: 126.7261,
           eligibleForRefund: true,
+          openingHours: null,
+          admissionFee: null,
+          phone: null,
+          paymentMethods: [],
+          digitalDiscountText: null,
         ),
         PlaceItem(
           id: 1008,
           name: '신지명사십리 해수욕장',
           address: '상세주소 확인 예정',
           description: '완도반값여행 대상 관광지. TODO: Kakao Places API로 주소/좌표 검증 후 저장.',
-          latitude: null,
-          longitude: null,
+          latitude: 34.3341,
+          longitude: 126.8014,
           eligibleForRefund: true,
+          openingHours: null,
+          admissionFee: null,
+          phone: null,
+          paymentMethods: [],
+          digitalDiscountText: null,
         ),
         PlaceItem(
           id: 1009,
           name: '금당 8경',
           address: '상세주소 확인 예정',
           description: '완도반값여행 대상 관광지. TODO: Kakao Places API로 주소/좌표 검증 후 저장.',
-          latitude: null,
-          longitude: null,
+          latitude: 34.46,
+          longitude: 127.09,
           eligibleForRefund: true,
+          openingHours: null,
+          admissionFee: null,
+          phone: null,
+          paymentMethods: [],
+          digitalDiscountText: null,
         ),
         PlaceItem(
           id: 1010,
           name: '어촌민속전시관',
           address: '상세주소 확인 예정',
           description: '완도반값여행 대상 관광지. TODO: Kakao Places API로 주소/좌표 검증 후 저장.',
-          latitude: null,
-          longitude: null,
+          latitude: 34.326,
+          longitude: 126.755,
           eligibleForRefund: true,
+          openingHours: null,
+          admissionFee: null,
+          phone: null,
+          paymentMethods: [],
+          digitalDiscountText: null,
         ),
         PlaceItem(
           id: 1011,
           name: '해양생태전시관',
           address: '상세주소 확인 예정',
           description: '완도반값여행 대상 관광지. TODO: Kakao Places API로 주소/좌표 검증 후 저장.',
-          latitude: null,
-          longitude: null,
+          latitude: 34.329,
+          longitude: 126.759,
           eligibleForRefund: true,
+          openingHours: null,
+          admissionFee: null,
+          phone: null,
+          paymentMethods: [],
+          digitalDiscountText: null,
         ),
         PlaceItem(
           id: 1012,
           name: '장보고 기념관',
           address: '상세주소 확인 예정',
           description: '완도반값여행 대상 관광지. TODO: Kakao Places API로 주소/좌표 검증 후 저장.',
-          latitude: null,
-          longitude: null,
+          latitude: 34.3672,
+          longitude: 126.7565,
           eligibleForRefund: true,
+          openingHours: null,
+          admissionFee: null,
+          phone: null,
+          paymentMethods: [],
+          digitalDiscountText: null,
         ),
         PlaceItem(
           id: 1013,
           name: '스마트치유센터',
           address: '상세주소 확인 예정',
           description: '완도반값여행 대상 관광지. TODO: Kakao Places API로 주소/좌표 검증 후 저장.',
-          latitude: null,
-          longitude: null,
+          latitude: 34.312,
+          longitude: 126.75,
           eligibleForRefund: true,
+          openingHours: null,
+          admissionFee: null,
+          phone: null,
+          paymentMethods: [],
+          digitalDiscountText: null,
         ),
         PlaceItem(
           id: 1014,
           name: '충무사',
           address: '상세주소 확인 예정',
           description: '완도반값여행 대상 관광지. TODO: Kakao Places API로 주소/좌표 검증 후 저장.',
-          latitude: null,
-          longitude: null,
+          latitude: 34.399,
+          longitude: 126.802,
           eligibleForRefund: true,
+          openingHours: null,
+          admissionFee: null,
+          phone: null,
+          paymentMethods: [],
+          digitalDiscountText: null,
         ),
         PlaceItem(
           id: 1015,
           name: '완도이순신기념관',
           address: '상세주소 확인 예정',
           description: '완도반값여행 대상 관광지. TODO: Kakao Places API로 주소/좌표 검증 후 저장.',
-          latitude: null,
-          longitude: null,
+          latitude: 34.396,
+          longitude: 126.804,
           eligibleForRefund: true,
+          openingHours: null,
+          admissionFee: null,
+          phone: null,
+          paymentMethods: [],
+          digitalDiscountText: null,
         ),
         PlaceItem(
           id: 1016,
           name: '약산해안치유의 숲',
           address: '상세주소 확인 예정',
           description: '완도반값여행 대상 관광지. TODO: Kakao Places API로 주소/좌표 검증 후 저장.',
-          latitude: null,
-          longitude: null,
+          latitude: 34.405,
+          longitude: 126.885,
           eligibleForRefund: true,
+          openingHours: null,
+          admissionFee: null,
+          phone: null,
+          paymentMethods: [],
+          digitalDiscountText: null,
         ),
       ],
       digitalTourCardPlaces: const [
@@ -243,7 +339,7 @@ class MockTravelRepository implements TravelRepository {
         digitalTourCardApplyUrl:
             'https://www.gangjintour.com/advance/advance_req.html?',
         dataSourceNote: 'SAMPLE_SEED',
-        statusCode: 'PREPARING',
+        statusCode: 'APPLYING',
         digitalBenefitAvailable: true,
         displayOrder: 2,
         mapTopPercent: 86,
@@ -260,6 +356,11 @@ class MockTravelRepository implements TravelRepository {
           latitude: 34.6445,
           longitude: 126.7782,
           eligibleForRefund: true,
+          openingHours: null,
+          admissionFee: null,
+          phone: null,
+          paymentMethods: [],
+          digitalDiscountText: null,
         ),
       ],
       digitalTourCardPlaces: const [
@@ -307,13 +408,13 @@ class MockTravelRepository implements TravelRepository {
         halfPriceApplyUrl: 'https://tour.pc.go.kr/Home/index',
         digitalTourCardApplyUrl: 'https://tour.pc.go.kr/Home/index',
         dataSourceNote: 'SAMPLE_SEED',
-        statusCode: 'PREPARING',
+        statusCode: 'APPLYING',
         digitalBenefitAvailable: true,
         displayOrder: 3,
-        mapTopPercent: 18,
-        mapLeftPercent: 74,
+        mapTopPercent: 13,
+        mapLeftPercent: 70,
         residenceRestrictionNote: 'sample adjacency rule',
-        matchedByResidence: false,
+        matchedByResidence: true,
       ),
       halfPricePlaces: const [
         PlaceItem(
@@ -324,6 +425,11 @@ class MockTravelRepository implements TravelRepository {
           latitude: 37.3705,
           longitude: 128.3902,
           eligibleForRefund: true,
+          openingHours: null,
+          admissionFee: null,
+          phone: null,
+          paymentMethods: [],
+          digitalDiscountText: null,
         ),
       ],
       digitalTourCardPlaces: const [
@@ -365,13 +471,85 @@ class MockTravelRepository implements TravelRepository {
     _regionDetails[2] = gangjin;
     _regionDetails[3] = pyeongchang;
 
+    // 홈 지도·온라인몰 데모용 추가 지역 (목업 전용 가짜 데이터 — 실서버와 무관).
+    RegionDetail simpleRegion({
+      required int id,
+      required String name,
+      required String province,
+      required String statusCode,
+      required double top,
+      required double left,
+      required int refundAmount,
+      required String mallName,
+    }) {
+      return RegionDetail(
+        region: RegionSummary(
+          id: id,
+          name: name,
+          province: province,
+          refundConditionAmount: refundAmount,
+          mockBudgetRemaining: 50,
+          halfPriceApplyUrl: 'https://example.com/apply',
+          digitalTourCardApplyUrl: 'https://example.com/apply',
+          dataSourceNote: 'SAMPLE_SEED',
+          statusCode: statusCode,
+          digitalBenefitAvailable: true,
+          displayOrder: id,
+          mapTopPercent: top,
+          mapLeftPercent: left,
+          residenceRestrictionNote: 'sample adjacency rule',
+          matchedByResidence: true,
+        ),
+        halfPricePlaces: [
+          PlaceItem(
+            id: id * 1000,
+            name: '$name 대표 관광지',
+            address: '$province $name 관광로 1',
+            description: '반값여행 인정 관광지 샘플',
+            latitude: null,
+            longitude: null,
+            eligibleForRefund: true,
+            openingHours: null,
+            admissionFee: null,
+            phone: null,
+            paymentMethods: [],
+            digitalDiscountText: null,
+          ),
+        ],
+        digitalTourCardPlaces: const [],
+        merchants: const [],
+        onlineMalls: [
+          OnlineMallItem(
+            id: id,
+            name: mallName,
+            mallUrl: 'https://example.com/mall$id',
+            description: '$name 특산물 온라인몰',
+          ),
+        ],
+      );
+    }
+
+    final extraRegions = [
+      simpleRegion(id: 4, name: '영월', province: '강원특별자치도', statusCode: 'PREPARING', top: 28, left: 77, refundAmount: 200000, mallName: '영월몰'),
+      simpleRegion(id: 5, name: '하동', province: '경상남도', statusCode: 'APPLYING', top: 68, left: 62, refundAmount: 200000, mallName: '하동녹차몰'),
+      simpleRegion(id: 6, name: '제천', province: '충청북도', statusCode: 'APPLYING', top: 33, left: 57, refundAmount: 180000, mallName: '제천몰'),
+      simpleRegion(id: 7, name: '고창', province: '전라북도', statusCode: 'PREPARING', top: 60, left: 28, refundAmount: 200000, mallName: '고창황토배기몰'),
+      simpleRegion(id: 8, name: '영광', province: '전라남도', statusCode: 'APPLYING', top: 52, left: 22, refundAmount: 250000, mallName: '영광굴비몰'),
+      simpleRegion(id: 9, name: '거창', province: '경상남도', statusCode: 'PREPARING', top: 62, left: 56, refundAmount: 200000, mallName: '거창몰'),
+    ];
+    for (final extra in extraRegions) {
+      _regionDetails[extra.region.id] = extra;
+    }
+
     _user = AppUser(
       id: 1,
       name: '샘플 사용자',
       email: 'sample@travel-mvp.local',
       phoneNumber: '010-1234-5678',
-      residence: '전라남도 완도군',
+      residence: '서울특별시 강남구',
       authProvider: 'GUEST',
+      nickname: randomNickname(),
+      avatarPreset: randomAvatar(),
       notificationSettings: const NotificationSettings(
         favoriteRegionPreopenAlert: true,
         tripEndSettlementAlert: true,
@@ -416,8 +594,64 @@ class MockTravelRepository implements TravelRepository {
         checked: true,
       ),
     ];
-    _tripFiles[1] = <UploadedFileItem>[];
-    _tripReceipts[1] = <ReceiptItem>[];
+    // 스토어 데모용 증빙 채움 (목업 전용): 인증샷 2장 + 숙박확인서 + 영수증 12만원.
+    _tripFiles[1] = <UploadedFileItem>[
+      UploadedFileItem(
+        id: 9001,
+        fileCategory: FileCategory.authPhoto,
+        originalFileName: 'wando_auth_1.jpg',
+        storagePath: 'mock/wando_auth_1.jpg',
+        fileSize: 812345,
+        mimeType: 'image/jpeg',
+        createdAt: DateTime(2026, 4, 21, 11, 20),
+      ),
+      UploadedFileItem(
+        id: 9003,
+        fileCategory: FileCategory.lodgingConfirmation,
+        originalFileName: 'wando_lodging_form.pdf',
+        storagePath: 'mock/wando_lodging_form.pdf',
+        fileSize: 182034,
+        mimeType: 'application/pdf',
+        createdAt: DateTime(2026, 4, 22, 18, 5),
+      ),
+    ];
+    _tripReceipts[1] = <ReceiptItem>[
+      ReceiptItem(
+        id: 8001,
+        uploadedFileId: 9101,
+        paymentType: PaymentType.creditCard,
+        usageScope: ReceiptUsageScope.lodging,
+        reviewStatus: ReceiptReviewStatus.approved,
+        amount: 80000,
+        paymentDateTime: DateTime(2026, 4, 21, 15, 2),
+        eligibleAmount: 80000,
+        reviewReason: '',
+        rawText: '청산도 한옥스테이 80,000원',
+      ),
+      ReceiptItem(
+        id: 8002,
+        uploadedFileId: 9102,
+        paymentType: PaymentType.creditCard,
+        usageScope: ReceiptUsageScope.general,
+        reviewStatus: ReceiptReviewStatus.approved,
+        amount: 40000,
+        paymentDateTime: DateTime(2026, 4, 21, 19, 30),
+        eligibleAmount: 40000,
+        reviewReason: '',
+        rawText: '완도 전복의집 40,000원',
+      ),
+    ];
+    _tripLodging[1] = const LodgingInfo(
+      id: 1,
+      lodgingName: '청산도 한옥스테이',
+      representativeName: '김완도',
+      phoneNumber: '061-552-1234',
+      address: '전라남도 완도군 청산면 슬로시티길 12',
+      signatureSvgPath: '[{"x":20,"y":60},{"x":46,"y":30},null]',
+      agreedPersonalInfo: true,
+      agreedStayProof: true,
+      uploadedFileId: 9003,
+    );
 
     _trips[2] = TripSummary(
       id: 2,
@@ -435,6 +669,41 @@ class MockTravelRepository implements TravelRepository {
     _tripPlaces[2] = <TripPlaceItem>[];
     _tripFiles[2] = <UploadedFileItem>[];
     _tripReceipts[2] = <ReceiptItem>[];
+
+    // 온라인몰 '내 환급금 사용처' 데모용 정산 완료 여행 (목업 전용).
+    _trips[3] = TripSummary(
+      id: 3,
+      regionId: 3,
+      regionName: pyeongchang.region.name,
+      applicantName: _user.name,
+      startDate: DateTime(2026, 3, 14),
+      endDate: DateTime(2026, 3, 15),
+      travelerCount: 2,
+      status: '정산 신청 완료',
+      totalSpentAmount: 240000,
+      refundConditionAmount: pyeongchang.region.refundConditionAmount,
+      settlementApplied: true,
+    );
+    _tripPlaces[3] = <TripPlaceItem>[];
+    _tripFiles[3] = <UploadedFileItem>[];
+    _tripReceipts[3] = <ReceiptItem>[];
+
+    _trips[4] = TripSummary(
+      id: 4,
+      regionId: 6,
+      regionName: '제천',
+      applicantName: _user.name,
+      startDate: DateTime(2026, 2, 21),
+      endDate: DateTime(2026, 2, 22),
+      travelerCount: 4,
+      status: '정산 신청 완료',
+      totalSpentAmount: 310000,
+      refundConditionAmount: 180000,
+      settlementApplied: true,
+    );
+    _tripPlaces[4] = <TripPlaceItem>[];
+    _tripFiles[4] = <UploadedFileItem>[];
+    _tripReceipts[4] = <ReceiptItem>[];
   }
 
   @override
@@ -453,24 +722,40 @@ class MockTravelRepository implements TravelRepository {
 
   @override
   Future<AppUser> localSignUp({
-    required String name,
     required String loginId,
     required String password,
-    required String phoneNumber,
     required String residence,
   }) async {
     _localLoginId = loginId.trim();
     _localPassword = password.trim();
-    _user = _user.copyWith(
-      name: name.trim(),
-      phoneNumber: phoneNumber.trim(),
-      residence: residence.trim(),
-    );
+    _user = _user.copyWith(residence: residence.trim());
     return _user;
   }
 
   @override
   Future<AppUser> getUser(int userId) async => _user;
+
+  @override
+  Future<void> deleteAccount(int userId) async {}
+
+  @override
+  Future<AppUser> updateResidence(int userId, String residence) async {
+    _user = _user.copyWith(residence: residence);
+    return _user;
+  }
+
+  @override
+  Future<AppUser> updateProfile(
+    int userId, {
+    String? nickname,
+    String? avatarPreset,
+  }) async {
+    _user = _user.copyWith(
+      nickname: nickname,
+      avatarPreset: avatarPreset,
+    );
+    return _user;
+  }
 
   @override
   Future<List<TripSummary>> getTrips(int userId) async {
@@ -500,9 +785,8 @@ class MockTravelRepository implements TravelRepository {
     final normalizedResidence = (residence ?? '').trim();
     final regions = _regionDetails.values
         .map((item) {
-          final matched = normalizedResidence.isEmpty ||
-              item.region.province.contains(normalizedResidence) ||
-              normalizedResidence.contains(item.region.province);
+          // 목업: 데모용으로 전 지역 노출 (실서버가 거주지 인접 제외를 계산).
+          const matched = true;
           return RegionSummary(
             id: item.region.id,
             name: item.region.name,
@@ -689,7 +973,7 @@ class MockTravelRepository implements TravelRepository {
   @override
   Future<CreateYoutubeCourseJobResponse> createYoutubeCourseJob({
     required int userId,
-    required int tripId,
+    int? tripId,
     required int regionId,
     required String youtubeUrl,
   }) async {
@@ -700,7 +984,7 @@ class MockTravelRepository implements TravelRepository {
     final jobId = 'mock-job-${DateTime.now().millisecondsSinceEpoch}';
     final stops = detail.halfPricePlaces
         .where((item) => item.latitude != null && item.longitude != null)
-        .take(4)
+        .take(5)
         .toList()
         .asMap()
         .entries
@@ -712,6 +996,18 @@ class MockTravelRepository implements TravelRepository {
             latitude: entry.value.latitude ?? 0,
             longitude: entry.value.longitude ?? 0,
             category: '관광지',
+            phoneNumber: '',
+            placeUrl: '',
+            websiteUri: '',
+            internationalPhoneNumber: '',
+            rating: null,
+            userRatingCount: 0,
+            businessStatus: '',
+            priceLevel: '',
+            types: const [],
+            openingHours: const [],
+            editorialSummary: '',
+            googlePlaceDetails: const {},
             source: 'youtube_mock',
             reason: 'Mock 유튜브 분석 결과',
           ),
@@ -757,6 +1053,16 @@ class MockTravelRepository implements TravelRepository {
         .toList()
       ..sort((a, b) => (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now()));
     return jobs.isEmpty ? null : jobs.first;
+  }
+
+  @override
+  Future<GooglePlaceDetailItem?> searchGooglePlaceDetail({
+    required String placeName,
+    required String address,
+    required double latitude,
+    required double longitude,
+  }) async {
+    return null;
   }
 
   @override
@@ -829,6 +1135,7 @@ class MockTravelRepository implements TravelRepository {
   Future<AuthPhotoReviewResult> analyzeAuthPhoto({
     required int tripId,
     required int uploadedFileId,
+    int? placeId,
   }) async {
     final trip = _requireTrip(tripId);
     return AuthPhotoReviewResult(
@@ -1010,7 +1317,8 @@ class MockTravelRepository implements TravelRepository {
         templateId: 1,
         templateKey: 'mock-regional-lodging-form',
         templateName: 'regional_lodging_confirmation_mock.pdf',
-        sourceFormat: 'PDF_PLACEHOLDER',
+        // 실서버(V61 이후)와 동일하게 DOCX 폼 입력 UI를 데모하도록 맞춘다.
+        sourceFormat: 'DOCX',
         previewTitle: '숙박확인서',
         previewSubtitle: 'Mock 모드 공통 템플릿',
         fields: [
@@ -1022,7 +1330,7 @@ class MockTravelRepository implements TravelRepository {
             y: 12,
             width: 24,
             height: 8,
-            editable: false,
+            editable: true,
             multiline: false,
             helperText: '',
           ),
@@ -1034,7 +1342,7 @@ class MockTravelRepository implements TravelRepository {
             y: 12,
             width: 24,
             height: 8,
-            editable: false,
+            editable: true,
             multiline: false,
             helperText: '',
           ),
@@ -1046,7 +1354,7 @@ class MockTravelRepository implements TravelRepository {
             y: 12,
             width: 28,
             height: 8,
-            editable: false,
+            editable: true,
             multiline: false,
             helperText: '',
           ),
@@ -1058,7 +1366,7 @@ class MockTravelRepository implements TravelRepository {
             y: 24,
             width: 40,
             height: 8,
-            editable: false,
+            editable: true,
             multiline: false,
             helperText: '',
           ),
@@ -1070,7 +1378,7 @@ class MockTravelRepository implements TravelRepository {
             y: 24,
             width: 40,
             height: 8,
-            editable: false,
+            editable: true,
             multiline: false,
             helperText: '',
           ),
@@ -1226,6 +1534,9 @@ class MockTravelRepository implements TravelRepository {
   String? getLodgingFormTemplatePreviewUrl(int tripId) => null;
 
   @override
+  String? getLodgingFormRenderedPdfUrl(int tripId) => null;
+
+  @override
   Future<String> downloadLodgingFormPdf(int tripId) async {
     final directory = await getApplicationDocumentsDirectory();
     final file = File('${directory.path}/trip-$tripId-lodging-form-mock.txt');
@@ -1237,12 +1548,22 @@ class MockTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<Uint8List> fetchLodgingFormPdfBytes(int tripId) async {
+    // 목 환경에는 실제 PDF 렌더러가 없어 인쇄·공유를 지원하지 않는다.
+    throw UnsupportedError('목 환경에서는 숙박확인서 PDF를 지원하지 않습니다.');
+  }
+
+  @override
   Future<SettlementSummary> getSettlementSummary(int tripId) async {
     return _buildSettlementSummary(_requireTrip(tripId));
   }
 
   @override
-  Future<void> applySettlement(int tripId) async {
+  Future<void> applySettlement(
+    int tripId, {
+    String? applicantName,
+    String? phoneNumber,
+  }) async {
     final trip = _requireTrip(tripId);
     _trips[tripId] = trip.copyWith(
       status: '정산 신청 완료',
@@ -1257,6 +1578,183 @@ class MockTravelRepository implements TravelRepository {
   ) async {
     _user = _user.copyWith(notificationSettings: settings);
     return settings;
+  }
+
+  // 커뮤니티 — mock 모드는 화면이 AppState 로컬퍼스트를 직접 쓰므로 서버 경로는 비활성.
+  @override
+  Future<List<CommunityPostData>> getCommunityFeed({int? userId}) async => const [];
+
+  @override
+  Future<CommunityPostData> createCommunityPost({
+    required int userId,
+    required String type,
+    String? regionName,
+    String? title,
+    required String body,
+    List<String> photos = const [],
+    String? courseName,
+    String? courseMeta,
+    List<SavedCourseStop> courseStops = const [],
+    int? tripId,
+    required String visibility,
+  }) async {
+    throw UnsupportedError('mock 모드는 로컬퍼스트 커뮤니티를 사용합니다');
+  }
+
+  @override
+  Future<void> toggleCommunityLike(int postId, int userId) async {}
+
+  @override
+  Future<void> toggleCommunityBookmark(int postId, int userId) async {}
+
+  @override
+  Future<void> updateCommunityVisibility(
+      int postId, int userId, String visibility) async {}
+
+  @override
+  Future<List<CommunityCommentData>> getCommunityComments(int postId,
+          {int? userId}) async =>
+      const [];
+
+  @override
+  Future<CommunityCommentData> addCommunityComment(
+      int postId, int userId, String body,
+      {int? parentId, int? mentionUserId}) async {
+    throw UnsupportedError('mock 모드는 로컬퍼스트 커뮤니티를 사용합니다');
+  }
+
+  @override
+  Future<CommunityPostData> updateCommunityPost({
+    required int postId,
+    required int userId,
+    String? type,
+    String? regionName,
+    String? title,
+    String? body,
+    List<String>? photos,
+    String? courseName,
+    String? courseMeta,
+    List<SavedCourseStop>? courseStops,
+    bool clearCourse = false,
+    String? visibility,
+  }) async {
+    throw UnsupportedError('mock 모드는 로컬퍼스트 커뮤니티를 사용합니다');
+  }
+
+  @override
+  Future<void> deleteCommunityPost(int postId, int userId) async {}
+
+  @override
+  Future<void> toggleCommunityCommentLike(int commentId, int userId) async {}
+
+  @override
+  Future<void> deleteCommunityComment(int commentId, int userId) async {}
+
+  @override
+  Future<void> reportCommunity({
+    required int userId,
+    required String targetType,
+    required int targetId,
+    String? reason,
+  }) async {}
+
+  @override
+  Future<CommunityMyPosts> getMyCommunityPosts(int userId) async =>
+      const CommunityMyPosts(
+          postCount: 0, receivedLikeCount: 0, receivedSaveCount: 0, posts: []);
+
+  @override
+  Future<List<CommunityPostData>> getMyCommunityBookmarks(int userId) async =>
+      const [];
+
+  final Map<int, List<ChecklistItem>> _checklists = {};
+
+  @override
+  Future<List<ChecklistItem>> getTripChecklist(int tripId) async {
+    return _checklists.putIfAbsent(tripId, ChecklistItem.defaults);
+  }
+
+  @override
+  Future<List<ChecklistItem>> updateTripChecklist(
+    int tripId,
+    List<ChecklistItem> items,
+  ) async {
+    _checklists[tripId] = List.of(items);
+    return items;
+  }
+
+  @override
+  Future<List<AppNotification>> getNotifications(int userId) async {
+    return [..._notifications]
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
+  @override
+  Future<void> markAllNotificationsRead(int userId) async {
+    _notifications =
+        _notifications.map((n) => n.copyWith(read: true)).toList();
+  }
+
+  static List<AppNotification> _seedNotifications() {
+    final now = DateTime.now();
+    return [
+      AppNotification(
+        type: NotificationType.regionOpen,
+        title: '강진 반값여행 접수 시작 🎉',
+        refType: 'REGION', refId: 2,
+        body: '관심 등록한 강진의 6월 반값여행 접수가 열렸어요. 지금 신청해보세요.',
+        createdAt: now.subtract(const Duration(minutes: 10)),
+        read: false,
+      ),
+      AppNotification(
+        type: NotificationType.courseDone,
+        title: '유튜브 코스가 완성됐어요',
+        refType: 'COURSE', refId: 1,
+        body: '강진 유튜브 추천 코스를 내 코스함에 저장했어요. 확인해보세요.',
+        createdAt: now.subtract(const Duration(hours: 1)),
+        read: false,
+      ),
+      AppNotification(
+        type: NotificationType.communityLike,
+        title: '여행하는민트님 외 4명이 좋아해요',
+        refType: 'POST', refId: 1,
+        body: '내 글 "강진 여행 후기"에 좋아요가 달렸어요.',
+        createdAt: now.subtract(const Duration(hours: 3)),
+        read: false,
+      ),
+      AppNotification(
+        type: NotificationType.settleDeadline,
+        title: '영월 정산 신청 마감 D-3',
+        refType: 'TRIP', refId: 1,
+        body: '여행 종료 다음날부터 7일 이내에 정산을 신청하세요.',
+        createdAt: now.subtract(const Duration(days: 1)),
+        read: true,
+      ),
+      AppNotification(
+        type: NotificationType.communityComment,
+        title: '강진가고파님이 댓글을 남겼어요',
+        refType: 'POST', refId: 1,
+        body: '가우도 주차는 어디 하셨어요?',
+        createdAt: now.subtract(const Duration(days: 2)),
+        read: true,
+      ),
+      AppNotification(
+        type: NotificationType.settleDeadline,
+        title: '완도 접수 마감 D-1',
+        refType: 'REGION', refId: 1,
+        body: '관심 등록한 완도 반값여행 접수가 곧 마감돼요.',
+        createdAt: now.subtract(const Duration(days: 3)),
+        read: true,
+      ),
+      AppNotification(
+        type: NotificationType.benefit,
+        title: '디지털 관광주민증 혜택 추가',
+        refType: 'MERCHANT', refId: 1,
+        body: '강진 가맹점에 디민증 추가 할인 혜택이 생겼어요.',
+        createdAt: now.subtract(const Duration(days: 7)),
+        read: true,
+      ),
+    ];
   }
 
   @override
@@ -1284,7 +1782,7 @@ class MockTravelRepository implements TravelRepository {
 
   @override
   Future<String> downloadMergedPdf(
-      int tripId, List<int> uploadedFileIds) async {
+      int tripId, List<int> uploadedFileIds, {String? fileName}) async {
     final directory = await getApplicationDocumentsDirectory();
     final file = File('${directory.path}/trip-$tripId-mock-bundle.txt');
     final payload = {

@@ -1,6 +1,6 @@
 ﻿import 'dart:convert';
 
-enum LoginProvider { kakao, google, guest }
+enum LoginProvider { kakao, naver, google, guest }
 
 enum PlaceCategory { halfPrice, digitalTourCard, merchant }
 
@@ -126,12 +126,14 @@ extension ReceiptReviewStatusWire on ReceiptReviewStatus {
 extension LoginProviderWire on LoginProvider {
   String get wireName => switch (this) {
         LoginProvider.kakao => 'KAKAO',
+        LoginProvider.naver => 'NAVER',
         LoginProvider.google => 'GOOGLE',
         LoginProvider.guest => 'GUEST',
       };
 
   String get label => switch (this) {
-        LoginProvider.kakao => '카카오톡',
+        LoginProvider.kakao => '카카오',
+        LoginProvider.naver => '네이버',
         LoginProvider.google => '구글',
         LoginProvider.guest => '게스트',
       };
@@ -149,20 +151,24 @@ class NotificationSettings {
   const NotificationSettings({
     required this.favoriteRegionPreopenAlert,
     required this.tripEndSettlementAlert,
+    this.marketingAlert = false,
   });
 
   final bool favoriteRegionPreopenAlert;
   final bool tripEndSettlementAlert;
+  final bool marketingAlert;
 
   NotificationSettings copyWith({
     bool? favoriteRegionPreopenAlert,
     bool? tripEndSettlementAlert,
+    bool? marketingAlert,
   }) {
     return NotificationSettings(
       favoriteRegionPreopenAlert:
           favoriteRegionPreopenAlert ?? this.favoriteRegionPreopenAlert,
       tripEndSettlementAlert:
           tripEndSettlementAlert ?? this.tripEndSettlementAlert,
+      marketingAlert: marketingAlert ?? this.marketingAlert,
     );
   }
 
@@ -171,13 +177,284 @@ class NotificationSettings {
       favoriteRegionPreopenAlert:
           json['favoriteRegionPreopenAlert'] as bool? ?? false,
       tripEndSettlementAlert: json['tripEndSettlementAlert'] as bool? ?? false,
+      marketingAlert: json['marketingAlert'] as bool? ?? false,
     );
   }
 
   Map<String, dynamic> toJson() => {
         'favoriteRegionPreopenAlert': favoriteRegionPreopenAlert,
         'tripEndSettlementAlert': tripEndSettlementAlert,
+        'marketingAlert': marketingAlert,
       };
+}
+
+/// 커뮤니티 게시글 (서버 계약: /api/community/posts — 2026-07-28).
+class CommunityPostData {
+  const CommunityPostData({
+    required this.id,
+    required this.type,
+    required this.title,
+    required this.body,
+    required this.regionName,
+    required this.photos,
+    required this.courseName,
+    required this.courseMeta,
+    this.courseStops = const [],
+    required this.verified,
+    required this.edited,
+    required this.visibility,
+    required this.likeCount,
+    required this.commentCount,
+    required this.saveCount,
+    required this.likedByMe,
+    required this.savedByMe,
+    required this.mine,
+    required this.authorNickname,
+    required this.authorAvatarPreset,
+    required this.createdAt,
+  });
+
+  final int id;
+  final String type;
+  final String? title;
+  final String body;
+  final String? regionName;
+  final List<String> photos;
+  final String? courseName;
+  final String? courseMeta;
+  final List<SavedCourseStop> courseStops;
+  final bool verified;
+  final bool edited;
+  final String visibility;
+  final int likeCount;
+  final int commentCount;
+  final int saveCount;
+  final bool likedByMe;
+  final bool savedByMe;
+  final bool mine;
+  final String authorNickname;
+  final String authorAvatarPreset;
+  final DateTime createdAt;
+
+  factory CommunityPostData.fromJson(Map<String, dynamic> json) =>
+      CommunityPostData(
+        id: json['id'] as int,
+        type: json['type'] as String? ?? 'REVIEW',
+        title: json['title'] as String?,
+        body: json['body'] as String? ?? '',
+        regionName: json['regionName'] as String?,
+        photos: ((json['photos'] as List<dynamic>?) ?? const [])
+            .map((e) => e.toString())
+            .toList(),
+        courseName: json['courseName'] as String?,
+        courseMeta: json['courseMeta'] as String?,
+        courseStops: ((json['courseStops'] as List<dynamic>?) ?? const [])
+            .map((e) => SavedCourseStop.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        verified: json['verified'] as bool? ?? false,
+        edited: json['edited'] as bool? ?? false,
+        visibility: json['visibility'] as String? ?? 'PUBLIC',
+        likeCount: json['likeCount'] as int? ?? 0,
+        commentCount: json['commentCount'] as int? ?? 0,
+        saveCount: json['saveCount'] as int? ?? 0,
+        likedByMe: json['likedByMe'] as bool? ?? false,
+        savedByMe: json['savedByMe'] as bool? ?? false,
+        mine: json['mine'] as bool? ?? false,
+        authorNickname: json['authorNickname'] as String? ?? '여행자',
+        authorAvatarPreset: json['authorAvatarPreset'] as String? ?? '0:0',
+        createdAt:
+            DateTime.tryParse(json['createdAt'] as String? ?? '')?.toLocal() ??
+                DateTime.now(),
+      );
+}
+
+class CommunityCommentData {
+  const CommunityCommentData({
+    required this.id,
+    required this.authorId,
+    required this.parentId,
+    required this.body,
+    required this.authorNickname,
+    required this.authorAvatarPreset,
+    required this.isPostAuthor,
+    required this.mine,
+    required this.likeCount,
+    required this.likedByMe,
+    required this.createdAt,
+  });
+
+  final int id;
+  final int authorId;
+
+  /// 인스타식 1단계 답글 — 루트 댓글 id (답글의 답글도 서버가 루트로 정규화).
+  final int? parentId;
+  final String body;
+  final String authorNickname;
+  final String authorAvatarPreset;
+  final bool isPostAuthor;
+  final bool mine;
+  final int likeCount;
+  final bool likedByMe;
+  final DateTime createdAt;
+
+  factory CommunityCommentData.fromJson(Map<String, dynamic> json) =>
+      CommunityCommentData(
+        id: json['id'] as int,
+        authorId: json['authorId'] as int? ?? 0,
+        parentId: json['parentId'] as int?,
+        body: json['body'] as String? ?? '',
+        authorNickname: json['authorNickname'] as String? ?? '여행자',
+        authorAvatarPreset: json['authorAvatarPreset'] as String? ?? '0:0',
+        isPostAuthor: json['isPostAuthor'] as bool? ?? false,
+        mine: json['mine'] as bool? ?? false,
+        likeCount: json['likeCount'] as int? ?? 0,
+        likedByMe: json['likedByMe'] as bool? ?? false,
+        createdAt:
+            DateTime.tryParse(json['createdAt'] as String? ?? '')?.toLocal() ??
+                DateTime.now(),
+      );
+}
+
+class CommunityMyPosts {
+  const CommunityMyPosts({
+    required this.postCount,
+    required this.receivedLikeCount,
+    required this.receivedSaveCount,
+    required this.posts,
+  });
+
+  final int postCount;
+  final int receivedLikeCount;
+  final int receivedSaveCount;
+  final List<CommunityPostData> posts;
+
+  factory CommunityMyPosts.fromJson(Map<String, dynamic> json) =>
+      CommunityMyPosts(
+        postCount: json['postCount'] as int? ?? 0,
+        receivedLikeCount: json['receivedLikeCount'] as int? ?? 0,
+        receivedSaveCount: json['receivedSaveCount'] as int? ?? 0,
+        posts: ((json['posts'] as List<dynamic>?) ?? const [])
+            .map((e) => CommunityPostData.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+/// 출발 준비 체크리스트 항목 — 계약: GET/PUT /api/trips/{tripId}/checklist (핸드오프 E, 사용자 직접 체크안).
+class ChecklistItem {
+  const ChecklistItem({
+    required this.key,
+    required this.label,
+    required this.checked,
+  });
+
+  final String key;
+  final String label;
+  final bool checked;
+
+  ChecklistItem copyWith({bool? checked}) =>
+      ChecklistItem(key: key, label: label, checked: checked ?? this.checked);
+
+  factory ChecklistItem.fromJson(Map<String, dynamic> json) => ChecklistItem(
+        key: json['key'] as String? ?? '',
+        label: json['label'] as String? ?? '',
+        // 서버는 done(자동판정+수동체크 합산)과 checked(수동)를 함께 준다 — 표시 기준은 done.
+        checked: (json['done'] ?? json['checked']) as bool? ?? false,
+      );
+
+  Map<String, dynamic> toJson() => {'key': key, 'checked': checked};
+
+  /// 서버 시드와 동일한 기본 4항목 — 백엔드 배포 전 폴백.
+  static List<ChecklistItem> defaults() => const [
+        ChecklistItem(key: 'currency_app', label: '지역화폐 앱 설치', checked: false),
+        ChecklistItem(
+            key: 'payment_method', label: '결제수단(인정 카드) 확인', checked: false),
+        ChecklistItem(
+            key: 'auth_guide', label: '인증사진 가이드 확인', checked: false),
+        ChecklistItem(key: 'lodging', label: '숙소 예약 확인', checked: false),
+      ];
+}
+
+/// 알림 유형 — 백엔드 wire enum(REGION_OPEN 등)과 매핑.
+/// 계약: GET /api/notifications → [{type,title,body,createdAt,read}]
+enum NotificationType {
+  regionOpen,
+  courseDone,
+  communityLike,
+  communityComment,
+  settleDeadline,
+  benefit,
+  unknown,
+}
+
+class AppNotification {
+  const AppNotification({
+    required this.type,
+    required this.title,
+    required this.body,
+    required this.createdAt,
+    this.read = false,
+    this.refType,
+    this.refId,
+  });
+
+  final NotificationType type;
+  final String title;
+  final String body;
+  final DateTime createdAt;
+  final bool read;
+
+  /// 딥링크 타겟 참조(백엔드 계약: REGION·COURSE·POST·TRIP·MERCHANT).
+  /// 알림 탭 시 이 값으로 관련 화면으로 이동. 백엔드 연동 전까진 mock에서만 채워짐.
+  final String? refType;
+  final int? refId;
+
+  AppNotification copyWith({bool? read}) => AppNotification(
+        type: type,
+        title: title,
+        body: body,
+        createdAt: createdAt,
+        read: read ?? this.read,
+        refType: refType,
+        refId: refId,
+      );
+
+  static NotificationType typeFromWire(String? wire) =>
+      switch (wire?.toUpperCase()) {
+        'REGION_OPEN' => NotificationType.regionOpen,
+        'COURSE_DONE' => NotificationType.courseDone,
+        'COMMUNITY_LIKE' => NotificationType.communityLike,
+        'COMMUNITY_COMMENT' => NotificationType.communityComment,
+        'SETTLE_DEADLINE' => NotificationType.settleDeadline,
+        'BENEFIT' => NotificationType.benefit,
+        _ => NotificationType.unknown,
+      };
+
+  factory AppNotification.fromJson(Map<String, dynamic> json) {
+    return AppNotification(
+      type: typeFromWire(json['type'] as String?),
+      title: json['title'] as String? ?? '',
+      body: json['body'] as String? ?? '',
+      createdAt:
+          DateTime.tryParse(json['createdAt'] as String? ?? '')?.toLocal() ??
+              DateTime.now(),
+      read: json['read'] as bool? ?? false,
+      refType: json['refType'] as String?,
+      refId: json['refId'] as int?,
+    );
+  }
+}
+
+/// 소셜 로그인 결과 (서버 계약: /api/auth/social-login).
+class SocialLoginResult {
+  const SocialLoginResult({
+    required this.user,
+    required this.newUser,
+    required this.needsResidence,
+  });
+
+  final AppUser user;
+  final bool newUser;
+  final bool needsResidence;
 }
 
 class AppUser {
@@ -190,6 +467,8 @@ class AppUser {
     required this.authProvider,
     required this.notificationSettings,
     required this.favoriteRegions,
+    this.nickname = '',
+    this.avatarPreset = '0:0',
   });
 
   final int id;
@@ -201,6 +480,12 @@ class AppUser {
   final NotificationSettings notificationSettings;
   final List<RegionSummary> favoriteRegions;
 
+  /// 커뮤니티 반익명 닉네임 (화면 표시·인사말용, 실명과 분리).
+  final String nickname;
+
+  /// 아바타 프리셋 (이모지 문자). 계약: community_profiles.avatar_preset.
+  final String avatarPreset;
+
   AppUser copyWith({
     String? name,
     String? email,
@@ -208,6 +493,8 @@ class AppUser {
     String? residence,
     NotificationSettings? notificationSettings,
     List<RegionSummary>? favoriteRegions,
+    String? nickname,
+    String? avatarPreset,
   }) {
     return AppUser(
       id: id,
@@ -218,6 +505,8 @@ class AppUser {
       authProvider: authProvider,
       notificationSettings: notificationSettings ?? this.notificationSettings,
       favoriteRegions: favoriteRegions ?? this.favoriteRegions,
+      nickname: nickname ?? this.nickname,
+      avatarPreset: avatarPreset ?? this.avatarPreset,
     );
   }
 
@@ -229,6 +518,8 @@ class AppUser {
       phoneNumber: json['phoneNumber'] as String? ?? '',
       residence: json['residence'] as String? ?? '',
       authProvider: json['authProvider'] as String? ?? 'GUEST',
+      nickname: json['nickname'] as String? ?? '',
+      avatarPreset: json['avatarPreset'] as String? ?? '0:0',
       notificationSettings: NotificationSettings.fromJson(
         (json['notificationSettings'] as Map<String, dynamic>?) ??
             const <String, dynamic>{
@@ -260,6 +551,17 @@ class RegionSummary {
     this.mapLeftPercent = 50,
     this.residenceRestrictionNote = '',
     required this.matchedByResidence,
+    this.applyStartDate,
+    this.applyDeadline,
+    this.openDate,
+    this.travelPeriodStart,
+    this.travelPeriodEnd,
+    this.settlementDeadlineDays,
+    this.refundConditionText,
+    this.refundRate,
+    this.maxRefundPerPerson,
+    this.paymentMethods = const [],
+    this.localCurrencyAppUrl,
   });
 
   final int id;
@@ -278,11 +580,28 @@ class RegionSummary {
   final String residenceRestrictionNote;
   final bool matchedByResidence;
 
+  // ── 접수·여행·정산 일정 및 환급 조건 (D-day, 지역 상세) ──
+  // 하민 데이터 백필 전까지는 null일 수 있음 — 화면에서 null이면 "정보 준비중" 폴백 처리.
+  final DateTime? applyStartDate;
+  final DateTime? applyDeadline;
+  final DateTime? openDate;
+  final DateTime? travelPeriodStart;
+  final DateTime? travelPeriodEnd;
+  final int? settlementDeadlineDays;
+  final String? refundConditionText;
+  final int? refundRate;
+  final int? maxRefundPerPerson;
+  final List<String> paymentMethods;
+  final String? localCurrencyAppUrl;
+
   String get statusLabel => switch (statusCode.toUpperCase()) {
         'APPLYING' => '접수중',
         'CLOSED' => '1차 마감',
         _ => '오픈 예정',
       };
+
+  static DateTime? _date(dynamic value) =>
+      value is String && value.isNotEmpty ? DateTime.tryParse(value) : null;
 
   factory RegionSummary.fromJson(Map<String, dynamic> json) {
     return RegionSummary(
@@ -303,8 +622,34 @@ class RegionSummary {
       residenceRestrictionNote:
           json['residenceRestrictionNote'] as String? ?? '',
       matchedByResidence: json['matchedByResidence'] as bool? ?? false,
+      applyStartDate: _date(json['applyStartDate']),
+      applyDeadline: _date(json['applyDeadline']),
+      openDate: _date(json['openDate']),
+      travelPeriodStart: _date(json['travelPeriodStart']),
+      travelPeriodEnd: _date(json['travelPeriodEnd']),
+      settlementDeadlineDays: json['settlementDeadlineDays'] as int?,
+      refundConditionText: json['refundConditionText'] as String?,
+      refundRate: json['refundRate'] as int?,
+      maxRefundPerPerson: json['maxRefundPerPerson'] as int?,
+      paymentMethods: ((json['paymentMethods'] as List<dynamic>?) ?? [])
+          .map((e) => e as String)
+          .toList(),
+      localCurrencyAppUrl: json['localCurrencyAppUrl'] as String?,
     );
   }
+}
+
+/// 접수 마감(접수중)·오픈 예정일(오픈예정)까지 남은 일수. 기준 날짜가 없으면 null.
+(int, bool)? regionDday(RegionSummary region) {
+  final target = region.statusCode.toUpperCase() == 'PREPARING'
+      ? region.openDate
+      : region.applyDeadline;
+  if (target == null) return null;
+  final today = DateTime.now();
+  final days = DateTime(target.year, target.month, target.day)
+      .difference(DateTime(today.year, today.month, today.day))
+      .inDays;
+  return (days, days <= 2);
 }
 
 class PlaceItem {
@@ -316,6 +661,11 @@ class PlaceItem {
     required this.latitude,
     required this.longitude,
     required this.eligibleForRefund,
+    required this.openingHours,
+    required this.admissionFee,
+    required this.phone,
+    required this.paymentMethods,
+    required this.digitalDiscountText,
   });
 
   final int id;
@@ -325,6 +675,11 @@ class PlaceItem {
   final double? latitude;
   final double? longitude;
   final bool eligibleForRefund;
+  final String? openingHours;
+  final String? admissionFee;
+  final String? phone;
+  final List<String> paymentMethods;
+  final String? digitalDiscountText;
 
   factory PlaceItem.fromJson(Map<String, dynamic> json) {
     return PlaceItem(
@@ -335,6 +690,13 @@ class PlaceItem {
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
       eligibleForRefund: json['eligibleForRefund'] as bool? ?? true,
+      openingHours: json['openingHours'] as String?,
+      admissionFee: json['admissionFee'] as String?,
+      phone: json['phone'] as String?,
+      paymentMethods: ((json['paymentMethods'] as List<dynamic>?) ?? [])
+          .map((e) => e as String)
+          .toList(),
+      digitalDiscountText: json['digitalDiscountText'] as String?,
     );
   }
 }
@@ -605,6 +967,11 @@ class TripSummary {
     required this.totalSpentAmount,
     required this.refundConditionAmount,
     required this.settlementApplied,
+    this.authCertifiedCount,
+    this.authRequiredCount,
+    this.checklistDoneCount,
+    this.checklistTotal,
+    this.settlementDeadline,
   });
 
   final int id;
@@ -618,6 +985,13 @@ class TripSummary {
   final int totalSpentAmount;
   final int refundConditionAmount;
   final bool settlementApplied;
+
+  /// 여행 진행 카운트(백엔드 E) — 서버 미지원 시 null.
+  final int? authCertifiedCount;
+  final int? authRequiredCount;
+  final int? checklistDoneCount;
+  final int? checklistTotal;
+  final DateTime? settlementDeadline;
 
   TripSummary copyWith({
     int? travelerCount,
@@ -637,6 +1011,11 @@ class TripSummary {
       totalSpentAmount: totalSpentAmount ?? this.totalSpentAmount,
       refundConditionAmount: refundConditionAmount,
       settlementApplied: settlementApplied ?? this.settlementApplied,
+      authCertifiedCount: authCertifiedCount,
+      authRequiredCount: authRequiredCount,
+      checklistDoneCount: checklistDoneCount,
+      checklistTotal: checklistTotal,
+      settlementDeadline: settlementDeadline,
     );
   }
 
@@ -653,6 +1032,13 @@ class TripSummary {
       totalSpentAmount: json['totalSpentAmount'] as int? ?? 0,
       refundConditionAmount: json['refundConditionAmount'] as int? ?? 0,
       settlementApplied: json['settlementApplied'] as bool? ?? false,
+      authCertifiedCount: json['authCertifiedCount'] as int?,
+      authRequiredCount: json['authRequiredCount'] as int?,
+      checklistDoneCount: json['checklistDoneCount'] as int?,
+      checklistTotal: json['checklistTotal'] as int?,
+      settlementDeadline: json['settlementDeadline'] == null
+          ? null
+          : DateTime.tryParse(json['settlementDeadline'] as String),
     );
   }
 }
@@ -753,6 +1139,10 @@ class AuthPhotoReviewResult {
     required this.facesClear,
     required this.backgroundVisible,
     required this.reason,
+    this.gpsPresent,
+    this.capturedAt,
+    this.locationVerified,
+    this.withinTripPeriod,
   });
 
   final bool approved;
@@ -762,6 +1152,12 @@ class AuthPhotoReviewResult {
   final bool backgroundVisible;
   final String reason;
 
+  /// EXIF 위치·시각 검증(백엔드 F) — 검증 미수행이면 null.
+  final bool? gpsPresent;
+  final DateTime? capturedAt;
+  final bool? locationVerified;
+  final bool? withinTripPeriod;
+
   factory AuthPhotoReviewResult.fromJson(Map<String, dynamic> json) {
     return AuthPhotoReviewResult(
       approved: json['approved'] as bool? ?? false,
@@ -770,6 +1166,12 @@ class AuthPhotoReviewResult {
       facesClear: json['facesClear'] as bool? ?? false,
       backgroundVisible: json['backgroundVisible'] as bool? ?? false,
       reason: json['reason'] as String? ?? '',
+      gpsPresent: json['gpsPresent'] as bool?,
+      capturedAt: json['capturedAt'] == null
+          ? null
+          : DateTime.tryParse(json['capturedAt'] as String),
+      locationVerified: json['locationVerified'] as bool?,
+      withinTripPeriod: json['withinTripPeriod'] as bool?,
     );
   }
 }
@@ -811,7 +1213,10 @@ class ReceiptItem {
         json['reviewStatus'] as String? ?? '',
       ),
       amount: json['amount'] as int?,
-      paymentDateTime: DateTime.tryParse(json['paymentDateTime'] as String? ?? ''),
+      // 서버는 "+09:00"을 붙여 내려주는데, DateTime.parse는 이를 UTC 시각으로 만든다.
+      // toLocal()을 빼면 11:05 결제가 02:05로 보인다. (다른 날짜 필드도 모두 toLocal)
+      paymentDateTime:
+          DateTime.tryParse(json['paymentDateTime'] as String? ?? '')?.toLocal(),
       eligibleAmount: json['eligibleAmount'] as int? ?? 0,
       reviewReason: json['reviewReason'] as String? ?? '',
       rawText: json['rawText'] as String? ?? '',
@@ -998,6 +1403,7 @@ class LodgingFormFieldItem {
 
   bool get isCheckbox => type.toLowerCase() == 'checkbox';
   bool get isSignature => type.toLowerCase() == 'signature';
+  bool get isDate => type.toLowerCase() == 'date';
 
   LodgingFormFieldItem copyWith({
     String? key,
@@ -1064,6 +1470,7 @@ class LodgingFormTemplateItem {
     required this.previewSubtitle,
     required this.fields,
     required this.notes,
+    this.electronicSignatureAllowed = true,
   });
 
   final int templateId;
@@ -1075,6 +1482,11 @@ class LodgingFormTemplateItem {
   final List<LodgingFormFieldItem> fields;
   final List<String> notes;
 
+  /// 지자체가 전자서명(앱 화면 서명)을 정산 증빙으로 인정하는지.
+  /// false면 출력 → 숙박업소 실물 서명/인장 → 사진 업로드로 유도한다.
+  /// 서버가 값을 안 내려주면 true(기존 동작 유지) — 실물만 인정되는 지역만 명시적으로 false.
+  final bool electronicSignatureAllowed;
+
   LodgingFormTemplateItem copyWith({
     int? templateId,
     String? templateKey,
@@ -1084,6 +1496,7 @@ class LodgingFormTemplateItem {
     String? previewSubtitle,
     List<LodgingFormFieldItem>? fields,
     List<String>? notes,
+    bool? electronicSignatureAllowed,
   }) {
     return LodgingFormTemplateItem(
       templateId: templateId ?? this.templateId,
@@ -1094,6 +1507,8 @@ class LodgingFormTemplateItem {
       previewSubtitle: previewSubtitle ?? this.previewSubtitle,
       fields: fields ?? this.fields,
       notes: notes ?? this.notes,
+      electronicSignatureAllowed:
+          electronicSignatureAllowed ?? this.electronicSignatureAllowed,
     );
   }
 
@@ -1105,6 +1520,8 @@ class LodgingFormTemplateItem {
       sourceFormat: json['sourceFormat'] as String? ?? '',
       previewTitle: json['previewTitle'] as String? ?? '',
       previewSubtitle: json['previewSubtitle'] as String? ?? '',
+      electronicSignatureAllowed:
+          json['electronicSignatureAllowed'] as bool? ?? true,
       fields: ((json['fields'] as List<dynamic>?) ?? [])
           .map(
             (item) =>
@@ -1223,6 +1640,8 @@ class SavedCourseStop {
     required this.latitude,
     required this.longitude,
     required this.sourceType,
+    this.day = 1,
+    this.time = '',
   });
 
   final int placeId;
@@ -1232,6 +1651,11 @@ class SavedCourseStop {
   final double longitude;
   final String sourceType;
 
+  /// 생성 결과의 일차·시간 — 코스함/여행 코스 보기에서 DAY별 일정을 살리기 위해 보존.
+  /// (예전 저장분엔 없어서 day 1 폴백)
+  final int day;
+  final String time;
+
   factory SavedCourseStop.fromJson(Map<String, dynamic> json) {
     return SavedCourseStop(
       placeId: json['placeId'] as int? ?? 0,
@@ -1240,6 +1664,8 @@ class SavedCourseStop {
       latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
       sourceType: json['sourceType'] as String? ?? 'PLACE',
+      day: json['day'] as int? ?? 1,
+      time: json['time'] as String? ?? '',
     );
   }
 
@@ -1250,6 +1676,8 @@ class SavedCourseStop {
         'latitude': latitude,
         'longitude': longitude,
         'sourceType': sourceType,
+        'day': day,
+        'time': time,
       };
 }
 
@@ -1364,6 +1792,18 @@ class YoutubeCourseJobStop {
     required this.latitude,
     required this.longitude,
     required this.category,
+    this.phoneNumber = '',
+    this.placeUrl = '',
+    this.websiteUri = '',
+    this.internationalPhoneNumber = '',
+    this.rating,
+    this.userRatingCount = 0,
+    this.businessStatus = '',
+    this.priceLevel = '',
+    this.types = const [],
+    this.openingHours = const [],
+    this.editorialSummary = '',
+    this.googlePlaceDetails = const {},
     required this.source,
     required this.reason,
   });
@@ -1374,10 +1814,23 @@ class YoutubeCourseJobStop {
   final double latitude;
   final double longitude;
   final String category;
+  final String phoneNumber;
+  final String placeUrl;
+  final String websiteUri;
+  final String internationalPhoneNumber;
+  final double? rating;
+  final int userRatingCount;
+  final String businessStatus;
+  final String priceLevel;
+  final List<String> types;
+  final List<String> openingHours;
+  final String editorialSummary;
+  final Map<String, dynamic> googlePlaceDetails;
   final String source;
   final String reason;
 
   factory YoutubeCourseJobStop.fromJson(Map<String, dynamic> json) {
+    final rawDetails = json['googlePlaceDetails'];
     return YoutubeCourseJobStop(
       order: json['order'] as int? ?? 0,
       placeName: json['placeName'] as String? ?? '',
@@ -1385,6 +1838,25 @@ class YoutubeCourseJobStop {
       latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
       longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
       category: json['category'] as String? ?? '',
+      phoneNumber: json['phoneNumber'] as String? ?? '',
+      placeUrl: json['placeUrl'] as String? ?? '',
+      websiteUri: json['websiteUri'] as String? ?? '',
+      internationalPhoneNumber:
+          json['internationalPhoneNumber'] as String? ?? '',
+      rating: (json['rating'] as num?)?.toDouble(),
+      userRatingCount: json['userRatingCount'] as int? ?? 0,
+      businessStatus: json['businessStatus'] as String? ?? '',
+      priceLevel: json['priceLevel'] as String? ?? '',
+      types: ((json['types'] as List<dynamic>?) ?? const [])
+          .map((item) => item.toString())
+          .toList(),
+      openingHours: ((json['openingHours'] as List<dynamic>?) ?? const [])
+          .map((item) => item.toString())
+          .toList(),
+      editorialSummary: json['editorialSummary'] as String? ?? '',
+      googlePlaceDetails: rawDetails is Map<String, dynamic>
+          ? rawDetails
+          : const <String, dynamic>{},
       source: json['source'] as String? ?? '',
       reason: json['reason'] as String? ?? '',
     );
@@ -1409,6 +1881,76 @@ class YoutubeCourseJobResult {
       stops: ((json['stops'] as List<dynamic>?) ?? const [])
           .map((item) => YoutubeCourseJobStop.fromJson(item as Map<String, dynamic>))
           .toList(),
+    );
+  }
+}
+
+class GooglePlaceDetailItem {
+  const GooglePlaceDetailItem({
+    required this.placeName,
+    required this.address,
+    required this.latitude,
+    required this.longitude,
+    required this.category,
+    required this.phoneNumber,
+    required this.placeUrl,
+    required this.websiteUri,
+    required this.internationalPhoneNumber,
+    required this.rating,
+    required this.userRatingCount,
+    required this.businessStatus,
+    required this.priceLevel,
+    required this.types,
+    required this.openingHours,
+    required this.editorialSummary,
+    required this.googlePlaceDetails,
+  });
+
+  final String placeName;
+  final String address;
+  final double latitude;
+  final double longitude;
+  final String category;
+  final String phoneNumber;
+  final String placeUrl;
+  final String websiteUri;
+  final String internationalPhoneNumber;
+  final double? rating;
+  final int userRatingCount;
+  final String businessStatus;
+  final String priceLevel;
+  final List<String> types;
+  final List<String> openingHours;
+  final String editorialSummary;
+  final Map<String, dynamic> googlePlaceDetails;
+
+  factory GooglePlaceDetailItem.fromJson(Map<String, dynamic> json) {
+    final rawDetails = json['googlePlaceDetails'];
+    return GooglePlaceDetailItem(
+      placeName: json['placeName'] as String? ?? '',
+      address: json['address'] as String? ?? '',
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
+      category: json['category'] as String? ?? '',
+      phoneNumber: json['phoneNumber'] as String? ?? '',
+      placeUrl: json['placeUrl'] as String? ?? '',
+      websiteUri: json['websiteUri'] as String? ?? '',
+      internationalPhoneNumber:
+          json['internationalPhoneNumber'] as String? ?? '',
+      rating: (json['rating'] as num?)?.toDouble(),
+      userRatingCount: json['userRatingCount'] as int? ?? 0,
+      businessStatus: json['businessStatus'] as String? ?? '',
+      priceLevel: json['priceLevel'] as String? ?? '',
+      types: ((json['types'] as List<dynamic>?) ?? const [])
+          .map((item) => item.toString())
+          .toList(),
+      openingHours: ((json['openingHours'] as List<dynamic>?) ?? const [])
+          .map((item) => item.toString())
+          .toList(),
+      editorialSummary: json['editorialSummary'] as String? ?? '',
+      googlePlaceDetails: rawDetails is Map<String, dynamic>
+          ? rawDetails
+          : const <String, dynamic>{},
     );
   }
 }

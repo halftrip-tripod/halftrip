@@ -3,7 +3,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <application
-        android:label="travel_support_mvp"
+        android:label="하프트립"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">
@@ -29,6 +29,31 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Google Maps SDK 키 (local.properties → manifestPlaceholder 주입) -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${GOOGLE_MAP_API_KEY}" />
+        <!-- 카카오 로그인 리다이렉트 (kakao{네이티브 앱 키}://oauth) — 키는 local.properties 주입 -->
+        <activity
+            android:name="com.kakao.sdk.flutter.AuthCodeCustomTabsActivity"
+            android:exported="true">
+            <intent-filter android:label="flutter_web_auth">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="kakao${KAKAO_NATIVE_APP_KEY}" android:host="oauth" />
+            </intent-filter>
+        </activity>
+        <!-- 네이버 로그인 SDK 설정 (flutter_naver_login이 메타데이터에서 읽음) -->
+        <meta-data
+            android:name="com.naver.sdk.clientId"
+            android:value="${NAVER_CLIENT_ID}" />
+        <meta-data
+            android:name="com.naver.sdk.clientSecret"
+            android:value="${NAVER_CLIENT_SECRET}" />
+        <meta-data
+            android:name="com.naver.sdk.clientName"
+            android:value="하프트립" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

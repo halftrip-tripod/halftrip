@@ -1,207 +1,91 @@
 import 'package:flutter/material.dart';
 
 import '../core/app_scope.dart';
-import '../data/residence_options.dart';
-import '../widgets/app_shell.dart';
+import '../models/app_models.dart';
+import '../theme/app_colors.dart';
+import 'local_login_screen.dart';
 
-class LoginScreen extends StatefulWidget {
+/// 스플래시 겸 소셜 로그인 화면 (카카오·네이버).
+/// 디자인: halftrip-design/login.html
+class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
-
-  @override
-  State<LoginScreen> createState() => _LoginScreenState();
-}
-
-class _LoginScreenState extends State<LoginScreen> {
-  final _loginIdController = TextEditingController();
-  final _passwordController = TextEditingController();
-
-  final _signUpNameController = TextEditingController();
-  final _signUpLoginIdController = TextEditingController();
-  final _signUpPasswordController = TextEditingController();
-  final _signUpPhoneController = TextEditingController();
-
-  String? _selectedProvince;
-  String? _selectedCity;
-
-  @override
-  void dispose() {
-    _loginIdController.dispose();
-    _passwordController.dispose();
-    _signUpNameController.dispose();
-    _signUpLoginIdController.dispose();
-    _signUpPasswordController.dispose();
-    _signUpPhoneController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
     final controller = AppScope.of(context);
-    final cities = _selectedProvince == null
-        ? const <String>[]
-        : residenceOptions[_selectedProvince] ?? const <String>[];
 
-    return AppShell(
-      title: '로그인',
-      modeName: controller.modeName,
-      showBottomNavigation: false,
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 460),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: DefaultTabController(
-              length: 2,
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 34),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    '여행 신청부터 정산 준비까지\n한 번에 관리하는 하프트립',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          height: 1.25,
-                        ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '회원가입 후 로그인해서 여행 계획과 정산 준비를 이어가세요.',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFF64748B),
-                        ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 28),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(28),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    child: Column(
-                      children: [
-                        const SizedBox(height: 8),
-                        const TabBar(
-                          tabs: [
-                            Tab(text: '로그인'),
-                            Tab(text: '회원가입'),
-                          ],
-                        ),
-                        SizedBox(
-                          height: 430,
-                          child: TabBarView(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.all(20),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    _TextFieldCard(
-                                      controller: _loginIdController,
-                                      label: '아이디',
-                                      hintText: '로그인 아이디를 입력해 주세요',
-                                    ),
-                                    const SizedBox(height: 14),
-                                    _TextFieldCard(
-                                      controller: _passwordController,
-                                      label: '비밀번호',
-                                      hintText: '비밀번호를 입력해 주세요',
-                                      obscureText: true,
-                                    ),
-                                    const Spacer(),
-                                    FilledButton(
-                                      onPressed: controller.isBusy
-                                          ? null
-                                          : () => _handleLogin(context),
-                                      child: const Text('로그인'),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.all(20),
-                                child: ListView(
-                                  children: [
-                                    _TextFieldCard(
-                                      controller: _signUpNameController,
-                                      label: '이름',
-                                      hintText: '이름을 입력해 주세요',
-                                    ),
-                                    const SizedBox(height: 14),
-                                    _TextFieldCard(
-                                      controller: _signUpLoginIdController,
-                                      label: '아이디',
-                                      hintText: '사용할 아이디를 입력해 주세요',
-                                    ),
-                                    const SizedBox(height: 14),
-                                    _TextFieldCard(
-                                      controller: _signUpPasswordController,
-                                      label: '비밀번호',
-                                      hintText: '4자 이상 입력해 주세요',
-                                      obscureText: true,
-                                    ),
-                                    const SizedBox(height: 14),
-                                    _TextFieldCard(
-                                      controller: _signUpPhoneController,
-                                      label: '전화번호',
-                                      hintText: '010-0000-0000',
-                                    ),
-                                    const SizedBox(height: 14),
-                                    _DropdownCard<String>(
-                                      label: '광역시/도',
-                                      value: _selectedProvince,
-                                      items: residenceOptions.keys.toList(),
-                                      hintText: '거주 지역을 선택해 주세요',
-                                      onChanged: (value) {
-                                        setState(() {
-                                          _selectedProvince = value;
-                                          _selectedCity = null;
-                                        });
-                                      },
-                                    ),
-                                    const SizedBox(height: 14),
-                                    _DropdownCard<String>(
-                                      label: '시/군/구',
-                                      value: _selectedCity,
-                                      items: cities,
-                                      hintText: '상세 거주지를 선택해 주세요',
-                                      onChanged: (value) {
-                                        setState(() {
-                                          _selectedCity = value;
-                                        });
-                                      },
-                                    ),
-                                    const SizedBox(height: 20),
-                                    FilledButton(
-                                      onPressed: controller.isBusy
-                                          ? null
-                                          : () => _handleSignUp(context),
-                                      child: const Text('회원가입하고 시작하기'),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (controller.errorMessage != null) ...[
-                    const SizedBox(height: 16),
-                    Text(
-                      controller.errorMessage!,
-                      style: const TextStyle(
-                        color: Color(0xFFDC2626),
-                        fontWeight: FontWeight.w700,
+                  // 상단 영역을 채워 로고를 가운데로 끌어올림
+                  Expanded(
+                    child: Center(
+                      child: Image.asset(
+                        'assets/logo/logo.png',
+                        height: 78,
+                        fit: BoxFit.contain,
                       ),
-                      textAlign: TextAlign.center,
                     ),
-                  ],
+                  ),
+                  _Copy(),
+                  const SizedBox(height: 24),
+                  _SocialButton(
+                    background: const Color(0xFFFEE500),
+                    foreground: const Color(0xFF181600),
+                    icon: Icons.chat_bubble,
+                    label: '카카오로 시작하기',
+                    onPressed: controller.isBusy
+                        ? null
+                        : () => _handleSocial(context, LoginProvider.kakao),
+                  ),
+                  const SizedBox(height: 10),
+                  _SocialButton(
+                    background: const Color(0xFF03C75A),
+                    foreground: Colors.white,
+                    leading: const Text(
+                      'N',
+                      style: TextStyle(
+                        fontFamily: 'Pretendard',
+                        fontSize: 17,
+                        height: 1,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                      ),
+                    ),
+                    label: '네이버로 시작하기',
+                    onPressed: controller.isBusy
+                        ? null
+                        : () => _handleSocial(context, LoginProvider.naver),
+                  ),
+                  const SizedBox(height: 16),
+                  _TermsLinks(),
+                  const SizedBox(height: 6),
+                  _LocalLoginLink(
+                    onTap: controller.isBusy
+                        ? null
+                        : () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const LocalLoginScreen(),
+                              ),
+                            ),
+                  ),
                   if (controller.isBusy) ...[
                     const SizedBox(height: 18),
-                    const Center(child: CircularProgressIndicator()),
+                    const Center(
+                      child: SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2.4),
+                      ),
+                    ),
                   ],
                 ],
               ),
@@ -212,101 +96,58 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Future<void> _handleLogin(BuildContext context) async {
+  Future<void> _handleSocial(
+    BuildContext context,
+    LoginProvider provider,
+  ) async {
     final controller = AppScope.of(context);
     try {
-      await controller.loginWithCredentials(
-        loginId: _loginIdController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
+      await controller.login(provider);
     } catch (_) {
-      if (!context.mounted) {
-        return;
-      }
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('로그인에 실패했습니다. 입력한 정보를 확인해 주세요.')),
-      );
-    }
-  }
-
-  Future<void> _handleSignUp(BuildContext context) async {
-    if (_selectedProvince == null || _selectedCity == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('거주 지역을 모두 선택해 주세요.')),
-      );
-      return;
-    }
-
-    final controller = AppScope.of(context);
-    final residence = '$_selectedProvince $_selectedCity';
-
-    try {
-      await controller.signUpWithCredentials(
-        name: _signUpNameController.text.trim(),
-        loginId: _signUpLoginIdController.text.trim(),
-        password: _signUpPasswordController.text.trim(),
-        phoneNumber: _signUpPhoneController.text.trim(),
-        residence: residence,
-      );
-    } catch (_) {
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('회원가입에 실패했습니다. 입력 내용을 다시 확인해 주세요.')),
+        SnackBar(content: Text('${provider.label} 로그인에 실패했어요. 다시 시도해 주세요.')),
       );
     }
   }
 }
 
-class _TextFieldCard extends StatelessWidget {
-  const _TextFieldCard({
-    required this.controller,
-    required this.label,
-    required this.hintText,
-    this.obscureText = false,
-  });
-
-  final TextEditingController controller;
-  final String label;
-  final String hintText;
-  final bool obscureText;
-
+class _Copy extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          label,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w800,
+        RichText(
+          textAlign: TextAlign.center,
+          text: const TextSpan(
+            style: TextStyle(
+              fontFamily: 'Pretendard',
+              fontSize: 22,
+              height: 1.32,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -1,
+              color: AppColors.ink9,
+            ),
+            children: [
+              TextSpan(text: '여행경비의 절반,\n'),
+              TextSpan(
+                text: '돌려받는',
+                style: TextStyle(color: AppColors.p600),
               ),
+              TextSpan(text: ' 국내여행'),
+            ],
+          ),
         ),
         const SizedBox(height: 8),
-        TextField(
-          controller: controller,
-          obscureText: obscureText,
-          decoration: InputDecoration(
-            hintText: hintText,
-            filled: true,
-            fillColor: const Color(0xFFF8FAFC),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 16,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: Color(0xFF16A34A)),
-            ),
+        const Text(
+          '반값여행 + 디지털 관광주민증을 한 번에',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontFamily: 'Pretendard',
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: AppColors.ink5,
           ),
         ),
       ],
@@ -314,67 +155,153 @@ class _TextFieldCard extends StatelessWidget {
   }
 }
 
-class _DropdownCard<T> extends StatelessWidget {
-  const _DropdownCard({
+class _SocialButton extends StatelessWidget {
+  const _SocialButton({
+    required this.background,
+    required this.foreground,
     required this.label,
-    required this.value,
-    required this.items,
-    required this.hintText,
-    required this.onChanged,
+    required this.onPressed,
+    this.icon,
+    this.leading,
   });
 
+  final Color background;
+  final Color foreground;
   final String label;
-  final T? value;
-  final List<T> items;
-  final String hintText;
-  final ValueChanged<T?> onChanged;
+  final VoidCallback? onPressed;
+  final IconData? icon;
+  final Widget? leading;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-        ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<T>(
-          value: value,
-          items: items
-              .map(
-                (item) => DropdownMenuItem<T>(
-                  value: item,
-                  child: Text(item.toString()),
+    return Material(
+      color: background,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onPressed,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (leading != null) ...[
+                leading!,
+                const SizedBox(width: 8),
+              ] else if (icon != null) ...[
+                Icon(icon, size: 19, color: foreground),
+                const SizedBox(width: 8),
+              ],
+              Text(
+                label,
+                style: TextStyle(
+                  fontFamily: 'Pretendard',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: foreground,
                 ),
-              )
-              .toList(),
-          onChanged: onChanged,
-          decoration: InputDecoration(
-            hintText: hintText,
-            filled: true,
-            fillColor: const Color(0xFFF8FAFC),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 16,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TermsLinks extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    const linkStyle = TextStyle(
+      fontFamily: 'Pretendard',
+      fontSize: 12.5,
+      fontWeight: FontWeight.w700,
+      color: AppColors.ink5,
+      decoration: TextDecoration.underline,
+    );
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        GestureDetector(
+          onTap: () => _showDoc(context, '이용약관'),
+          child: const Text('이용약관', style: linkStyle),
+        ),
+        const Text(
+          '  ·  ',
+          style: TextStyle(
+            fontFamily: 'Pretendard',
+            fontSize: 12.5,
+            fontWeight: FontWeight.w500,
+            color: AppColors.ink4,
+          ),
+        ),
+        GestureDetector(
+          onTap: () => _showDoc(context, '개인정보처리방침'),
+          child: const Text('개인정보처리방침', style: linkStyle),
+        ),
+      ],
+    );
+  }
+
+  void _showDoc(BuildContext context, String title) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 4, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: Theme.of(context).textTheme.titleLarge,
             ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            const SizedBox(height: 12),
+            const Text(
+              '서비스 출시 전 데모 화면입니다. 실제 약관 내용은 정식 출시 시 제공됩니다.',
+              style: TextStyle(
+                fontFamily: 'Pretendard',
+                fontSize: 14,
+                height: 1.5,
+                color: AppColors.ink5,
+              ),
             ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: Color(0xFF16A34A)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LocalLoginLink extends StatelessWidget {
+  const _LocalLoginLink({required this.onTap});
+
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: GestureDetector(
+        onTap: onTap,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(vertical: 6),
+          child: Text(
+            '로컬 로그인',
+            style: TextStyle(
+              fontFamily: 'Pretendard',
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              color: AppColors.ink5,
+              decoration: TextDecoration.underline,
             ),
           ),
         ),
-      ],
+      ),
     );
   }
 }

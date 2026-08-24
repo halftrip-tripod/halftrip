@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../screens/main_navigation_screen.dart';
+import '../screens/mypage_screen.dart';
+import '../screens/notification_center_screen.dart';
+import '../theme/app_colors.dart';
 
 class AppShell extends StatelessWidget {
   const AppShell({
@@ -62,7 +65,7 @@ class AppShell extends StatelessWidget {
     final selectedIndex = currentTabIndex ?? _fallbackTabIndex();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7F3),
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
         automaticallyImplyLeading: false,
         leading: shouldShowBackButton
@@ -73,7 +76,7 @@ class AppShell extends StatelessWidget {
               )
             : null,
         leadingWidth: shouldShowBackButton ? 56 : null,
-        backgroundColor: const Color(0xFFF6F7F3),
+        backgroundColor: AppColors.bg,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         toolbarHeight: 90,
@@ -81,6 +84,7 @@ class AppShell extends StatelessWidget {
         title: _TopBar(
           actions: actions,
           showBackButton: shouldShowBackButton,
+          showUtilityActions: showBottomNavigation,
         ),
       ),
       body: SafeArea(
@@ -113,7 +117,7 @@ class AppShell extends StatelessWidget {
                           (index) => _handleFallbackTabSelected(context, index),
                       height: 84,
                       backgroundColor: Colors.white,
-                      indicatorColor: const Color(0xFFE7F7F0),
+                      indicatorColor: AppColors.p100,
                       shadowColor: Colors.transparent,
                       labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
                       destinations: const [
@@ -152,22 +156,62 @@ class _TopBar extends StatelessWidget {
   const _TopBar({
     this.actions,
     required this.showBackButton,
+    this.showUtilityActions = false,
   });
 
   final List<Widget>? actions;
   final bool showBackButton;
+  final bool showUtilityActions;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(left: showBackButton ? 4 : 20, right: 12),
+      padding: EdgeInsets.only(left: showBackButton ? 4 : 20, right: 8),
       child: Row(
         children: [
           const _BrandLogo(),
           const Spacer(),
           if (actions != null) ...actions!,
+          if (showUtilityActions) ...[
+            _TopIconButton(
+              icon: Icons.notifications_none_rounded,
+              tooltip: '알림',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                    builder: (_) => const NotificationCenterScreen()),
+              ),
+            ),
+            _TopIconButton(
+              icon: Icons.person_outline_rounded,
+              tooltip: '마이페이지',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const MyPageScreen()),
+              ),
+            ),
+          ],
         ],
       ),
+    );
+  }
+}
+
+class _TopIconButton extends StatelessWidget {
+  const _TopIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: onPressed,
+      tooltip: tooltip,
+      icon: Icon(icon, color: AppColors.ink7, size: 24),
     );
   }
 }
@@ -177,18 +221,12 @@ class _BrandLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Transform.translate(
-      offset: const Offset(-4, 1),
-      child: SizedBox(
-        height: 70,
-        width: 212,
-        child: Image.asset(
-          'assets/logo/logo.png',
-          fit: BoxFit.contain,
-          alignment: Alignment.centerLeft,
-          filterQuality: FilterQuality.high,
-        ),
-      ),
+    return Image.asset(
+      'assets/logo/logo.png',
+      height: 27,
+      fit: BoxFit.contain,
+      alignment: Alignment.centerLeft,
+      filterQuality: FilterQuality.high,
     );
   }
 }
@@ -210,26 +248,23 @@ class SectionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        boxShadow: AppShadows.card,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             title,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF0F172A),
-                ),
+            style: Theme.of(context).textTheme.titleLarge,
           ),
           if (subtitle.trim().isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
               subtitle,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF64748B),
+                    color: AppColors.ink5,
                     height: 1.5,
                   ),
             ),
