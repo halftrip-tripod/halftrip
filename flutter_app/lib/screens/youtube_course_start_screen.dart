@@ -18,6 +18,11 @@ const List<BoxShadow> _cardShadow = [
   BoxShadow(color: Color(0x0F1B3A5B), blurRadius: 18, offset: Offset(0, 5)),
 ];
 
+/// 코스 생성 플로우 중간 화면(방식 선택·지역 선택·링크 입력)의 라우트 이름.
+/// 분석 화면 진입 시 이 이름이 붙은 화면들을 스택에서 걷어내 — 대기 화면에서
+/// 뒤로 가면 여행 상세/코스함으로 바로 돌아가게 한다.
+const kCourseCreationFlowRoute = 'course-creation-flow';
+
 /// 유튜브 링크에서 영상 ID를 뽑는다. watch / youtu.be / shorts / embed 를 받는다.
 String? youtubeVideoId(String raw) {
   final value = raw.trim();
@@ -84,7 +89,10 @@ class _YoutubeCourseStartScreenState extends State<YoutubeCourseStartScreen> {
       setState(() => _errorMessage = '올바른 유튜브 영상 링크를 입력해 주세요.');
       return;
     }
-    await Navigator.of(context).push(
+    // 생성 플로우 화면(방식 선택·지역 선택·링크 입력)을 스택에서 걷어낸다 —
+    // 대기 화면에서 뒤로 가면 여행 상세/코스함으로 바로. 이미 요청해둔 상태에서
+    // 실수로 재요청하는 흐름 차단. (재생성은 실패 카드의 "다시 만들기"로 명시적으로)
+    await Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
         builder:
             (_) => YoutubeCourseAnalysisScreen(
@@ -93,8 +101,8 @@ class _YoutubeCourseStartScreenState extends State<YoutubeCourseStartScreen> {
               youtubeUrl: url,
             ),
       ),
+      (route) => route.settings.name != kCourseCreationFlowRoute,
     );
-    if (mounted) setState(() {});
   }
 
   @override
@@ -426,7 +434,7 @@ class _LinkInputCard extends StatelessWidget {
                           const SizedBox(height: 14),
                           Container(height: 1, color: _rowDivider),
                           const SizedBox(height: 14),
-                          _VideoPreview(videoId: videoId),
+                          YoutubeVideoPreview(videoId: videoId),
                         ],
                       ),
           ),
@@ -466,19 +474,19 @@ class _LinkInputCard extends StatelessWidget {
   }
 }
 
-/// 링크 미리보기 — 시안처럼 큰 썸네일 + 제목 + 채널명.
+/// 링크 미리보기 — 큰 썸네일 + 제목 + 채널명. (분석 대기 화면과 공용)
 /// 제목·채널명은 유튜브 oEmbed(키 불필요)로 가져온다. 영상 길이·조회수는
 /// YouTube Data API(서버 키)가 필요해 서버 엔드포인트가 열리면 채운다.
-class _VideoPreview extends StatefulWidget {
-  const _VideoPreview({required this.videoId});
+class YoutubeVideoPreview extends StatefulWidget {
+  const YoutubeVideoPreview({super.key, required this.videoId});
 
   final String videoId;
 
   @override
-  State<_VideoPreview> createState() => _VideoPreviewState();
+  State<YoutubeVideoPreview> createState() => _YoutubeVideoPreviewState();
 }
 
-class _VideoPreviewState extends State<_VideoPreview> {
+class _YoutubeVideoPreviewState extends State<YoutubeVideoPreview> {
   /// oEmbed 결과 캐시 — 같은 영상 재입력 시 재조회하지 않는다.
   static final Map<String, (String, String)> _metaCache = {};
 
@@ -492,7 +500,7 @@ class _VideoPreviewState extends State<_VideoPreview> {
   }
 
   @override
-  void didUpdateWidget(covariant _VideoPreview oldWidget) {
+  void didUpdateWidget(covariant YoutubeVideoPreview oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.videoId != widget.videoId) {
       _title = null;

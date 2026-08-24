@@ -90,6 +90,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   Future<void> _openYoutubeAnalysis(TripDetail detail) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
+        settings: const RouteSettings(name: kCourseCreationFlowRoute),
         builder: (_) => YoutubeCourseStartScreen(tripDetail: detail),
       ),
     );
@@ -202,6 +203,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     );
     await Navigator.of(context).push(
       MaterialPageRoute(
+        settings: const RouteSettings(name: kCourseCreationFlowRoute),
         builder:
             (builderContext) => CourseCreateScreen(
               forTrip: proxy,
