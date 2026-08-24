@@ -8,6 +8,10 @@ import '../models/app_models.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui/app_card.dart';
 import '../widgets/place_map_view.dart';
+import '../mock_ui/screens/course_flow.dart'
+    show CourseViewScreen, courseFromSaved;
+import 'youtube_course_start_screen.dart'
+    show YoutubeCourseStartScreen, YoutubeVideoPreview, youtubeVideoId;
 import 'youtube_travel_plan_screen.dart';
 
 class YoutubeCourseAnalysisScreen extends StatefulWidget {
@@ -36,6 +40,9 @@ class _YoutubeCourseAnalysisScreenState
     extends State<YoutubeCourseAnalysisScreen> {
   String? _jobId;
   YoutubeCourseJobItem? _job;
+
+  /// 분석 단계 연출용 경과 시간 — 폴링(5초) setState 때마다 다시 읽힌다.
+  final Stopwatch _analysisStopwatch = Stopwatch()..start();
   String? _errorMessage;
   bool _creating = true;
   Timer? _pollingTimer;
@@ -140,6 +147,18 @@ class _YoutubeCourseAnalysisScreenState
         _errorMessage = '유튜브 코스 작업을 시작하지 못했습니다.\n$error';
       });
     }
+  }
+
+  /// 실패 시에만 링크 입력으로 명시 복귀 — 대기 화면 뒤로가기는 여행 상세로 간다.
+  void _retryWithNewLink() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => YoutubeCourseStartScreen(
+          tripDetail: widget.tripDetail,
+          regionName: widget.regionName,
+        ),
+      ),
+    );
   }
 
   void _startPollingIfNeeded() {
@@ -404,6 +423,20 @@ class _YoutubeCourseAnalysisScreenState
     }
   }
 
+  /// 코스함 경로 — 완료 시점에 이미 자동 저장돼 있으므로 저장 대신 바로 연다.
+  Future<void> _openInSavedCourses() async {
+    final job = _job;
+    if (job == null) return;
+    final controller = AppScope.of(context);
+    final saved = controller.findSavedCourse(job.jobId);
+    if (saved == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CourseViewScreen(course: courseFromSaved(saved)),
+      ),
+    );
+  }
+
   void _openTravelPlan() {
     final job = _job;
     if (job == null || job.result == null) return;
@@ -537,9 +570,23 @@ class _YoutubeCourseAnalysisScreenState
                   const SizedBox(width: 10),
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: _saving ? null : _saveToPlanner,
-                      icon: const Icon(Icons.bookmark_rounded, size: 18),
-                      label: Text(_saving ? '저장 중...' : '내 코스함에 저장'),
+                      // 여행 경로 = 플래너 적용·확정 코스 연결 / 코스함 경로 = 이미
+                      // 자동 저장돼 있으니 저장 대신 코스함 보기로 바로 연다.
+                      onPressed: _saving
+                          ? null
+                          : ((widget.tripDetail != null || _job?.tripId != null)
+                              ? _saveToPlanner
+                              : _openInSavedCourses),
+                      icon: Icon(
+                          (widget.tripDetail != null || _job?.tripId != null)
+                              ? Icons.bookmark_rounded
+                              : Icons.folder_open_rounded,
+                          size: 18),
+                      label: Text(_saving
+                          ? '저장 중...'
+                          : ((widget.tripDetail != null || _job?.tripId != null)
+                              ? '이 여행 코스로 등록'
+                              : '코스함에서 열기')),
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.p500,
                         foregroundColor: Colors.white,
@@ -579,13 +626,19 @@ class _YoutubeCourseAnalysisScreenState
                   ),
                   const SizedBox(height: 16),
                   if (pending)
-                    _AnalyzingCard(processing: job?.isProcessing ?? false),
+                    _AnalyzingCard(
+                      processing: job?.isProcessing ?? false,
+                      elapsedSeconds: _analysisStopwatch.elapsed.inSeconds,
+                    ),
                   if (_errorMessage != null && job == null) ...[
                     const SizedBox(height: 12),
-                    _FailedCard(message: _errorMessage!),
+                    _FailedCard(
+                        message: _errorMessage!, onRetry: _retryWithNewLink),
                   ],
                   if (job != null && job.isFailed)
-                    _FailedCard(message: job.errorMessage ?? '알 수 없는 오류'),
+                    _FailedCard(
+                        message: job.errorMessage ?? '알 수 없는 오류',
+                        onRetry: _retryWithNewLink),
                 ],
               ),
     );
@@ -883,6 +936,11 @@ class _VideoCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 13),
+          // 어떤 영상을 분석 중인지 보이게 — 시작 화면과 같은 썸네일+제목+채널 미리보기.
+          if (youtubeVideoId(youtubeUrl) != null) ...[
+            YoutubeVideoPreview(videoId: youtubeVideoId(youtubeUrl)!),
+            const SizedBox(height: 12),
+          ],
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
             decoration: BoxDecoration(
@@ -917,9 +975,13 @@ class _VideoCard extends StatelessWidget {
 
 /// 분석 진행 카드 (디자인 ytanalyze + bgnote).
 class _AnalyzingCard extends StatelessWidget {
-  const _AnalyzingCard({required this.processing});
+  const _AnalyzingCard({required this.processing, this.elapsedSeconds = 0});
 
   final bool processing;
+
+  /// 분석 시작 후 경과 시간 — 서버는 대기/처리 중만 알려주므로,
+  /// 처리 중에는 경과 시간에 따라 단계를 자연스럽게 진행시킨다(45초/칸).
+  final int elapsedSeconds;
 
   @override
   Widget build(BuildContext context) {
@@ -929,7 +991,7 @@ class _AnalyzingCard extends StatelessWidget {
       ('환급 인정 관광지와 매칭', 2),
       ('동선 짜고 코스 완성', 3),
     ];
-    final current = processing ? 1 : 0;
+    final current = processing ? (1 + elapsedSeconds ~/ 45).clamp(1, 3) : 0;
 
     return Column(
       children: [
@@ -964,7 +1026,7 @@ class _AnalyzingCard extends StatelessWidget {
                     ),
                     SizedBox(height: 4),
                     Text(
-                      '코스는 백그라운드에서 계속 만들어지고, 완료되면 알림으로 알려드려요.',
+                      '완료되면 알림으로 알려드려요 · 약 2~3분 소요 예정',
                       style: TextStyle(
                         fontFamily: 'Pretendard',
                         fontSize: 12,
@@ -1052,9 +1114,12 @@ class _AnalyzingCard extends StatelessWidget {
 
 /// 분석 실패 카드 (디자인 failbox).
 class _FailedCard extends StatelessWidget {
-  const _FailedCard({required this.message});
+  const _FailedCard({required this.message, this.onRetry});
 
   final String message;
+
+  /// 다른 영상으로 다시 만들기 — 링크 입력 화면으로 명시적으로 복귀.
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -1098,6 +1163,19 @@ class _FailedCard extends StatelessWidget {
               height: 1.55,
             ),
           ),
+          if (onRetry != null) ...[
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('다른 영상으로 다시 만들기'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(double.infinity, 48),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18)),
+              ),
+            ),
+          ],
         ],
       ),
     );
