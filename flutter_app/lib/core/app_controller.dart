@@ -3,6 +3,8 @@ import 'dart:async';
 
 import 'package:firebase_messaging/firebase_messaging.dart'
     hide NotificationSettings;
+import 'package:flutter_naver_login/flutter_naver_login.dart';
+import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' as kakao;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -256,10 +258,28 @@ class AppController extends ChangeNotifier {
     final preferences = await SharedPreferences.getInstance();
     await preferences.clear();
     await clearPersistedSession();
+    // 탈퇴는 로그아웃과 달리 소셜 연결 자체를 끊는다(카카오 unlink).
+    await _signOutSocialSdks(unlink: true);
     savedCourses = const [];
     selectedCourseIdsByTrip = const <int, String>{};
     pendingYoutubeCourseJobs = const [];
     logout();
+  }
+
+  /// 소셜 SDK 토큰 정리 — 로그아웃·탈퇴 시 기기에 남은 카카오·네이버 세션을 지운다.
+  /// (네이버 로그인 검수 항목: 서비스 로그아웃 시 토큰 폐기. 미설정·웹이면 조용히 통과)
+  Future<void> _signOutSocialSdks({bool unlink = false}) async {
+    if (kIsWeb) return;
+    try {
+      if (unlink) {
+        await kakao.UserApi.instance.unlink();
+      } else {
+        await kakao.UserApi.instance.logout();
+      }
+    } catch (_) {}
+    try {
+      await FlutterNaverLogin.logOutAndDeleteToken();
+    } catch (_) {}
   }
 
   void logout() {
@@ -267,6 +287,7 @@ class AppController extends ChangeNotifier {
     _repository.clearSession();
     // 기기에 남긴 세션도 함께 파기 (완료를 기다릴 필요는 없음).
     unawaited(clearPersistedSession());
+    unawaited(_signOutSocialSdks());
     currentUser = null;
     trips = const [];
     needsResidenceSetup = false;
