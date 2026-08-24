@@ -172,10 +172,13 @@ class CourseCreateScreen extends StatelessWidget {
   void _go(BuildContext context, Widget Function(Region) builder) {
     if (forTrip != null) {
       final region = AppState.I.regionByName(forTrip!.region);
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => builder(region)));
+      Navigator.of(context).push(MaterialPageRoute(
+          settings: const RouteSettings(name: kCourseCreationFlowRoute),
+          builder: (_) => builder(region)));
       return;
     }
     Navigator.of(context).push(MaterialPageRoute(
+        settings: const RouteSettings(name: kCourseCreationFlowRoute),
         builder: (_) => CourseRegionScreen(onPicked: builder)));
   }
 
@@ -435,7 +438,10 @@ class _CourseRegionScreenState extends State<CourseRegionScreen> {
             padding: const EdgeInsets.all(15),
             radius: 18,
             onTap: () => Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (_) => widget.onPicked(r))),
+                MaterialPageRoute(
+                    settings:
+                        const RouteSettings(name: kCourseCreationFlowRoute),
+                    builder: (_) => widget.onPicked(r))),
             child: Row(children: [
               EmojiBox(r.emoji, size: 46, fontSize: 23),
               const SizedBox(width: 13),
@@ -1626,6 +1632,8 @@ class _CourseSavedScreenState extends State<CourseSavedScreen> {
           icon: const Icon(Icons.add_rounded, color: AppColors.p600),
           onPressed: () => Navigator.of(context)
               .push(MaterialPageRoute(
+                  settings:
+                      const RouteSettings(name: kCourseCreationFlowRoute),
                   builder: (_) => const CourseCreateScreen()))
               .then((_) => setState(() {})),
         ),
