@@ -10,6 +10,7 @@ import '../widgets/ui/app_card.dart';
 import '../widgets/place_map_view.dart';
 import '../mock_ui/screens/course_flow.dart'
     show CourseViewScreen, courseFromSaved;
+import 'planner_screen.dart';
 import 'youtube_course_start_screen.dart'
     show YoutubeCourseStartScreen, YoutubeVideoPreview, youtubeVideoId;
 import 'youtube_travel_plan_screen.dart';
@@ -406,9 +407,26 @@ class _YoutubeCourseAnalysisScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text(tripId != null
-                ? '생성된 코스를 현재 여행 플래너에 적용했습니다.'
+                ? '코스를 이 여행에 등록했어요.'
                 : '코스를 내 코스함에 저장했습니다.')),
       );
+      // 등록 직후엔 보통 바로 다듬는다 — 연필 편집이 있는 코스 보기로 교체 진입.
+      // (생성 플로우 화면들은 이미 걷어내서, 뒤로 가면 여행 상세로 돌아간다)
+      if (tripId != null && savedCourse != null && mounted) {
+        final navigator = Navigator.of(context);
+        await navigator.pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => CourseViewScreen(
+              course: courseFromSaved(savedCourse),
+              editInAppBar: true,
+              onEdit: () => navigator.push(
+                MaterialPageRoute(
+                    builder: (_) => PlannerScreen(tripId: tripId)),
+              ),
+            ),
+          ),
+        );
+      }
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -585,7 +603,7 @@ class _YoutubeCourseAnalysisScreenState
                       label: Text(_saving
                           ? '저장 중...'
                           : ((widget.tripDetail != null || _job?.tripId != null)
-                              ? '이 여행 코스로 등록'
+                              ? '이 코스로 등록'
                               : '코스함에서 열기')),
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.p500,
