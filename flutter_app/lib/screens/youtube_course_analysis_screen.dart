@@ -9,7 +9,7 @@ import '../theme/app_colors.dart';
 import '../widgets/ui/app_card.dart';
 import '../widgets/place_map_view.dart';
 import '../mock_ui/screens/course_flow.dart'
-    show CourseViewScreen, courseFromSaved;
+    show CourseEditScreen, CourseViewScreen, courseFromSaved, savedStopsFromCourse;
 import 'planner_screen.dart';
 import 'youtube_course_start_screen.dart'
     show YoutubeCourseStartScreen, YoutubeVideoPreview, youtubeVideoId;
@@ -441,16 +441,28 @@ class _YoutubeCourseAnalysisScreenState
     }
   }
 
-  /// 코스함 경로 — 완료 시점에 이미 자동 저장돼 있으므로 저장 대신 바로 연다.
-  Future<void> _openInSavedCourses() async {
+  /// 코스함 경로 — 완료 시점에 이미 자동 저장돼 있으므로, 결과에서 바로 편집으로.
+  /// (결과 화면이 이미 지도·일정을 보여주니 코스 보기를 한 번 더 열 이유가 없다)
+  Future<void> _editSavedCourse() async {
     final job = _job;
     if (job == null) return;
     final controller = AppScope.of(context);
     final saved = controller.findSavedCourse(job.jobId);
     if (saved == null) return;
+    final viewCourse = courseFromSaved(saved);
     await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => CourseViewScreen(course: courseFromSaved(saved)),
+      MaterialPageRoute(builder: (_) => CourseEditScreen(course: viewCourse)),
+    );
+    // 편집 결과를 실스토어(영속)에 반영 — 코스함 편집과 같은 경로.
+    await controller.saveCourse(
+      SavedCourse(
+        id: saved.id,
+        regionId: saved.regionId,
+        regionName: saved.regionName,
+        title: viewCourse.title,
+        preferences: saved.preferences,
+        stops: savedStopsFromCourse(viewCourse.stops),
+        createdAt: saved.createdAt,
       ),
     );
   }
@@ -594,17 +606,17 @@ class _YoutubeCourseAnalysisScreenState
                           ? null
                           : ((widget.tripDetail != null || _job?.tripId != null)
                               ? _saveToPlanner
-                              : _openInSavedCourses),
+                              : _editSavedCourse),
                       icon: Icon(
                           (widget.tripDetail != null || _job?.tripId != null)
                               ? Icons.bookmark_rounded
-                              : Icons.folder_open_rounded,
+                              : Icons.edit_rounded,
                           size: 18),
                       label: Text(_saving
                           ? '저장 중...'
                           : ((widget.tripDetail != null || _job?.tripId != null)
                               ? '이 코스로 등록'
-                              : '코스함에서 열기')),
+                              : '코스 편집하기')),
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.p500,
                         foregroundColor: Colors.white,
