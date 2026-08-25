@@ -600,6 +600,33 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<ReceiptItem> correctReceipt({
+    required int tripId,
+    required int receiptId,
+    int? amount,
+    PaymentType? paymentType,
+    DateTime? paymentDateTime,
+  }) async {
+    // 서버가 "yyyy-MM-dd HH:mm" 문자열을 기대한다 (springboot #58).
+    String? dt;
+    if (paymentDateTime != null) {
+      final d = paymentDateTime;
+      String two(int v) => v.toString().padLeft(2, '0');
+      dt = '${d.year}-${two(d.month)}-${two(d.day)} ${two(d.hour)}:${two(d.minute)}';
+    }
+    final response = await _jsonRequest(
+      'PATCH',
+      '/trips/$tripId/receipts/$receiptId',
+      body: {
+        if (amount != null) 'amount': amount,
+        if (paymentType != null) 'paymentType': paymentType.wireName,
+        if (dt != null) 'paymentDateTime': dt,
+      },
+    );
+    return ReceiptItem.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  @override
   Future<LodgingInfo> saveLodgingInfo(
     int tripId,
     LodgingInfo lodgingInfo,

@@ -1264,6 +1264,45 @@ class MockTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<ReceiptItem> correctReceipt({
+    required int tripId,
+    required int receiptId,
+    int? amount,
+    PaymentType? paymentType,
+    DateTime? paymentDateTime,
+  }) async {
+    final receipts = [...?_tripReceipts[tripId]];
+    final index = receipts.indexWhere((item) => item.id == receiptId);
+    if (index < 0) {
+      throw StateError('Receipt not found: $receiptId');
+    }
+    final before = receipts[index];
+    final nextAmount = amount ?? before.amount ?? 0;
+    final nextPaymentType = paymentType ?? before.paymentType;
+    // 보정값도 실서버처럼 심사를 다시 탄다 — mock에서만 통과하는 값이 생기지 않게.
+    final review = _reviewReceipt(nextPaymentType, before.usageScope, nextAmount);
+    final corrected = ReceiptItem(
+      id: before.id,
+      uploadedFileId: before.uploadedFileId,
+      paymentType: nextPaymentType,
+      usageScope: before.usageScope,
+      reviewStatus: review.$1,
+      amount: nextAmount,
+      paymentDateTime: paymentDateTime ?? before.paymentDateTime,
+      eligibleAmount: review.$2,
+      reviewReason: review.$3,
+      rawText: before.rawText,
+    );
+    receipts[index] = corrected;
+    _tripReceipts[tripId] = receipts;
+
+    final trip = _requireTrip(tripId);
+    final total = receipts.fold<int>(0, (sum, item) => sum + item.eligibleAmount);
+    _trips[tripId] = trip.copyWith(totalSpentAmount: total);
+    return corrected;
+  }
+
+  @override
   Future<LodgingInfo> saveLodgingInfo(
       int tripId, LodgingInfo lodgingInfo) async {
     final next = lodgingInfo.id == 0 ? lodgingInfo.copyWith() : lodgingInfo;
