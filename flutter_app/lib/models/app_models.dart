@@ -90,6 +90,16 @@ extension PaymentTypeWire on PaymentType {
         PaymentType.simpleReceipt => '간이영수증',
         PaymentType.unknown => '판별 실패',
       };
+
+  String get wireName => switch (this) {
+        PaymentType.creditCard => 'CREDIT_CARD',
+        PaymentType.checkCard => 'CHECK_CARD',
+        PaymentType.onlinePayment => 'ONLINE_PAYMENT',
+        PaymentType.bankTransfer => 'BANK_TRANSFER',
+        PaymentType.cashReceipt => 'CASH_RECEIPT',
+        PaymentType.simpleReceipt => 'SIMPLE_RECEIPT',
+        PaymentType.unknown => 'UNKNOWN',
+      };
 }
 
 extension ReceiptUsageScopeWire on ReceiptUsageScope {

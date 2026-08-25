@@ -116,6 +116,16 @@ abstract class TravelRepository {
     required int uploadedFileId,
     required ReceiptUsageScope usageScope,
   });
+
+  /// OCR이 잘못 읽은 값을 사용자가 바로잡는다. null 필드는 기존 값 유지.
+  /// 보정값도 서버에서 분석과 같은 심사를 다시 탄다.
+  Future<ReceiptItem> correctReceipt({
+    required int tripId,
+    required int receiptId,
+    int? amount,
+    PaymentType? paymentType,
+    DateTime? paymentDateTime,
+  });
   Future<LodgingInfo> saveLodgingInfo(int tripId, LodgingInfo lodgingInfo);
   Future<LodgingInfo> extractLodgingInfo({
     required int tripId,
