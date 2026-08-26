@@ -414,15 +414,21 @@ class _YoutubeCourseAnalysisScreenState
       // (생성 플로우 화면들은 이미 걷어내서, 뒤로 가면 여행 상세로 돌아간다)
       if (tripId != null && savedCourse != null && mounted) {
         final navigator = Navigator.of(context);
+        final viewCourse = courseFromSaved(savedCourse);
         await navigator.pushReplacement(
           MaterialPageRoute(
             builder: (_) => CourseViewScreen(
-              course: courseFromSaved(savedCourse),
-              editInAppBar: true,
-              onEdit: () => navigator.push(
-                MaterialPageRoute(
-                    builder: (_) => PlannerScreen(tripId: tripId)),
-              ),
+              course: viewCourse,
+              // 연필 편집(통일 CourseEditScreen) 후 실스토어에 반영.
+              onEdited: () => controller.saveCourse(SavedCourse(
+                id: savedCourse.id,
+                regionId: savedCourse.regionId,
+                regionName: savedCourse.regionName,
+                title: viewCourse.title,
+                preferences: savedCourse.preferences,
+                stops: savedStopsFromCourse(viewCourse.stops),
+                createdAt: savedCourse.createdAt,
+              )),
             ),
           ),
         );

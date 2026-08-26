@@ -5,7 +5,6 @@ import '../../models/app_models.dart';
 import '../../screens/auth_photo_upload_screen.dart';
 import '../../screens/youtube_course_start_screen.dart';
 import '../../screens/lodging_form_screen.dart';
-import '../../screens/planner_screen.dart';
 import '../../screens/receipt_evidence_screen.dart';
 import '../../screens/settlement_screen.dart';
 import '../../screens/submission_package_screen.dart';
@@ -97,15 +96,24 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     await _reload();
   }
 
-  /// 확정 코스 탭 — 수정 / 여행 등록 취소 / 보관함 삭제 를 고르는 시트.
-  /// 코스 상세 보기 — 코스함 상세와 같은 지도+DAY+타임라인, 편집은 우측 상단 연필.
+  /// 코스 상세 보기 — 코스함 상세와 완전히 같은 화면(지도+DAY+번호 리스트).
+  /// 수정은 우측 상단 연필(통일된 CourseEditScreen), ⋯에는 등록취소·삭제만.
   void _openCourseView(TripDetail detail, SavedCourse course) {
+    final c = _asViewCourse(course);
     Navigator.of(context)
         .push(MaterialPageRoute(
           builder: (_) => CourseViewScreen(
-            course: _asViewCourse(course),
-            editInAppBar: true,
-            onEdit: () => _push(PlannerScreen(tripId: widget.tripId)),
+            course: c,
+            // 편집 저장 후 실스토어(코스함)에 반영 — 여행 코스도 원본은 코스함.
+            onEdited: () => AppScope.of(context).saveCourse(SavedCourse(
+              id: course.id,
+              regionId: course.regionId,
+              regionName: course.regionName,
+              title: c.title,
+              preferences: course.preferences,
+              stops: savedStopsFromCourse(c.stops),
+              createdAt: course.createdAt,
+            )),
             onMore: () async {
               final action = await _openCourseActions(detail, course);
               // 등록취소·삭제됐으면 이 코스 상세는 더 보여줄 게 없다 — 여행 상세로 복귀.
@@ -136,13 +144,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                     color: AppColors.ink9)),
           ),
         ),
-        ListTile(
-          leading: const Icon(Icons.edit_outlined,
-              size: 20, color: AppColors.ink7),
-          title: const Text('코스 수정',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-          onTap: () => Navigator.of(context).pop('edit'),
-        ),
+        // 코스 수정은 상세 화면 우측 상단 연필로 — 이 시트에는 등록취소/삭제만.
         ListTile(
           leading: const Icon(Icons.link_off_rounded,
               size: 20, color: AppColors.ink7),
@@ -170,8 +172,6 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     if (!mounted || action == null) return null;
     final controller = AppScope.of(context);
     switch (action) {
-      case 'edit':
-        _push(PlannerScreen(tripId: widget.tripId));
       case 'unlink':
         await controller.unselectCourseForTrip(detail.trip.id);
         if (mounted) {
@@ -200,6 +200,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       people: trip.travelerCount,
       stage: mock.TripStage.before,
       nights: trip.endDate.difference(trip.startDate).inDays,
+      backendId: trip.id,
     );
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -499,7 +500,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
               ),
               const Spacer(),
               GestureDetector(
-                onTap: () => _push(PlannerScreen(tripId: widget.tripId)),
+                onTap: () => _openCourseView(detail, course),
                 child: const Text(
                   '코스 전체 보기 ›',
                   style: TextStyle(
@@ -517,7 +518,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
               title: course.title,
               subtitle: '${course.regionName} · ${course.stops.length}곳',
               tinted: true,
-              onTap: () => _push(PlannerScreen(tripId: widget.tripId)),
+              onTap: () => _openCourseView(detail, course),
             ),
           ],
         )

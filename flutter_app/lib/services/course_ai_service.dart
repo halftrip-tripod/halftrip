@@ -12,6 +12,7 @@ class AiCourseStop {
     required this.order,
     required this.reason,
     required this.eligibleForRefund,
+    this.category = '',
   });
 
   final String name;
@@ -19,6 +20,7 @@ class AiCourseStop {
   final int order;
   final String reason;
   final bool eligibleForRefund;
+  final String category;
 
   factory AiCourseStop.fromJson(Map<String, dynamic> json) {
     return AiCourseStop(
@@ -27,6 +29,7 @@ class AiCourseStop {
       order: (json['order'] as num?)?.toInt() ?? 0,
       reason: json['reason'] as String? ?? '',
       eligibleForRefund: json['eligibleForRefund'] as bool? ?? false,
+      category: json['category'] as String? ?? '',
     );
   }
 }
