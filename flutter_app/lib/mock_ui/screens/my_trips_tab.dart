@@ -45,10 +45,14 @@ class _MyTripsTabState extends State<MyTripsTab> {
     final controller = AppScope.of(context);
     final trips = controller.trips;
     // 진행 중 = 정산 신청 전 전부(여행 전·중·종료 대기). 배지가 단계를 말해주므로
-    // 섹션을 쪼개지 않고, 정산 신청까지 마친 여행만 지난 여행으로 내린다.
-    final active = trips.where((t) => !t.settlementApplied).toList()
+    // 섹션을 쪼개지 않되, 정산 신청을 마쳤거나 마감이 지난 여행은 지난 여행으로 내린다.
+    final active = trips
+        .where((t) => !t.settlementApplied && !settlementExpired(t))
+        .toList()
       ..sort((a, b) => a.startDate.compareTo(b.startDate));
-    final past = trips.where((t) => t.settlementApplied).toList()
+    final past = trips
+        .where((t) => t.settlementApplied || settlementExpired(t))
+        .toList()
       ..sort((a, b) => b.endDate.compareTo(a.endDate));
     final favCount = controller.currentUser?.favoriteRegions.length ?? 0;
 
@@ -130,8 +134,11 @@ class _MyTripsTabState extends State<MyTripsTab> {
             const SizedBox(height: 12),
             for (final trip in past) ...[
               AppCard(
-                onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => PastTripScreen(tripId: trip.id))),
+                // 신청 완료 여행은 지난 여행 화면, 마감 지남 여행은 상세(마감 안내)로.
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => trip.settlementApplied
+                        ? PastTripScreen(tripId: trip.id)
+                        : TripDetailScreen(tripId: trip.id))),
                 child: Row(children: [
                   RegionArt(trip.regionName, size: 48, fontSize: 24, radius: 15),
                   const SizedBox(width: 13),
@@ -144,7 +151,10 @@ class _MyTripsTabState extends State<MyTripsTab> {
                           style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink5)),
                     ]),
                   ),
-                  const Pill('정산 신청 완료', tone: PillTone.gold),
+                  // 마감이 지나 내려온 여행은 완료가 아니라 마감 지남으로 정직하게.
+                  trip.settlementApplied
+                      ? const Pill('정산 신청 완료', tone: PillTone.gold)
+                      : const Pill('정산 마감 지남', tone: PillTone.gray),
                 ]),
               ),
               const SizedBox(height: 12),
@@ -200,6 +210,17 @@ TripStageView stageOf(TripSummary t) {
 }
 
 enum TripStageView { before, during, settle, review }
+
+/// 정산 마감이 지났는데 신청도 안 한 여행 — 목록에선 지난 여행으로 내리고,
+/// 상세에선 정산 권유를 멈춘다 (QA 8/26 #2·#3).
+bool settlementExpired(TripSummary t) {
+  if (t.settlementApplied) return false;
+  if (stageOf(t) != TripStageView.settle) return false;
+  final deadline = t.settlementDeadline;
+  if (deadline == null) return false;
+  return DateUtils.dateOnly(deadline)
+      .isBefore(DateUtils.dateOnly(DateTime.now()));
+}
 
 String regionEmojiOf(String regionName) {
   const map = <String, String>{
