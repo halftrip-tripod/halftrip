@@ -9,6 +9,10 @@ abstract class TravelRepository {
   /// mock 구현은 들고 있는 토큰이 없으므로 아무것도 하지 않는다.
   void clearSession() {}
 
+  /// 현재 세션 토큰 — 헤더를 직접 붙일 수 없는 곳(브라우저 PDF 뷰어 등)에
+  /// 넘겨주기 위해 노출한다. mock·비로그인 상태에서는 null.
+  String? get authToken => null;
+
   Future<AppUser> mockLogin(LoginProvider provider);
   /// 소셜 로그인 — SDK가 받은 액세스 토큰을 서버가 제공자 API로 검증.
   Future<SocialLoginResult> socialLogin({
@@ -50,6 +54,19 @@ abstract class TravelRepository {
     bool includeMerchants = true,
   });
   Future<PlaceInfoDetail> getPlaceInfoDetail(int regionId, {String? residence});
+
+  /// 지역 축제 — TourAPI 실시간. 진행 중·예정 축제가 없으면 빈 목록.
+  Future<List<RegionFestival>> getRegionFestivals(int regionId) async => const [];
+
+  /// 지역 관광지·맛집·숙소 — TourAPI 실시간. type: 관광지|맛집|숙소|null(전체), keyword: 검색어(선택).
+  Future<List<TourAttraction>> getRegionAttractions(int regionId,
+          {String? type, String? keyword}) async =>
+      const [];
+
+  /// TourAPI 관광지 상세 — 없으면 null(화면은 기본 정보만).
+  Future<TourPlaceDetail?> getTourPlaceDetail(String contentId,
+          {int contentTypeId = 12}) async =>
+      null;
   Future<MerchantMapSearchResult> getMerchantMap({
     required int regionId,
     double? southLat,

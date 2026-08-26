@@ -22,6 +22,9 @@ class MockTravelRepository implements TravelRepository {
   }
 
   @override
+  String? get authToken => null;
+
+  @override
   Future<SocialLoginResult> socialLogin({
     required LoginProvider provider,
     required String accessToken,
@@ -865,6 +868,19 @@ class MockTravelRepository implements TravelRepository {
       onlineMalls: detail.onlineMalls,
     );
   }
+
+  @override
+  Future<List<RegionFestival>> getRegionFestivals(int regionId) async => const [];
+
+  @override
+  Future<List<TourAttraction>> getRegionAttractions(int regionId,
+          {String? type, String? keyword}) async =>
+      const [];
+
+  @override
+  Future<TourPlaceDetail?> getTourPlaceDetail(String contentId,
+          {int contentTypeId = 12}) async =>
+      null;
 
   @override
   Future<MerchantMapSearchResult> getMerchantMap({
