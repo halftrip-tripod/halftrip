@@ -14,6 +14,7 @@ class PlaceMapView extends StatelessWidget {
     required this.kakaoEnabled,
     this.routeMarkers = const [],
     this.connectSequentially = false,
+    this.numberedMarkers = false,
     this.highlightedMarkerId,
     this.onMarkerTap,
     this.onMarkerDoubleTap,
@@ -30,6 +31,7 @@ class PlaceMapView extends StatelessWidget {
   final bool kakaoEnabled;
   final List<PlaceMapRoutePoint> routeMarkers;
   final bool connectSequentially;
+  final bool numberedMarkers;
   final int? highlightedMarkerId;
   final ValueChanged<int>? onMarkerTap;
   final ValueChanged<int>? onMarkerDoubleTap;
@@ -52,6 +54,7 @@ class PlaceMapView extends StatelessWidget {
         emptyMessage: emptyMessage,
         routeMarkers: routeMarkers,
         connectSequentially: connectSequentially,
+        numberedMarkers: numberedMarkers,
         highlightedMarkerId: highlightedMarkerId,
         onMarkerTap: onMarkerTap,
         onMarkerDetailsRequested: onMarkerDetailsRequested,
