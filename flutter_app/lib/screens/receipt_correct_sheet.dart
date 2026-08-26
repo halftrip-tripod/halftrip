@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../core/app_scope.dart';
+import '../mock_ui/widgets/ui.dart';
 import '../models/app_models.dart';
 import '../theme/app_colors.dart';
 
@@ -16,14 +17,9 @@ Future<ReceiptItem?> showReceiptCorrectSheet(
   required int tripId,
   required ReceiptItem receipt,
 }) {
-  return showModalBottomSheet<ReceiptItem>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.white,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-    ),
-    builder: (_) => _ReceiptCorrectSheet(tripId: tripId, receipt: receipt),
+  return showAppSheet<ReceiptItem>(
+    context,
+    child: _ReceiptCorrectSheet(tripId: tripId, receipt: receipt),
   );
 }
 
@@ -66,6 +62,19 @@ class _ReceiptCorrectSheetState extends State<_ReceiptCorrectSheet> {
   void dispose() {
     _amountController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickPaymentType() async {
+    final picked = await pickOption(
+      context,
+      title: '결제수단',
+      options: [for (final type in _selectableTypes) type.label],
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _paymentType =
+          _selectableTypes.firstWhere((type) => type.label == picked);
+    });
   }
 
   Future<void> _pickDateTime() async {
@@ -134,116 +143,107 @@ class _ReceiptCorrectSheetState extends State<_ReceiptCorrectSheet> {
     final won = NumberFormat('#,###');
     final dt = _paymentDateTime;
     return Padding(
-      padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 18,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-      ),
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text('영수증 정보 수정',
               style: TextStyle(
-                  fontFamily: 'Pretendard',
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.ink9)),
-          const SizedBox(height: 4),
-          const Text('AI가 잘못 읽은 값을 고쳐 주세요. 수정한 값으로 인정 여부를 다시 심사해요.',
-              style: TextStyle(
-                  fontFamily: 'Pretendard',
-                  fontSize: 12.5,
-                  height: 1.5,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.ink5)),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.ink9,
+                  letterSpacing: -.4)),
           const SizedBox(height: 18),
           _label('금액'),
           TextField(
             controller: _amountController,
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: _fieldDecoration(
-              hint: '예: ${won.format(45000)}',
+            style: const TextStyle(
+                fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink9),
+            decoration: InputDecoration(
+              hintText: '예: ${won.format(45000)}',
+              hintStyle: const TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.ink4),
               suffixText: '원',
-            ),
-          ),
-          const SizedBox(height: 14),
-          _label('결제수단'),
-          DropdownButtonFormField<PaymentType>(
-            initialValue:
-                _selectableTypes.contains(_paymentType) ? _paymentType : null,
-            hint: const Text('결제수단 선택'),
-            items: [
-              for (final type in _selectableTypes)
-                DropdownMenuItem(value: type, child: Text(type.label)),
-            ],
-            onChanged: (value) {
-              if (value != null) setState(() => _paymentType = value);
-            },
-            decoration: _fieldDecoration(),
-          ),
-          const SizedBox(height: 14),
-          _label('결제일시'),
-          OutlinedButton.icon(
-            onPressed: _pickDateTime,
-            icon: const Icon(Icons.event_rounded, size: 18),
-            label: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                dt == null
-                    ? '날짜와 시간 선택'
-                    : '${dt.year}.${dt.month}.${dt.day} '
-                        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}',
-                style: const TextStyle(
-                    fontFamily: 'Pretendard',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600),
+              suffixStyle: const TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink5),
+              filled: true,
+              fillColor: AppColors.surf,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide.none,
               ),
             ),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(48),
-              alignment: Alignment.centerLeft,
-            ),
           ),
-          const SizedBox(height: 20),
-          FilledButton(
-            onPressed: _saving ? null : _save,
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
-            child: _saving
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
-                : const Text('저장하고 다시 심사받기'),
+          const SizedBox(height: 16),
+          _label('결제수단'),
+          _pickField(
+            value: _selectableTypes.contains(_paymentType)
+                ? _paymentType.label
+                : null,
+            placeholder: '결제수단 선택',
+            trailing: Icons.expand_more_rounded,
+            onTap: _pickPaymentType,
           ),
+          const SizedBox(height: 16),
+          _label('결제일시'),
+          _pickField(
+            value: dt == null
+                ? null
+                : '${dt.year}.${dt.month}.${dt.day} '
+                    '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}',
+            placeholder: '날짜와 시간 선택',
+            trailing: Icons.calendar_today_rounded,
+            onTap: _pickDateTime,
+          ),
+          const SizedBox(height: 22),
+          Row(children: [
+            PrimaryButton('저장하기', disabled: _saving, onTap: _save),
+          ]),
         ],
       ),
     );
   }
 
   Widget _label(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.only(bottom: 8),
         child: Text(text,
             style: const TextStyle(
-                fontFamily: 'Pretendard',
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
-                color: AppColors.ink7)),
+                color: AppColors.ink5)),
       );
 
-  InputDecoration _fieldDecoration({String? hint, String? suffixText}) {
-    return InputDecoration(
-      hintText: hint,
-      suffixText: suffixText,
-      filled: true,
-      fillColor: AppColors.surf,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
+  /// 탭해서 고르는 필드 — 거주지 설정의 _PickField와 같은 생김새 (surf 배경 버전).
+  Widget _pickField({
+    required String? value,
+    required String placeholder,
+    required IconData trailing,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+        decoration: BoxDecoration(
+          color: AppColors.surf,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(children: [
+          Expanded(
+            child: Text(value ?? placeholder,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: value == null ? FontWeight.w500 : FontWeight.w700,
+                  color: value == null ? AppColors.ink4 : AppColors.ink9,
+                )),
+          ),
+          Icon(trailing, size: 18, color: AppColors.ink4),
+        ]),
       ),
     );
   }
