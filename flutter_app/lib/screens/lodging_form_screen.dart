@@ -47,6 +47,47 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
   final Map<String, bool> _checkboxValues = {};
   final Map<String, String> _signatureValues = {};
   LodgingFormData? _formData;
+  int? _lodgingRegionId; // TourAPI 숙소 검색용 (regionName → id 해석 캐시)
+
+  /// 숙박업소를 TourAPI에서 검색해 이름·주소를 컨트롤러에 채운다. 없으면 직접 입력 유지.
+  Future<void> _openLodgingSearch(TextEditingController nameController) async {
+    final repo = AppScope.of(context).repository;
+    final regionName = _formData?.regionName ?? '';
+    if (_lodgingRegionId == null && regionName.isNotEmpty) {
+      try {
+        final regions = await repo.getRegions();
+        final match = regions.where(
+            (r) => regionName.startsWith(r.name) || r.name.startsWith(regionName));
+        _lodgingRegionId = match.isNotEmpty ? match.first.id : null;
+      } catch (_) {
+        _lodgingRegionId = null;
+      }
+    }
+    if (!mounted) return;
+    final regionId = _lodgingRegionId;
+    if (regionId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('지역을 확인할 수 없어 검색을 열 수 없어요. 직접 입력해 주세요.')));
+      return;
+    }
+    final selected = await showModalBottomSheet<TourAttraction>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      builder: (_) => _LodgingSearchSheet(regionId: regionId),
+    );
+    if (selected == null || !mounted) return;
+    void set(String key, String value) =>
+        _textControllers.putIfAbsent(key, TextEditingController.new).text = value;
+    nameController.text = selected.title;
+    set('lodging_name', selected.title);
+    set('lodging_name_bottom', selected.title);
+    set('address', selected.address);
+    set('address_bottom', selected.address);
+    setState(() {});
+  }
 
   String _firstSignatureFieldKey() {
     for (final field
@@ -342,6 +383,7 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
                           url: previewUrl,
                           height: previewHeight,
                           pageCount: pageCount,
+                          authToken: controller.repository.authToken,
                         ),
                       ),
                     ),
@@ -672,6 +714,29 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 12),
+              // 숙박업소명은 TourAPI에서 검색해 이름·주소를 한 번에 채울 수 있다(없으면 직접 입력).
+              if (field.key == 'lodging_name') ...[
+                GestureDetector(
+                  onTap: () => _openLodgingSearch(controller),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0F9FF),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.search_rounded, size: 18, color: Color(0xFF0284C7)),
+                        SizedBox(width: 6),
+                        Text('숙박업소 검색으로 채우기',
+                            style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: Color(0xFF0369A1))),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               TextField(
                 controller: controller,
                 autofocus: true,
@@ -1843,6 +1908,148 @@ class _BusinessNumberFormatter extends TextInputFormatter {
     return TextEditingValue(
       text: text,
       selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+}
+
+/// 숙박업소 검색 시트 — TourAPI 숙박(type=숙소). 선택하면 그 항목을 pop으로 돌려준다.
+class _LodgingSearchSheet extends StatefulWidget {
+  const _LodgingSearchSheet({required this.regionId});
+  final int regionId;
+
+  @override
+  State<_LodgingSearchSheet> createState() => _LodgingSearchSheetState();
+}
+
+class _LodgingSearchSheetState extends State<_LodgingSearchSheet> {
+  final _ctl = TextEditingController();
+  String _query = '';
+  Future<List<TourAttraction>>? _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+  }
+
+  @override
+  void dispose() {
+    _ctl.dispose();
+    super.dispose();
+  }
+
+  void _reload() {
+    setState(() {
+      _future = AppScope.of(context).repository.getRegionAttractions(
+            widget.regionId,
+            type: '숙소',
+            keyword: _query.isEmpty ? null : _query,
+          );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const ink9 = Color(0xFF0F172A);
+    const ink5 = Color(0xFF64748B);
+    const ink4 = Color(0xFF94A3B8);
+    const surf = Color(0xFFF8FAFC);
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 8,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 5,
+              margin: const EdgeInsets.only(top: 6, bottom: 14),
+              decoration: BoxDecoration(
+                  color: const Color(0xFFE2E8F0), borderRadius: BorderRadius.circular(999)),
+            ),
+          ),
+          const Text('숙박업소 검색',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: ink9)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _ctl,
+            onSubmitted: (v) {
+              _query = v.trim();
+              _reload();
+            },
+            onChanged: (v) => _query = v.trim(),
+            textInputAction: TextInputAction.search,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ink9),
+            decoration: const InputDecoration(
+              hintText: '숙소명 검색',
+              hintStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: ink4),
+              prefixIcon: Icon(Icons.search_rounded, size: 20, color: ink4),
+              filled: true,
+              fillColor: surf,
+              contentPadding: EdgeInsets.zero,
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(14)), borderSide: BorderSide.none),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 320,
+            child: FutureBuilder<List<TourAttraction>>(
+              future: _future,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Center(
+                      child: SizedBox(
+                          width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.4)));
+                }
+                final items = snapshot.data ?? const <TourAttraction>[];
+                if (items.isEmpty) {
+                  return const Center(
+                    child: Text('검색 결과가 없어요. 아래에서 직접 입력해 주세요.',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: ink4)),
+                  );
+                }
+                return ListView.separated(
+                  itemCount: items.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1, color: Color(0xFFEDF2F7)),
+                  itemBuilder: (_, i) {
+                    final a = items[i];
+                    return InkWell(
+                      onTap: () => Navigator.of(context).pop(a),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(a.title,
+                              style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: ink9)),
+                          const SizedBox(height: 3),
+                          Text(a.address,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: ink5)),
+                        ]),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('찾는 곳이 없어요 · 직접 입력하기'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
