@@ -10,11 +10,16 @@ class PdfEmbedView extends StatefulWidget {
     required this.url,
     this.height = 640,
     this.pageCount = 1,
+    this.authToken,
   });
 
   final String url;
   final double height;
   final int pageCount;
+
+  /// 보호된 PDF(채워진 숙박확인서 등)를 열 때 실어 보낼 세션 토큰.
+  /// 공개 서식(template-pdf)에는 없어도 되지만 있어도 무방하다.
+  final String? authToken;
 
   @override
   State<PdfEmbedView> createState() => _PdfEmbedViewState();
@@ -51,7 +56,11 @@ class _PdfEmbedViewState extends State<PdfEmbedView> {
     });
 
     try {
-      final response = await http.get(Uri.parse(widget.url));
+      final token = widget.authToken;
+      final response = await http.get(
+        Uri.parse(widget.url),
+        headers: token == null ? null : {'Authorization': 'Bearer $token'},
+      );
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw _PdfLoadException(response.statusCode);
       }
