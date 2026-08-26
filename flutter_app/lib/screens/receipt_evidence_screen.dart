@@ -574,15 +574,24 @@ class _ReceiptRow extends StatelessWidget {
                 fontSize: 14,
                 fontWeight: FontWeight.w800,
                 color: AppColors.ink9)),
-        IconButton(
-          onPressed: onEdit,
-          tooltip: '정보 수정',
-          icon: const Icon(Icons.edit_outlined, color: AppColors.ink4, size: 20),
+        // 금액과 액션은 넉넉히 띄우고, 수정·삭제는 한 묶음으로 붙인다.
+        const SizedBox(width: 14),
+        GestureDetector(
+          onTap: onEdit,
+          behavior: HitTestBehavior.opaque,
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 5, vertical: 6),
+            child: Icon(Icons.edit_outlined, color: AppColors.ink4, size: 20),
+          ),
         ),
-        IconButton(
-          onPressed: onDelete,
-          icon: const Icon(Icons.delete_outline_rounded,
-              color: AppColors.ink4, size: 20),
+        GestureDetector(
+          onTap: onDelete,
+          behavior: HitTestBehavior.opaque,
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 5, vertical: 6),
+            child: Icon(Icons.delete_outline_rounded,
+                color: AppColors.ink4, size: 20),
+          ),
         ),
       ]),
     );
