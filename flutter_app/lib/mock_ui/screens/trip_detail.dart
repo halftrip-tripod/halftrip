@@ -567,41 +567,19 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             color: AppColors.warning.withValues(alpha: .09),
             borderRadius: BorderRadius.circular(16),
           ),
-          child: Column(
+          child: const Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.schedule_rounded, size: 20, color: AppColors.warning),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      '정산 신청 마감이 지났어요. 추가 접수 가능 여부는 지자체에 문의해 주세요.',
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.ink7,
-                          height: 1.5),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              // 마감 전에 지자체에서 신청을 마쳤다면 앱에도 완료로 남길 수 있게 구제 경로.
-              Padding(
-                padding: const EdgeInsets.only(left: 30),
-                child: GestureDetector(
-                  onTap: () => _push(SettlementScreen(tripId: widget.tripId)),
-                  child: const Text(
-                    '이미 지자체에서 신청을 마쳤다면, 신청 완료로 표시하기',
-                    style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.p600,
-                        decoration: TextDecoration.underline,
-                        decorationColor: AppColors.p600),
-                  ),
+              Icon(Icons.schedule_rounded, size: 20, color: AppColors.warning),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '정산 신청 마감이 지났어요. 추가 접수 가능 여부는 지자체에 문의해 주세요.',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.ink7,
+                      height: 1.5),
                 ),
               ),
             ],
@@ -659,7 +637,45 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             ),
           ],
         ),
+      // 마감 전에 지자체에서 이미 신청한 사람의 기록용 — 정산 화면 하단과 같은 링크.
+      if (expired)
+        Center(
+          child: GestureDetector(
+            onTap: () => _markSettledExternally(detail),
+            behavior: HitTestBehavior.opaque,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 6),
+              child: Text.rich(
+                TextSpan(children: [
+                  TextSpan(
+                      text: '이미 신청했어요 · ',
+                      style: TextStyle(color: AppColors.ink5)),
+                  TextSpan(
+                      text: '완료로 표시',
+                      style: TextStyle(
+                          color: AppColors.p600,
+                          fontWeight: FontWeight.w800,
+                          decoration: TextDecoration.underline,
+                          decorationColor: AppColors.p600)),
+                ]),
+                style: TextStyle(fontSize: 13),
+              ),
+            ),
+          ),
+        ),
     ];
+  }
+
+  /// 지자체에서 이미 신청을 마친 여행을 앱에도 완료로 기록한다 (별도 정보 수집 없음).
+  Future<void> _markSettledExternally(TripDetail detail) async {
+    final controller = AppScope.of(context);
+    await controller.runTask(() => controller.repository.applySettlement(
+          widget.tripId,
+          applicantName: detail.trip.applicantName,
+          phoneNumber: '',
+        ));
+    await _reload();
+    if (mounted) showMock(context, '정산 신청 완료로 표시했어요.');
   }
 
   // ───────────────────── 정산 신청 완료 (환급은 외부에서 진행)
@@ -667,50 +683,6 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     return [
       _TripHeader(detail: detail, stage: TripStageView.review),
       const _StageBar(current: 3),
-      AppCard(
-        child: Column(
-          children: const [
-            SizedBox(height: 4),
-            CircleAvatar(
-              radius: 28,
-              backgroundColor: AppColors.p50,
-              child: Icon(Icons.check_rounded, size: 28, color: AppColors.p600),
-            ),
-            SizedBox(height: 12),
-            Text(
-              '정산 신청 완료',
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w900,
-                color: AppColors.ink9,
-              ),
-            ),
-            SizedBox(height: 6),
-            Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(text: '수고하셨어요! 환급은 '),
-                  TextSpan(
-                    text: '보통 1~2개월 뒤',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.ink9,
-                    ),
-                  ),
-                  TextSpan(text: ' 지자체에서 개별 안내돼요.'),
-                ],
-              ),
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: AppColors.ink5,
-                height: 1.5,
-              ),
-            ),
-          ],
-        ),
-      ),
       _DCard(
         title: '환급금, 어디서 쓸까?',
         sub: '환급받은 지역화폐 사용처를 미리 둘러보세요.',
