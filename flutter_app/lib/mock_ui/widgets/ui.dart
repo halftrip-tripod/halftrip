@@ -5,6 +5,12 @@ import '../theme/app_colors.dart';
 // 체크박스 정본 — 실화면·목업 공용이라 디자인 시스템(lib/widgets/ui/)에 둔다.
 export '../../widgets/ui/app_checkbox.dart';
 
+/// 한국어 안내문을 어절 단위로 줄바꿈시킨다 — "기준이에/요"처럼 어절 중간에서
+/// 끊기지 않게, 어절 안 음절 사이에 WORD JOINER(U+2060)를 끼운다. (CSS word-break:
+/// keep-all에 해당하는 Flutter 대응)
+String keepWords(String text) =>
+    text.split(' ').map((w) => w.split('').join('\u2060')).join(' ');
+
 /// 흰 카드 (라운드 24 · 테두리 없음 · card 그림자).
 class AppCard extends StatelessWidget {
   const AppCard({

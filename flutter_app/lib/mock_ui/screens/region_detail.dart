@@ -110,7 +110,12 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
                 r.statusCode.toUpperCase() == 'CLOSED'
                     ? '접수 마감'
                     : dday == null
-                        ? (_isPreparing ? '오픈일 확인 필요' : '마감일 확인 필요')
+                        // 마감일 없는 접수중 지역 = 선착순·예산 소진 마감 — 접수 시작일을 보여준다.
+                        ? (_isPreparing
+                            ? '오픈일 확인 필요'
+                            : (r.applyStartDate != null
+                                ? '${r.applyStartDate!.month}.${r.applyStartDate!.day} 접수 시작'
+                                : '선착순 접수'))
                         : dday.$1 < 0
                             ? (_isPreparing ? '오픈 예정' : '접수 마감')
                             : dday.$1 == 0
@@ -130,13 +135,14 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(color: AppColors.p50, borderRadius: BorderRadius.circular(16)),
-            child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Icon(Icons.campaign_outlined, size: 20, color: AppColors.p600),
-              SizedBox(width: 10),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.campaign_outlined, size: 20, color: AppColors.p600),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  '아직 접수 전이에요. 아래 조건은 지자체 사업 공고 기준이에요.',
-                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink5, height: 1.5),
+                  // keepWords: 어절 중간("기준이에/요")에서 줄바꿈되지 않게.
+                  keepWords('아직 접수 전이에요. 아래 조건은 지자체 사업 공고 기준이에요.'),
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink5, height: 1.5),
                 ),
               ),
             ]),
