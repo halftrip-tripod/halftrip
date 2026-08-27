@@ -125,9 +125,9 @@ class _TripCalendarSheetState extends State<_TripCalendarSheet> {
     final leading = DateTime(_month.year, _month.month, 1).weekday % 7;
     final summary = _summaryText();
     final allowed = widget.allowedRange;
+    // 기간 밖 선택은 막지 않는다 — 실제 신청 회차가 다를 수 있어서.
+    // 대신 안내 칩이 파랑→노랑으로 바뀌며 알려준다.
     final warned = _outOfAllowed;
-    // 기간 밖 선택은 막지 않고 노란색으로만 알린다 — 실제 신청 회차가 다를 수 있어서.
-    final accent = warned ? AppColors.warning : AppColors.p500;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -143,16 +143,11 @@ class _TripCalendarSheetState extends State<_TripCalendarSheet> {
           const Text('여행 일정',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink9, letterSpacing: -.5)),
           const SizedBox(height: 6),
-          Text(
-              warned
-                  ? '$summary · ${widget.allowedLabel ?? '여행기간'} 밖 날짜예요'
-                  : summary,
+          Text(summary,
               style: TextStyle(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w700,
-                color: warned
-                    ? const Color(0xFF9A6800)
-                    : (_end != null ? AppColors.p600 : AppColors.ink5),
+                color: _end != null ? AppColors.p600 : AppColors.ink5,
               )),
           if (allowed != null) ...[
             const SizedBox(height: 12),
@@ -160,17 +155,25 @@ class _TripCalendarSheetState extends State<_TripCalendarSheet> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
               decoration: BoxDecoration(
-                color: AppColors.p50,
+                color: warned ? AppColors.warningTint : AppColors.p50,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(children: [
-                const Icon(Icons.event_available_rounded, size: 15, color: AppColors.p700),
+                Icon(
+                    warned
+                        ? Icons.error_outline_rounded
+                        : Icons.event_available_rounded,
+                    size: 15,
+                    color: warned ? const Color(0xFF9A6800) : AppColors.p700),
                 const SizedBox(width: 7),
                 Expanded(
                   child: Text(
-                    '${widget.allowedLabel ?? '여행기간'} ${kdate(allowed.start)} ~ ${kdate(allowed.end)}',
-                    style: const TextStyle(
-                        fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.p700),
+                    '${widget.allowedLabel ?? '여행기간'} ${kdate(allowed.start)} ~ ${kdate(allowed.end)}'
+                    '${warned ? ' · 기간 밖 날짜예요' : ''}',
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: warned ? const Color(0xFF9A6800) : AppColors.p700),
                   ),
                 ),
               ]),
@@ -241,7 +244,6 @@ class _TripCalendarSheetState extends State<_TripCalendarSheet> {
                   day: day,
                   start: _start,
                   end: _end,
-                  accent: accent,
                   disabled: day.isBefore(DateUtils.dateOnly(widget.firstDate)) ||
                       day.isAfter(DateUtils.dateOnly(widget.lastDate)),
                   onTap: () => _tapDay(day),
@@ -299,7 +301,6 @@ class _DayCell extends StatelessWidget {
     required this.end,
     required this.disabled,
     required this.onTap,
-    this.accent = AppColors.p500,
   });
 
   final DateTime day;
@@ -307,9 +308,6 @@ class _DayCell extends StatelessWidget {
   final DateTime? end;
   final bool disabled;
   final VoidCallback onTap;
-
-  /// 선택 표시 색 — 기본 하늘색, 회차 여행기간 밖 선택이면 노란색(warning).
-  final Color accent;
 
   @override
   Widget build(BuildContext context) {
@@ -320,7 +318,6 @@ class _DayCell extends StatelessWidget {
         start != null && end != null && !day.isBefore(start!) && !day.isAfter(end!);
     final single = isStart && isEnd;
     final isToday = DateUtils.isSameDay(day, DateTime.now());
-    final bandColor = accent.withValues(alpha: .16);
 
     return GestureDetector(
       onTap: disabled ? null : onTap,
@@ -331,10 +328,10 @@ class _DayCell extends StatelessWidget {
         if (inRange && !single)
           Row(children: [
             Expanded(
-              child: Container(height: 38, color: isStart ? Colors.transparent : bandColor),
+              child: Container(height: 38, color: isStart ? Colors.transparent : AppColors.p50),
             ),
             Expanded(
-              child: Container(height: 38, color: isEnd ? Colors.transparent : bandColor),
+              child: Container(height: 38, color: isEnd ? Colors.transparent : AppColors.p50),
             ),
           ]),
         // 끝점 원
@@ -342,7 +339,7 @@ class _DayCell extends StatelessWidget {
           width: 38,
           height: 38,
           decoration: isEndpoint
-              ? BoxDecoration(color: accent, shape: BoxShape.circle)
+              ? const BoxDecoration(color: AppColors.p500, shape: BoxShape.circle)
               : null,
           alignment: Alignment.center,
           child: Text('${day.day}',
