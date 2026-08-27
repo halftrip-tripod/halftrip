@@ -102,31 +102,10 @@ class _PastTripScreenState extends State<PastTripScreen> {
             // 환급
             AppCard(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                // 정산 상태는 상단 배지가 이미 말해준다 — 중복 안내 카드는 두지 않는다.
                 const Text('환급',
                     style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.3)),
                 const SizedBox(height: 13),
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(color: AppColors.successTint, borderRadius: BorderRadius.circular(15)),
-                  child: const Row(children: [
-                    CircleAvatar(
-                      radius: 19,
-                      backgroundColor: AppColors.success,
-                      child: Icon(Icons.military_tech_rounded, size: 20, color: Colors.white),
-                    ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text('정산 신청 완료 · 환급 진행',
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF177D43))),
-                        SizedBox(height: 2),
-                        Text('환급금은 지자체에서 개별 안내돼요. 보통 1~2개월 소요.',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF2E9B5F))),
-                      ]),
-                    ),
-                  ]),
-                ),
-                const SizedBox(height: 12),
                 SurfRow(
                   icon: Icons.shopping_bag_outlined,
                   title: '환급금, 어디서 쓸까?',

@@ -5,7 +5,6 @@ import '../../models/app_models.dart';
 import '../../screens/auth_photo_upload_screen.dart';
 import '../../screens/youtube_course_start_screen.dart';
 import '../../screens/lodging_form_screen.dart';
-import '../../screens/planner_screen.dart';
 import '../../screens/receipt_evidence_screen.dart';
 import '../../screens/settlement_screen.dart';
 import '../../screens/submission_package_screen.dart';
@@ -17,7 +16,8 @@ import 'course_flow.dart';
 import '../widgets/region_art.dart';
 import '../widgets/ui.dart';
 import 'my_trips_tab.dart'
-    show TripStageView, dateRangeOf, durationLabelOf, regionEmojiOf, stageOf;
+    show TripStageView, dateRangeOf, durationLabelOf, regionEmojiOf,
+        settlementExpired, stageOf;
 
 /// 여행 상세 (S2-3, 4단계 컨트롤 센터) — 목업 UI + TripDetail 실데이터.
 /// 기록·증빙·정산은 연동된 기존 화면으로 라우팅한다.
@@ -97,15 +97,24 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     await _reload();
   }
 
-  /// 확정 코스 탭 — 수정 / 여행 등록 취소 / 보관함 삭제 를 고르는 시트.
-  /// 코스 상세 보기 — 코스함 상세와 같은 지도+DAY+타임라인, 편집은 우측 상단 연필.
+  /// 코스 상세 보기 — 코스함 상세와 완전히 같은 화면(지도+DAY+번호 리스트).
+  /// 수정은 우측 상단 연필(통일된 CourseEditScreen), ⋯에는 등록취소·삭제만.
   void _openCourseView(TripDetail detail, SavedCourse course) {
+    final c = _asViewCourse(course);
     Navigator.of(context)
         .push(MaterialPageRoute(
           builder: (_) => CourseViewScreen(
-            course: _asViewCourse(course),
-            editInAppBar: true,
-            onEdit: () => _push(PlannerScreen(tripId: widget.tripId)),
+            course: c,
+            // 편집 저장 후 실스토어(코스함)에 반영 — 여행 코스도 원본은 코스함.
+            onEdited: () => AppScope.of(context).saveCourse(SavedCourse(
+              id: course.id,
+              regionId: course.regionId,
+              regionName: course.regionName,
+              title: c.title,
+              preferences: course.preferences,
+              stops: savedStopsFromCourse(c.stops),
+              createdAt: course.createdAt,
+            )),
             onMore: () async {
               final action = await _openCourseActions(detail, course);
               // 등록취소·삭제됐으면 이 코스 상세는 더 보여줄 게 없다 — 여행 상세로 복귀.
@@ -136,13 +145,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                     color: AppColors.ink9)),
           ),
         ),
-        ListTile(
-          leading: const Icon(Icons.edit_outlined,
-              size: 20, color: AppColors.ink7),
-          title: const Text('코스 수정',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-          onTap: () => Navigator.of(context).pop('edit'),
-        ),
+        // 코스 수정은 상세 화면 우측 상단 연필로 — 이 시트에는 등록취소/삭제만.
         ListTile(
           leading: const Icon(Icons.link_off_rounded,
               size: 20, color: AppColors.ink7),
@@ -170,8 +173,6 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     if (!mounted || action == null) return null;
     final controller = AppScope.of(context);
     switch (action) {
-      case 'edit':
-        _push(PlannerScreen(tripId: widget.tripId));
       case 'unlink':
         await controller.unselectCourseForTrip(detail.trip.id);
         if (mounted) {
@@ -200,6 +201,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       people: trip.travelerCount,
       stage: mock.TripStage.before,
       nights: trip.endDate.difference(trip.startDate).inDays,
+      backendId: trip.id,
     );
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -417,7 +419,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
               icon: _taskGuides[i].$1,
               label: _taskGuides[i].$2,
               when: _taskGuides[i].$3,
-              onTap: () => _showTaskGuide(i),
+              onTap: () => _showTaskGuide(i, detail),
             ),
         ],
       ),
@@ -499,7 +501,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
               ),
               const Spacer(),
               GestureDetector(
-                onTap: () => _push(PlannerScreen(tripId: widget.tripId)),
+                onTap: () => _openCourseView(detail, course),
                 child: const Text(
                   '코스 전체 보기 ›',
                   style: TextStyle(
@@ -517,7 +519,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
               title: course.title,
               subtitle: '${course.regionName} · ${course.stops.length}곳',
               tinted: true,
-              onTap: () => _push(PlannerScreen(tripId: widget.tripId)),
+              onTap: () => _openCourseView(detail, course),
             ),
           ],
         )
@@ -552,12 +554,42 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         detail.trip.refundConditionAmount <= 0 ||
         detail.trip.totalSpentAmount >= detail.trip.refundConditionAmount;
 
+    final expired = settlementExpired(detail.trip);
+
     return [
       _TripHeader(detail: detail, stage: TripStageView.settle),
       const _StageBar(current: 2),
+      // 마감 지난 여행 — 목록 카드("정산 마감 지남")와 같은 말을 하도록 상세에도 알린다.
+      if (expired)
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.warning.withValues(alpha: .09),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.schedule_rounded, size: 20, color: AppColors.warning),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '정산 신청 마감이 지났어요. 추가 접수 가능 여부는 지자체에 문의해 주세요.',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.ink7,
+                      height: 1.5),
+                ),
+              ),
+            ],
+          ),
+        ),
       _DCard(
         title: '증빙 자료 준비',
-        sub: '여행이 끝나도 정산 전까지 자유롭게 추가·수정할 수 있어요.',
+        sub: expired
+            ? '정산 마감이 지난 여행이에요. 올린 증빙은 열람용으로 남아 있어요.'
+            : '여행이 끝나도 정산 전까지 자유롭게 추가·수정할 수 있어요.',
         children: [
           _CheckLine(
             '관광지 인증샷 ${authCount.clamp(0, authRequired)}/$authRequired',
@@ -593,17 +625,57 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           ),
         ],
       ),
-      _DCard(
-        title: '정산 신청',
-        sub: '증빙 패키지를 지자체 정산 페이지에 제출하세요.',
-        children: [
-          _NextLink(
-            '정산 신청하러 가기',
-            onTap: () => _push(SettlementScreen(tripId: widget.tripId)),
+      // 마감 지난 여행에는 정산 권유 카드를 내리지 않는다 (QA 8/26 #2).
+      if (!expired)
+        _DCard(
+          title: '정산 신청',
+          sub: '증빙 패키지를 지자체 정산 페이지에 제출하세요.',
+          children: [
+            _NextLink(
+              '정산 신청하러 가기',
+              onTap: () => _push(SettlementScreen(tripId: widget.tripId)),
+            ),
+          ],
+        ),
+      // 마감 전에 지자체에서 이미 신청한 사람의 기록용 — 정산 화면 하단과 같은 링크.
+      if (expired)
+        Center(
+          child: GestureDetector(
+            onTap: () => _markSettledExternally(detail),
+            behavior: HitTestBehavior.opaque,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 6),
+              child: Text.rich(
+                TextSpan(children: [
+                  TextSpan(
+                      text: '이미 신청했어요 · ',
+                      style: TextStyle(color: AppColors.ink5)),
+                  TextSpan(
+                      text: '완료로 표시',
+                      style: TextStyle(
+                          color: AppColors.p600,
+                          fontWeight: FontWeight.w800,
+                          decoration: TextDecoration.underline,
+                          decorationColor: AppColors.p600)),
+                ]),
+                style: TextStyle(fontSize: 13),
+              ),
+            ),
           ),
-        ],
-      ),
+        ),
     ];
+  }
+
+  /// 지자체에서 이미 신청을 마친 여행을 앱에도 완료로 기록한다 (별도 정보 수집 없음).
+  Future<void> _markSettledExternally(TripDetail detail) async {
+    final controller = AppScope.of(context);
+    await controller.runTask(() => controller.repository.applySettlement(
+          widget.tripId,
+          applicantName: detail.trip.applicantName,
+          phoneNumber: '',
+        ));
+    await _reload();
+    if (mounted) showMock(context, '정산 신청 완료로 표시했어요.');
   }
 
   // ───────────────────── 정산 신청 완료 (환급은 외부에서 진행)
@@ -611,50 +683,6 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     return [
       _TripHeader(detail: detail, stage: TripStageView.review),
       const _StageBar(current: 3),
-      AppCard(
-        child: Column(
-          children: const [
-            SizedBox(height: 4),
-            CircleAvatar(
-              radius: 28,
-              backgroundColor: AppColors.p50,
-              child: Icon(Icons.check_rounded, size: 28, color: AppColors.p600),
-            ),
-            SizedBox(height: 12),
-            Text(
-              '정산 신청 완료',
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w900,
-                color: AppColors.ink9,
-              ),
-            ),
-            SizedBox(height: 6),
-            Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(text: '수고하셨어요! 환급은 '),
-                  TextSpan(
-                    text: '보통 1~2개월 뒤',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.ink9,
-                    ),
-                  ),
-                  TextSpan(text: ' 지자체에서 개별 안내돼요.'),
-                ],
-              ),
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: AppColors.ink5,
-                height: 1.5,
-              ),
-            ),
-          ],
-        ),
-      ),
       _DCard(
         title: '환급금, 어디서 쓸까?',
         sub: '환급받은 지역화폐 사용처를 미리 둘러보세요.',
@@ -711,7 +739,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       '관광지 인증샷 (EXIF)',
       '여행 중',
       [
-        '지정관광지 2곳 이상에서 인증샷을 찍어야 해요.',
+        '지정관광지 {n}곳 이상에서 인증샷을 찍어야 해요.',
         '기본 카메라로 촬영해 위치·시간(GPS·EXIF) 정보가 남아야 자동 인증돼요.',
         '신청 대표자와 일행 얼굴, 배경이 함께 나오게 찍어주세요.',
         '캡처·SNS 저장본은 촬영 정보가 지워져 인증이 어려워요.',
@@ -750,8 +778,13 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     ),
   ];
 
-  void _showTaskGuide(int index) {
-    final (icon, title, timing, bullets) = _taskGuides[index];
+  void _showTaskGuide(int index, TripDetail detail) {
+    final (icon, title, timing, rawBullets) = _taskGuides[index];
+    // 인증 요구 개소는 지역마다 달라 서버 값으로 치환 (게이지와 같은 폴백 2).
+    final authRequired = detail.trip.authRequiredCount ?? 2;
+    final bullets = [
+      for (final b in rawBullets) b.replaceAll('{n}', '$authRequired'),
+    ];
     showAppSheet(
       context,
       child: Padding(

@@ -9,7 +9,7 @@ import '../state/app_state.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui.dart';
 import 'community.dart';
-import 'place_detail.dart';
+import 'tour_place_detail.dart';
 
 /// S1-2 지역 상세 (신청 판단 허브) — 실 API(RegionSummary) 연동.
 class RegionDetailScreen extends StatefulWidget {
@@ -23,6 +23,7 @@ class RegionDetailScreen extends StatefulWidget {
 class _RegionDetailScreenState extends State<RegionDetailScreen> {
   final _openAcc = {0};
   Future<RegionDetail>? _placesFuture;
+  Future<List<RegionFestival>>? _festivalsFuture;
   bool _placesInitialized = false;
 
   @override
@@ -34,6 +35,7 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
       widget.region.id,
       residence: controller.currentUser?.residence,
     );
+    _festivalsFuture = controller.repository.getRegionFestivals(widget.region.id);
     _placesInitialized = true;
   }
 
@@ -59,12 +61,6 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
 
     return DetailScaffold(
       title: r.name,
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.ios_share_rounded, size: 20),
-          onPressed: () => showMock(context, '공유 링크를 복사했어요. (목업)'),
-        ),
-      ],
       // 오픈예정: 관심 등록 = 오픈 알림이므로 별표 없이 알림 CTA 하나만.
       // 접수중: 별표(즐겨찾기) + 신청 CTA(실제 지자체 신청 링크로 이동).
       cta: CtaBar(children: [
@@ -139,7 +135,7 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
               SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  '아직 접수 전이에요. 아래 조건은 지자체 사업 공고 기준 — 미리 확인하고 오픈되면 바로 신청하세요.',
+                  '아직 접수 전이에요. 아래 조건은 지자체 사업 공고 기준이에요.',
                   style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink5, height: 1.5),
                 ),
               ),
@@ -158,12 +154,23 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink7)),
             ]),
           ),
+          // 접수중 지역은 신청한 회차의 여행 가능 기간을 함께 보여준다 (visitkorea 동기화 값).
+          if (r.travelPeriodStart != null && r.travelPeriodEnd != null)
+            _Kv(
+              '여행 기간',
+              '${r.roundLabel != null ? '${r.roundLabel} · ' : ''}'
+                  '${r.travelPeriodStart!.month}.${r.travelPeriodStart!.day} ~ '
+                  '${r.travelPeriodEnd!.month}.${r.travelPeriodEnd!.day}',
+            ),
           _Kv(
             '결제 수단',
             r.paymentMethods.isNotEmpty
-                ? r.paymentMethods
-                    .map((code) => PaymentTypeWire.fromWire(code).label)
-                    .join(' · ')
+                // 서버 값이 CARD 같은 코드면 라벨로, 공고 원문 문구면 그대로 표시.
+                // (V69부터 실데이터가 문구라 코드 매핑에만 기대면 "판별 실패"로 떴다)
+                ? r.paymentMethods.map((code) {
+                    final type = PaymentTypeWire.fromWire(code);
+                    return type == PaymentType.unknown ? code : type.label;
+                  }).join(' · ')
                 : _paymentSummary(guideText),
           ),
           _Kv('인증 조건', _proofSummary(guideText)),
@@ -181,58 +188,6 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
             r.maxRefundPerPerson != null
                 ? '${_formatWon(r.maxRefundPerPerson!)}원'
                 : '지역 공고 기준 확인',
-          ),
-        ]),
-        // 인정 관광지 — 실 API(RegionDetail.halfPricePlaces) 연동.
-        _DCard(title: '환급 인정 관광지', children: [
-          SizedBox(
-            height: 148,
-            child: FutureBuilder<RegionDetail>(
-              future: _placesFuture,
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final places = snapshot.data!.halfPricePlaces;
-                if (places.isEmpty) {
-                  return const Center(
-                    child: Text('등록된 관광지 정보가 아직 없어요.',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink4)),
-                  );
-                }
-                return ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: places.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 12),
-                  itemBuilder: (_, i) => GestureDetector(
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => PlaceDetailScreen(place: places[i]))),
-                    child: SizedBox(
-                      width: 128,
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Container(
-                          width: 128,
-                          height: 90,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(color: AppColors.p50, borderRadius: BorderRadius.circular(16)),
-                          child: const Text('📍', style: TextStyle(fontSize: 38)),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(places[i].name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink9)),
-                        const SizedBox(height: 2),
-                        Text(places[i].address,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink5)),
-                      ]),
-                    ),
-                  ),
-                );
-              },
-            ),
           ),
         ]),
         // 상세 정산 규칙
@@ -276,6 +231,76 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
                   style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF9A6800), height: 1.55)),
             ),
         ]),
+        // 인정 관광지 — 실 API(RegionDetail.halfPricePlaces) 연동.
+        _DCard(title: '환급 인정 관광지', children: [
+          SizedBox(
+            height: 148,
+            child: FutureBuilder<RegionDetail>(
+              future: _placesFuture,
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final places = snapshot.data!.halfPricePlaces;
+                if (places.isEmpty) {
+                  return const Center(
+                    child: Text('등록된 관광지 정보가 아직 없어요.',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink4)),
+                  );
+                }
+                return ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: places.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 12),
+                  itemBuilder: (_, i) => GestureDetector(
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => TourPlaceDetailScreen(
+                              regionId: widget.region.id,
+                              attraction: TourAttraction(
+                                contentId: '',
+                                contentTypeId: '12',
+                                title: places[i].name,
+                                address: places[i].address,
+                                category: '환급 인정',
+                                tel: places[i].phone ?? '',
+                                latitude: places[i].latitude,
+                                longitude: places[i].longitude,
+                                eligibleForRefund: true,
+                              ),
+                            ))),
+                    child: SizedBox(
+                      width: 128,
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Container(
+                          width: 128,
+                          height: 90,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(color: AppColors.p50, borderRadius: BorderRadius.circular(16)),
+                          child: const Text('📍', style: TextStyle(fontSize: 38)),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(places[i].name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink9)),
+                        const SizedBox(height: 2),
+                        Text(places[i].address,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink5)),
+                      ]),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ]),
+        // 축제 + 볼거리·맛집 (TourAPI) — 한 슬롯으로 묶어 빈 섹션이 유령 간격을 안 만들게 한다.
+        Column(children: [
+          _FestivalSection(future: _festivalsFuture),
+          _AttractionsSection(regionId: widget.region.id),
+        ]),
         // 디민증
         if (r.digitalBenefitAvailable)
           _DCard(title: '디지털 관광주민증 혜택', children: [
@@ -305,8 +330,6 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
           _DCard(
             title: '${r.name} 여행 후기',
             children: [
-              const Text('다녀온 사람들의 생생한 후기로 코스를 그려보세요.',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.ink5)),
               for (var i = 0; i < regionPosts.length && i < 2; i++) ...[
                 if (i > 0) const Divider(height: 1),
                 _ReviewRow(post: regionPosts[i]),
@@ -386,6 +409,161 @@ IconData _sectionIcon(String title) {
   if (title.contains('결제') || title.contains('경비') || title.contains('소비')) return Icons.credit_card_rounded;
   if (title.contains('숙박')) return Icons.bed_outlined;
   return Icons.description_outlined;
+}
+
+/// 이 지역 볼거리·맛집 — TourAPI 관광지/음식점. 관광지↔맛집 토글, 대표 몇 개 + 전체보기.
+class _AttractionsSection extends StatefulWidget {
+  const _AttractionsSection({required this.regionId});
+  final int regionId;
+
+  @override
+  State<_AttractionsSection> createState() => _AttractionsSectionState();
+}
+
+class _AttractionsSectionState extends State<_AttractionsSection> {
+  static const _types = ['관광지', '맛집'];
+  int _tab = 0;
+  final Map<String, Future<List<TourAttraction>>> _cache = {};
+
+  Future<List<TourAttraction>> _load(String type) {
+    return _cache.putIfAbsent(
+        type, () => AppScope.of(context).repository.getRegionAttractions(widget.regionId, type: type));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final type = _types[_tab];
+    return FutureBuilder<List<TourAttraction>>(
+        future: _load(type),
+        builder: (context, snapshot) {
+          final all = snapshot.data ?? const <TourAttraction>[];
+          // 데이터도 없고 로딩도 끝났으면 섹션 자체를 감춘다.
+          if (snapshot.connectionState == ConnectionState.done && all.isEmpty && _tab == 0) {
+            return const SizedBox.shrink();
+          }
+          final preview = all.take(4).toList();
+          return _DCard(title: '이 지역 볼거리·맛집', children: [
+            SegChips(
+              labels: _types,
+              selected: _tab,
+              onChanged: (i) => setState(() => _tab = i),
+            ),
+            if (snapshot.connectionState != ConnectionState.done)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 18),
+                child: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.4))),
+              )
+            else if (preview.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 14),
+                child: Text('등록된 정보가 아직 없어요.',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink4)),
+              )
+            else ...[
+              Column(children: [for (final a in preview) TourAttractionRow(attraction: a)]),
+              if (all.length > preview.length)
+                GestureDetector(
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => TourAttractionListScreen(items: all, type: type))),
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 4),
+                    height: 46,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(color: AppColors.p100, borderRadius: BorderRadius.circular(14)),
+                    child: Text('$type ${all.length}곳 전체보기  ›',
+                        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.p700)),
+                  ),
+                ),
+            ],
+            const Text('출처: 한국관광공사 TourAPI',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.ink4)),
+          ]);
+        },
+      );
+  }
+}
+
+/// 지역 축제 섹션 — TourAPI 결과가 있을 때만 카드가 뜬다(없으면 공간도 안 차지).
+class _FestivalSection extends StatelessWidget {
+  const _FestivalSection({required this.future});
+  final Future<List<RegionFestival>>? future;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<RegionFestival>>(
+      future: future,
+      builder: (context, snapshot) {
+        final festivals = snapshot.data ?? const <RegionFestival>[];
+        if (festivals.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: _DCard(title: '이 지역 축제 소식', children: [
+            // 같은 지역·시즌이면 축제는 많아야 한두 개 — 세로로 쌓아 섹션이 늘어나게.
+            for (final festival in festivals) _FestivalRow(festival: festival),
+            const Text('출처: 한국관광공사 TourAPI',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.ink4)),
+          ]),
+        );
+      },
+    );
+  }
+}
+
+/// 축제 행 — 인정 관광지 카드와 같은 이모지 박스 언어를 가로 리스트 행으로.
+/// 대표이미지는 쓰지 않는다(웹 CORS·링크 불안정). 세로로 쌓여 섹션이 늘어난다.
+class _FestivalRow extends StatelessWidget {
+  const _FestivalRow({required this.festival});
+  final RegionFestival festival;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: AppColors.surf, borderRadius: BorderRadius.circular(16)),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+        Container(
+          width: 48,
+          height: 48,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: AppColors.p50, borderRadius: BorderRadius.circular(14)),
+          child: const Text('🎪', style: TextStyle(fontSize: 24)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: festival.ongoing ? AppColors.p600 : AppColors.p100,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(festival.ongoing ? '진행중' : '예정',
+                    style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: festival.ongoing ? Colors.white : AppColors.p700)),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(festival.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink9)),
+              ),
+            ]),
+            if (festival.periodLabel.isNotEmpty) ...[
+              const SizedBox(height: 5),
+              Text(festival.periodLabel,
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink5)),
+            ],
+          ]),
+        ),
+      ]),
+    );
+  }
 }
 
 /// 지역상세 카드 (제목 + 컨텐츠 리스트).

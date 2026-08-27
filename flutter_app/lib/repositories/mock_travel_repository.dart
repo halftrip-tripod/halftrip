@@ -22,6 +22,9 @@ class MockTravelRepository implements TravelRepository {
   }
 
   @override
+  String? get authToken => null;
+
+  @override
   Future<SocialLoginResult> socialLogin({
     required LoginProvider provider,
     required String accessToken,
@@ -867,6 +870,19 @@ class MockTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<List<RegionFestival>> getRegionFestivals(int regionId) async => const [];
+
+  @override
+  Future<List<TourAttraction>> getRegionAttractions(int regionId,
+          {String? type, String? keyword}) async =>
+      const [];
+
+  @override
+  Future<TourPlaceDetail?> getTourPlaceDetail(String contentId,
+          {int contentTypeId = 12}) async =>
+      null;
+
+  @override
   Future<MerchantMapSearchResult> getMerchantMap({
     required int regionId,
     double? southLat,
@@ -1261,6 +1277,45 @@ class MockTravelRepository implements TravelRepository {
       );
     }
     return receipt;
+  }
+
+  @override
+  Future<ReceiptItem> correctReceipt({
+    required int tripId,
+    required int receiptId,
+    int? amount,
+    PaymentType? paymentType,
+    DateTime? paymentDateTime,
+  }) async {
+    final receipts = [...?_tripReceipts[tripId]];
+    final index = receipts.indexWhere((item) => item.id == receiptId);
+    if (index < 0) {
+      throw StateError('Receipt not found: $receiptId');
+    }
+    final before = receipts[index];
+    final nextAmount = amount ?? before.amount ?? 0;
+    final nextPaymentType = paymentType ?? before.paymentType;
+    // 보정값도 실서버처럼 심사를 다시 탄다 — mock에서만 통과하는 값이 생기지 않게.
+    final review = _reviewReceipt(nextPaymentType, before.usageScope, nextAmount);
+    final corrected = ReceiptItem(
+      id: before.id,
+      uploadedFileId: before.uploadedFileId,
+      paymentType: nextPaymentType,
+      usageScope: before.usageScope,
+      reviewStatus: review.$1,
+      amount: nextAmount,
+      paymentDateTime: paymentDateTime ?? before.paymentDateTime,
+      eligibleAmount: review.$2,
+      reviewReason: review.$3,
+      rawText: before.rawText,
+    );
+    receipts[index] = corrected;
+    _tripReceipts[tripId] = receipts;
+
+    final trip = _requireTrip(tripId);
+    final total = receipts.fold<int>(0, (sum, item) => sum + item.eligibleAmount);
+    _trips[tripId] = trip.copyWith(totalSpentAmount: total);
+    return corrected;
   }
 
   @override

@@ -19,6 +19,7 @@ class PlaceMapView extends StatefulWidget {
     required this.kakaoEnabled,
     this.routeMarkers = const [],
     this.connectSequentially = false,
+    this.numberedMarkers = false,
     this.highlightedMarkerId,
     this.onMarkerTap,
     this.onMarkerDoubleTap,
@@ -35,6 +36,7 @@ class PlaceMapView extends StatefulWidget {
   final bool kakaoEnabled;
   final List<PlaceMapRoutePoint> routeMarkers;
   final bool connectSequentially;
+  final bool numberedMarkers;
   final int? highlightedMarkerId;
   final ValueChanged<int>? onMarkerTap;
   final ValueChanged<int>? onMarkerDoubleTap;
@@ -830,8 +832,8 @@ class _PlaceMapViewState extends State<PlaceMapView> {
     required String label,
     required bool selected,
   }) {
-    final fill = selected ? '#16A34A' : '#7C3AED';
-    final stroke = selected ? '#166534' : '#6D28D9';
+    final fill = selected ? '#0369A1' : '#0EA5E9';
+    final stroke = selected ? '#075985' : '#0284C7';
     final svg = '''
 <svg xmlns="http://www.w3.org/2000/svg" width="42" height="54" viewBox="0 0 42 54">
   <path d="M21 2C10.5066 2 2 10.5066 2 21C2 35.25 21 52 21 52C21 52 40 35.25 40 21C40 10.5066 31.4934 2 21 2Z" fill="$fill" stroke="$stroke" stroke-width="2"/>
@@ -908,6 +910,7 @@ class _PlaceMapViewState extends State<PlaceMapView> {
         emptyMessage: widget.emptyMessage,
         routeMarkers: widget.routeMarkers,
         connectSequentially: widget.connectSequentially,
+        numberedMarkers: widget.numberedMarkers,
         highlightedMarkerId: widget.highlightedMarkerId,
         onViewportChanged: widget.onViewportChanged,
         onMarkerTap: widget.onMarkerTap,

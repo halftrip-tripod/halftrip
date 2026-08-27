@@ -90,6 +90,16 @@ extension PaymentTypeWire on PaymentType {
         PaymentType.simpleReceipt => '간이영수증',
         PaymentType.unknown => '판별 실패',
       };
+
+  String get wireName => switch (this) {
+        PaymentType.creditCard => 'CREDIT_CARD',
+        PaymentType.checkCard => 'CHECK_CARD',
+        PaymentType.onlinePayment => 'ONLINE_PAYMENT',
+        PaymentType.bankTransfer => 'BANK_TRANSFER',
+        PaymentType.cashReceipt => 'CASH_RECEIPT',
+        PaymentType.simpleReceipt => 'SIMPLE_RECEIPT',
+        PaymentType.unknown => 'UNKNOWN',
+      };
 }
 
 extension ReceiptUsageScopeWire on ReceiptUsageScope {
@@ -562,6 +572,7 @@ class RegionSummary {
     this.maxRefundPerPerson,
     this.paymentMethods = const [],
     this.localCurrencyAppUrl,
+    this.roundLabel,
   });
 
   final int id;
@@ -593,6 +604,9 @@ class RegionSummary {
   final int? maxRefundPerPerson;
   final List<String> paymentMethods;
   final String? localCurrencyAppUrl;
+
+  /// 현재(또는 다음) 접수 차수 라벨 — "5차". visitkorea 동기화가 채우며 없으면 null.
+  final String? roundLabel;
 
   String get statusLabel => switch (statusCode.toUpperCase()) {
         'APPLYING' => '접수중',
@@ -631,6 +645,7 @@ class RegionSummary {
       refundConditionText: json['refundConditionText'] as String?,
       refundRate: json['refundRate'] as int?,
       maxRefundPerPerson: json['maxRefundPerPerson'] as int?,
+      roundLabel: json['roundLabel'] as String?,
       paymentMethods: ((json['paymentMethods'] as List<dynamic>?) ?? [])
           .map((e) => e as String)
           .toList(),
@@ -793,6 +808,165 @@ class OnlineMallItem {
       name: json['name'] as String? ?? '',
       mallUrl: json['mallUrl'] as String? ?? '',
       description: json['description'] as String? ?? '',
+    );
+  }
+}
+
+/// 지역 축제 한 건 (TourAPI 출처). 날짜는 YYYYMMDD 문자열.
+class RegionFestival {
+  const RegionFestival({
+    required this.contentId,
+    required this.title,
+    required this.address,
+    required this.startDate,
+    required this.endDate,
+    required this.imageUrl,
+    required this.tel,
+    required this.ongoing,
+  });
+
+  final String contentId;
+  final String title;
+  final String address;
+  final String startDate;
+  final String endDate;
+  final String imageUrl;
+  final String tel;
+  final bool ongoing;
+
+  factory RegionFestival.fromJson(Map<String, dynamic> json) {
+    return RegionFestival(
+      contentId: json['contentId'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      address: json['address'] as String? ?? '',
+      startDate: json['startDate'] as String? ?? '',
+      endDate: json['endDate'] as String? ?? '',
+      imageUrl: json['imageUrl'] as String? ?? '',
+      tel: json['tel'] as String? ?? '',
+      ongoing: json['ongoing'] as bool? ?? false,
+    );
+  }
+
+  /// "2026.09.18 ~ 09.27" 형태의 표시용 기간. 날짜가 없으면 빈 문자열.
+  String get periodLabel {
+    String fmt(String yyyymmdd, {bool withYear = true}) {
+      if (yyyymmdd.length != 8) return yyyymmdd;
+      final y = yyyymmdd.substring(0, 4);
+      final m = yyyymmdd.substring(4, 6);
+      final d = yyyymmdd.substring(6, 8);
+      return withYear ? '$y.$m.$d' : '$m.$d';
+    }
+
+    if (startDate.isEmpty && endDate.isEmpty) return '';
+    if (endDate.isEmpty) return fmt(startDate);
+    if (startDate.isEmpty) return fmt(endDate);
+    final sameYear = startDate.length == 8 &&
+        endDate.length == 8 &&
+        startDate.substring(0, 4) == endDate.substring(0, 4);
+    return '${fmt(startDate)} ~ ${fmt(endDate, withYear: !sameYear)}';
+  }
+}
+
+/// TourAPI 관광지/맛집/숙소 목록 항목 (볼거리·맛집 섹션, 코스 장소 검색, 숙소 검색).
+class TourAttraction {
+  const TourAttraction({
+    required this.contentId,
+    required this.contentTypeId,
+    required this.title,
+    required this.address,
+    required this.category,
+    required this.tel,
+    this.latitude,
+    this.longitude,
+    this.eligibleForRefund = false,
+  });
+
+  final String contentId;
+  final String contentTypeId;
+  final String title;
+  final String address;
+  final String category;
+  final String tel;
+  final double? latitude;
+  final double? longitude;
+  final bool eligibleForRefund; // 반값여행 환급 인정 관광지(지정관광지)인지
+
+  TourAttraction copyWith({bool? eligibleForRefund}) => TourAttraction(
+        contentId: contentId,
+        contentTypeId: contentTypeId,
+        title: title,
+        address: address,
+        category: category,
+        tel: tel,
+        latitude: latitude,
+        longitude: longitude,
+        eligibleForRefund: eligibleForRefund ?? this.eligibleForRefund,
+      );
+
+  factory TourAttraction.fromJson(Map<String, dynamic> json) {
+    return TourAttraction(
+      contentId: json['contentId'] as String? ?? '',
+      contentTypeId: json['contentTypeId'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      address: json['address'] as String? ?? '',
+      category: json['category'] as String? ?? '',
+      tel: json['tel'] as String? ?? '',
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
+    );
+  }
+}
+
+/// TourAPI 관광지 상세 (관광지 상세 화면). infoRows가 비면 "기본 정보만" 상태.
+class TourPlaceDetail {
+  const TourPlaceDetail({
+    required this.contentId,
+    required this.contentTypeId,
+    required this.title,
+    required this.address,
+    required this.overview,
+    required this.homepageUrl,
+    this.latitude,
+    this.longitude,
+    this.infoRows = const [],
+  });
+
+  final String contentId;
+  final String contentTypeId;
+  final String title;
+  final String address;
+  final String overview;
+  final String homepageUrl;
+  final double? latitude;
+  final double? longitude;
+  final List<TourPlaceInfoRow> infoRows;
+
+  factory TourPlaceDetail.fromJson(Map<String, dynamic> json) {
+    return TourPlaceDetail(
+      contentId: json['contentId'] as String? ?? '',
+      contentTypeId: json['contentTypeId'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      address: json['address'] as String? ?? '',
+      overview: json['overview'] as String? ?? '',
+      homepageUrl: json['homepageUrl'] as String? ?? '',
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
+      infoRows: ((json['infoRows'] as List<dynamic>?) ?? const [])
+          .map((e) => TourPlaceInfoRow.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}
+
+class TourPlaceInfoRow {
+  const TourPlaceInfoRow({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  factory TourPlaceInfoRow.fromJson(Map<String, dynamic> json) {
+    return TourPlaceInfoRow(
+      label: json['label'] as String? ?? '',
+      value: json['value'] as String? ?? '',
     );
   }
 }
@@ -1642,6 +1816,7 @@ class SavedCourseStop {
     required this.sourceType,
     this.day = 1,
     this.time = '',
+    this.category = '',
   });
 
   final int placeId;
@@ -1656,6 +1831,10 @@ class SavedCourseStop {
   final int day;
   final String time;
 
+  /// 장소 카테고리(관광지/맛집/숙소/카페 …) — 아이콘·태그를 정확히 되살리기 위해 보존.
+  /// sourceType(환급 여부)만으론 맛집·비환급 관광지가 뭉개져서 별도 저장. (예전 저장분엔 빈값)
+  final String category;
+
   factory SavedCourseStop.fromJson(Map<String, dynamic> json) {
     return SavedCourseStop(
       placeId: json['placeId'] as int? ?? 0,
@@ -1666,6 +1845,7 @@ class SavedCourseStop {
       sourceType: json['sourceType'] as String? ?? 'PLACE',
       day: json['day'] as int? ?? 1,
       time: json['time'] as String? ?? '',
+      category: json['category'] as String? ?? '',
     );
   }
 
@@ -1678,6 +1858,7 @@ class SavedCourseStop {
         'sourceType': sourceType,
         'day': day,
         'time': time,
+        'category': category,
       };
 }
 

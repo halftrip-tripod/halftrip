@@ -31,6 +31,7 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   /// 세션 영속화용 — 현재 토큰 조회. (secure storage 저장은 AppController 책임)
+  @override
   String? get authToken => _authToken;
 
   /// 앱 재시작 시 secure storage에 보관해둔 토큰을 다시 채운다.
@@ -145,7 +146,7 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   Future<String> _downloadFromUri(Uri uri, String fileName) async {
-    final response = await http.get(uri);
+    final response = await http.get(uri, headers: _headers(json: false));
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('다운로드 실패: ${response.body}');
     }
@@ -344,6 +345,42 @@ class ApiTravelRepository implements TravelRepository {
       },
     );
     return PlaceInfoDetail.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<List<RegionFestival>> getRegionFestivals(int regionId) async {
+    final response = await _jsonRequest('GET', '/regions/$regionId/festivals');
+    return ((response['data'] as List<dynamic>?) ?? const [])
+        .map((e) => RegionFestival.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<List<TourAttraction>> getRegionAttractions(int regionId,
+      {String? type, String? keyword}) async {
+    final response = await _jsonRequest(
+      'GET',
+      '/regions/$regionId/attractions',
+      query: {
+        if (type != null && type.isNotEmpty) 'type': type,
+        if (keyword != null && keyword.isNotEmpty) 'q': keyword,
+      },
+    );
+    return ((response['data'] as List<dynamic>?) ?? const [])
+        .map((e) => TourAttraction.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<TourPlaceDetail?> getTourPlaceDetail(String contentId,
+      {int contentTypeId = 12}) async {
+    final response = await _jsonRequest(
+      'GET',
+      '/tour-places/$contentId',
+      query: {'contentTypeId': contentTypeId},
+    );
+    final data = response['data'];
+    return data == null ? null : TourPlaceDetail.fromJson(data as Map<String, dynamic>);
   }
 
   @override
@@ -578,6 +615,7 @@ class ApiTravelRepository implements TravelRepository {
   }) async {
     final response = await http.get(
       _uri('/trips/$tripId/uploaded-files/$uploadedFileId/binary'),
+      headers: _headers(json: false),
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('파일 다운로드 실패: ${response.body}');
@@ -595,6 +633,33 @@ class ApiTravelRepository implements TravelRepository {
       'POST',
       '/trips/$tripId/receipts/analyze/$uploadedFileId',
       body: {'usageScope': usageScope.wireName},
+    );
+    return ReceiptItem.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<ReceiptItem> correctReceipt({
+    required int tripId,
+    required int receiptId,
+    int? amount,
+    PaymentType? paymentType,
+    DateTime? paymentDateTime,
+  }) async {
+    // 서버가 "yyyy-MM-dd HH:mm" 문자열을 기대한다 (springboot #58).
+    String? dt;
+    if (paymentDateTime != null) {
+      final d = paymentDateTime;
+      String two(int v) => v.toString().padLeft(2, '0');
+      dt = '${d.year}-${two(d.month)}-${two(d.day)} ${two(d.hour)}:${two(d.minute)}';
+    }
+    final response = await _jsonRequest(
+      'PATCH',
+      '/trips/$tripId/receipts/$receiptId',
+      body: {
+        if (amount != null) 'amount': amount,
+        if (paymentType != null) 'paymentType': paymentType.wireName,
+        if (dt != null) 'paymentDateTime': dt,
+      },
     );
     return ReceiptItem.fromJson(response['data'] as Map<String, dynamic>);
   }
@@ -689,7 +754,10 @@ class ApiTravelRepository implements TravelRepository {
 
   @override
   Future<Uint8List> fetchLodgingFormPdfBytes(int tripId) async {
-    final response = await http.get(_uri('/integrations/lodging-form/$tripId/pdf'));
+    final response = await http.get(
+      _uri('/integrations/lodging-form/$tripId/pdf'),
+      headers: _headers(json: false),
+    );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('숙박확인서 PDF 불러오기 실패: ${response.body}');
     }

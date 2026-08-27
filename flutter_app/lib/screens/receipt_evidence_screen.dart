@@ -9,6 +9,7 @@ import '../models/app_models.dart';
 import '../repositories/travel_repository.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui/app_card.dart';
+import 'receipt_correct_sheet.dart';
 
 /// 영수증 OCR — 사진 → 결제수단·금액·일시 인식 → 인정 여부 → 누적 소비 추적.
 /// 디자인: halftrip-design/receipt-ocr.html
@@ -144,6 +145,33 @@ class _ReceiptEvidenceScreenState extends State<ReceiptEvidenceScreen> {
     if (mounted) _snack('영수증을 추가했어요.');
   }
 
+  /// 방금 읽은 OCR 결과를 등록 전에 바로잡는다.
+  Future<void> _editDraft() async {
+    final draft = _draftReceipt;
+    if (draft == null) return;
+    final corrected = await showReceiptCorrectSheet(
+      context,
+      tripId: widget.tripId,
+      receipt: draft,
+    );
+    if (corrected != null && mounted) {
+      setState(() => _draftReceipt = corrected);
+    }
+  }
+
+  /// 이미 등록한 영수증도 나중에 오독을 발견하면 고칠 수 있어야 한다.
+  Future<void> _editSaved(ReceiptItem receipt) async {
+    final corrected = await showReceiptCorrectSheet(
+      context,
+      tripId: widget.tripId,
+      receipt: receipt,
+    );
+    if (corrected != null && mounted) {
+      await _reload();
+      _snack('영수증 정보를 수정했어요. 인정 여부도 다시 심사했어요.');
+    }
+  }
+
   Future<void> _deleteReceipt(int fileId) async {
     await AppScope.of(context)
         .repository
@@ -237,10 +265,10 @@ class _ReceiptEvidenceScreenState extends State<ReceiptEvidenceScreen> {
                   : '${detail.trip.regionName} 인정 결제수단: '
                       '${_acceptedPaymentMethods.map((code) => PaymentTypeWire.fromWire(code).label).join(' · ')}'),
 
-              // OCR 결과 (draft)
+              // OCR 결과 (draft) — 등록 전에 "이 정보가 맞나요?"로 확인받는다.
               if (draft != null) ...[
                 const SizedBox(height: 14),
-                _OcrCard(receipt: draft, won: won),
+                _OcrCard(receipt: draft, won: won, onEdit: _editDraft),
               ],
 
               // 등록한 영수증
@@ -268,6 +296,7 @@ class _ReceiptEvidenceScreenState extends State<ReceiptEvidenceScreen> {
                     child: _ReceiptRow(
                       receipt: r,
                       won: won,
+                      onEdit: () => _editSaved(r),
                       onDelete: () => _deleteReceipt(r.uploadedFileId),
                     ),
                   ),
@@ -362,9 +391,10 @@ class _Note extends StatelessWidget {
 }
 
 class _OcrCard extends StatelessWidget {
-  const _OcrCard({required this.receipt, required this.won});
+  const _OcrCard({required this.receipt, required this.won, required this.onEdit});
   final ReceiptItem receipt;
   final NumberFormat won;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -403,6 +433,33 @@ class _OcrCard extends StatelessWidget {
           _kv('결제일시', value: _dt(receipt.paymentDateTime) ?? '확인되지 않음'),
           if (receipt.reviewReason.isNotEmpty)
             _kv('판정', value: receipt.reviewReason),
+          const SizedBox(height: 10),
+          const Divider(height: 1, color: AppColors.track),
+          const SizedBox(height: 10),
+          // OCR은 완전하지 않다 — 등록 전에 사용자에게 확인받고 고칠 길을 연다.
+          Row(children: [
+            const Expanded(
+              child: Text('이 정보가 맞나요?',
+                  style: TextStyle(
+                      fontFamily: 'Pretendard',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.ink5)),
+            ),
+            TextButton.icon(
+              onPressed: onEdit,
+              icon: const Icon(Icons.edit_rounded, size: 15),
+              label: const Text('수정하기'),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.p600,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                textStyle: const TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700),
+              ),
+            ),
+          ]),
         ],
       ),
     );
@@ -469,9 +526,13 @@ class _PayChip extends StatelessWidget {
 
 class _ReceiptRow extends StatelessWidget {
   const _ReceiptRow(
-      {required this.receipt, required this.won, required this.onDelete});
+      {required this.receipt,
+      required this.won,
+      required this.onEdit,
+      required this.onDelete});
   final ReceiptItem receipt;
   final NumberFormat won;
+  final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   @override
@@ -513,10 +574,24 @@ class _ReceiptRow extends StatelessWidget {
                 fontSize: 14,
                 fontWeight: FontWeight.w800,
                 color: AppColors.ink9)),
-        IconButton(
-          onPressed: onDelete,
-          icon: const Icon(Icons.delete_outline_rounded,
-              color: AppColors.ink4, size: 20),
+        // 금액과 액션은 넉넉히 띄우고, 수정·삭제는 한 묶음으로 붙인다.
+        const SizedBox(width: 14),
+        GestureDetector(
+          onTap: onEdit,
+          behavior: HitTestBehavior.opaque,
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 5, vertical: 6),
+            child: Icon(Icons.edit_outlined, color: AppColors.ink4, size: 20),
+          ),
+        ),
+        GestureDetector(
+          onTap: onDelete,
+          behavior: HitTestBehavior.opaque,
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 5, vertical: 6),
+            child: Icon(Icons.delete_outline_rounded,
+                color: AppColors.ink4, size: 20),
+          ),
         ),
       ]),
     );

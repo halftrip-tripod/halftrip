@@ -102,6 +102,7 @@ class Trip {
     this.ddayLabel = '',
     this.nights = 1,
     this.course,
+    this.backendId,
   });
 
   final String emoji;
@@ -115,6 +116,10 @@ class Trip {
 
   /// 이 여행의 확정 코스 — 없으면 여행 상세에서 코스 만들기로 유도.
   Course? course;
+
+  /// 실서버 여행 id — 여행 상세에서 프록시로 만들 때 채워져,
+  /// 코스함 가져오기 등 실스토어 연결(selectCourseForTrip)에 쓴다.
+  final int? backendId;
 }
 
 enum PostTag { review, course, ask, info }

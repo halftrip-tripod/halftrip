@@ -13,12 +13,32 @@ import '../data/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui.dart';
+import 'tour_place_detail.dart';
 
 // ───────────────────────── 코스 영속화 변환 (목업 Course ↔ 실스토어 SavedCourse)
 // 코스의 원본 저장소는 controller.savedCourses(기기 영속) 하나다. 목업 Course는
 // 화면 표시용 뷰모델일 뿐 — 코스함·여행 코스 보기 모두 실스토어에서 변환해 그린다.
 
-/// 목업 Course 스톱 → 영속 스톱. DAY·시간을 보존해야 다시 열었을 때 일정이 산다.
+/// 코스 스톱의 아이콘 — 태그(카테고리)에서 파생. 편집·저장·뷰 어디서나 같은 규칙으로
+/// 그려야 "저장하니 음식점이 관광지 아이콘으로 바뀌는" 불일치가 안 생긴다.
+/// 태그가 있으면 그에 맞게, 없으면 기본 핀(📍).
+String courseStopEmoji(String tag) {
+  if (tag.contains('맛집') || tag.contains('음식') || tag.contains('식당')) return '🍽️';
+  if (tag.contains('카페')) return '☕';
+  if (tag.contains('숙') || tag.contains('호텔') || tag.contains('펜션') || tag.contains('리조트')) {
+    return '🏨';
+  }
+  if (tag.contains('관광주민증') || tag.contains('디지털')) return '🎫';
+  if (tag.contains('자연')) return '🌿';
+  if (tag.contains('역사') || tag.contains('문화')) return '🏛️';
+  if (tag.contains('레포츠') || tag.contains('체험')) return '⛰️';
+  if (tag.contains('쇼핑')) return '🛍️';
+  if (tag.contains('축제') || tag.contains('공연') || tag.contains('행사')) return '🎪';
+  if (tag.contains('관광') || tag.contains('환급') || tag.contains('명소')) return '🏞️';
+  return '📍';
+}
+
+/// 목업 Course 스톱 → 영속 스톱. DAY·카테고리를 보존해야 다시 열었을 때 일정·아이콘이 산다.
 List<SavedCourseStop> savedStopsFromCourse(List<CourseStop> stops) => [
       for (final s in stops)
         SavedCourseStop(
@@ -30,6 +50,7 @@ List<SavedCourseStop> savedStopsFromCourse(List<CourseStop> stops) => [
           sourceType: s.refund ? 'HALF_PRICE' : 'MERCHANT',
           day: s.day,
           time: s.time,
+          category: s.tag, // 관광지/맛집/숙소 원본 보존 (refund 불리언으로 뭉개지 않게)
         ),
     ];
 
@@ -59,104 +80,184 @@ Course courseFromSaved(
     savedAgo: savedAgo,
     stops: [
       for (final s in saved.stops)
-        CourseStop(
-          day: s.day,
-          time: s.time,
-          emoji: switch (s.sourceType.toUpperCase()) {
-            'MERCHANT' => '🍽️',
-            'DIGITAL_TOUR_CARD' => '🎫',
-            _ => '🏞️',
-          },
-          name: s.name,
-          tag: switch (s.sourceType.toUpperCase()) {
-            'MERCHANT' => '가맹점',
-            'DIGITAL_TOUR_CARD' => '디지털 관광주민증',
-            _ => '관광지',
-          },
-          refund: s.sourceType.toUpperCase() != 'MERCHANT',
-          latitude: s.latitude == 0 ? null : s.latitude,
-          longitude: s.longitude == 0 ? null : s.longitude,
-          address: s.address.isEmpty ? null : s.address,
-          placeId: s.placeId == 0 ? null : s.placeId,
-        ),
+        () {
+          // 카테고리 우선 복원 — 예전 저장분(category 빈값)만 sourceType으로 폴백.
+          final cat = s.category.isNotEmpty
+              ? s.category
+              : switch (s.sourceType.toUpperCase()) {
+                  'MERCHANT' => '가맹점',
+                  'DIGITAL_TOUR_CARD' => '디지털 관광주민증',
+                  _ => '관광지',
+                };
+          return CourseStop(
+            day: s.day,
+            time: s.time,
+            emoji: courseStopEmoji(cat),
+            name: s.name,
+            tag: cat,
+            refund: s.sourceType.toUpperCase() != 'MERCHANT',
+            stay: cat.contains('숙'),
+            latitude: s.latitude == 0 ? null : s.latitude,
+            longitude: s.longitude == 0 ? null : s.longitude,
+            address: s.address.isEmpty ? null : s.address,
+            placeId: s.placeId == 0 ? null : s.placeId,
+          );
+        }(),
     ],
   );
 }
 
 // ───────────────────────── AI 코스 생성 유틸 (실서버 후보 → 일정 배치)
 
-const _day1Slots = ['10:00', '12:30', '14:30', '18:00'];
-const _day2Slots = ['09:30', '12:00', '14:30'];
+/// AI 코스 후보 하나 — 지정관광지·TourAPI 관광지·맛집을 한 형태로 모은다.
+class _AiCand {
+  _AiCand({
+    required this.name,
+    required this.category,
+    required this.address,
+    required this.description,
+    required this.refund,
+    this.latitude,
+    this.longitude,
+    this.placeId = 0,
+  });
+  final String name;
+  final String category; // 관광지/맛집/숙소 …
+  final String address;
+  final String description;
+  final bool refund; // 환급 인정(지정관광지)
+  final double? latitude;
+  final double? longitude;
+  final int placeId;
 
-/// 실서버 후보(PlaceItem) 목록 → DAY1/DAY2 일정으로 배치.
-List<CourseStop> _scheduleAiStops(List<PlaceItem> places) {
-  final stops = <CourseStop>[];
-  for (var i = 0; i < places.length && i < 7; i++) {
-    final day = i < _day1Slots.length ? 1 : 2;
-    final time = day == 1 ? _day1Slots[i] : _day2Slots[i - _day1Slots.length];
-    final place = places[i];
-    stops.add(CourseStop(
+  Map<String, dynamic> toAiJson() => {
+        'name': name,
+        'category': category,
+        'address': address,
+        'description': description,
+        'eligibleForRefund': refund,
+      };
+}
+
+String _aiNormName(String s) => s.replaceAll(RegExp(r'\s+|\(.*\)'), '').trim();
+
+CourseStop _aiCandToStop(_AiCand c, int day) => CourseStop(
       day: day,
-      time: time,
-      emoji: _aiPlaceEmoji(place),
-      name: place.name,
-      tag: '관광지',
-      refund: place.eligibleForRefund,
-      latitude: place.latitude,
-      longitude: place.longitude,
-      address: place.address,
-      placeId: place.id,
-    ));
-  }
-  return stops;
-}
+      time: '',
+      emoji: courseStopEmoji(c.category),
+      name: c.name,
+      tag: c.category.isEmpty ? '관광지' : c.category,
+      refund: c.refund,
+      stay: c.category.contains('숙'),
+      latitude: c.latitude,
+      longitude: c.longitude,
+      address: c.address.isEmpty ? null : c.address,
+      placeId: c.placeId == 0 ? null : c.placeId,
+    );
 
-String _aiPlaceEmoji(PlaceItem place) {
-  final text = '${place.name} ${place.description}';
-  if (text.contains('다리') || text.contains('출렁')) return '🌉';
-  if (text.contains('박물관') || text.contains('청자')) return '🏺';
-  if (text.contains('초당') || text.contains('유적') || text.contains('생가')) {
-    return '🏯';
-  }
-  if (text.contains('시장') || text.contains('식당') || text.contains('맛')) {
-    return '🍲';
-  }
-  if (text.contains('카페')) return '☕';
-  if (text.contains('한옥') || text.contains('스테이') || text.contains('숙')) {
-    return '🏠';
-  }
-  if (text.contains('타워') || text.contains('전망') || text.contains('케이블')) {
-    return '🗼';
-  }
-  if (text.contains('공원') || text.contains('생태') || text.contains('수목원')) {
-    return '🌾';
-  }
-  if (text.contains('해수욕장') || text.contains('해변') || text.contains('섬')) {
-    return '🏖️';
-  }
-  return '📍';
-}
-
-/// 취향 키워드 매칭 규칙 기반 대체 정렬 (LLM 실패/빈 결과 시).
-List<PlaceItem> _rankAiPlaces(
-    List<PlaceItem> places, List<String> prefs) {
-  int score(PlaceItem place) {
-    final text = '${place.name} ${place.address} ${place.description}';
-    var total = 0;
+/// 취향 우선순위 기반 규칙 정렬 (LLM 실패/빈 결과 시 대체).
+/// 환급 인정 관광지 2곳은 반드시 앞쪽에 포함해 환급 조건을 보장한다.
+List<_AiCand> _rankAiCands(List<_AiCand> cands, List<String> prefs, int nights) {
+  int score(_AiCand c) {
+    final text = '${c.name} ${c.category} ${c.address} ${c.description}';
+    var total = c.refund ? 5 : 0; // 환급 인정 약간 가산
     for (var i = 0; i < prefs.length; i++) {
       final keywords = switch (prefs[i]) {
-        '맛집' => ['시장', '식당', '맛', '카페'],
-        '자연' => ['공원', '생태', '해수욕장', '섬', '산', '숲'],
-        '문화' => ['박물관', '유적', '초당', '생가', '청자'],
-        _ => ['체험', '타워', '전망', '케이블', '짚'],
+        '맛집' => ['맛집', '시장', '식당', '맛', '카페', '음식'],
+        '자연' => ['자연', '공원', '생태', '해수욕장', '섬', '산', '숲', '해변'],
+        '문화' => ['문화', '역사', '박물관', '유적', '초당', '생가', '청자'],
+        _ => ['체험', '레포츠', '타워', '전망', '케이블', '짚'],
       };
       if (keywords.any(text.contains)) total += (prefs.length - i) * 10;
     }
     return total;
   }
 
-  final ranked = [...places]..sort((a, b) => score(b).compareTo(score(a)));
-  return ranked.take(7).toList();
+  final ranked = [...cands]..sort((a, b) => score(b).compareTo(score(a)));
+  final maxStops = ((nights + 1) * 4).clamp(4, 20);
+  final picked = ranked.take(maxStops).toList();
+  // 환급 인정 관광지 2곳 보장 — 부족하면 뒤에서 끌어와 채운다.
+  final refundInPicked = picked.where((c) => c.refund).length;
+  if (refundInPicked < 2) {
+    final more = ranked.where((c) => c.refund && !picked.contains(c)).take(2 - refundInPicked);
+    picked.addAll(more);
+  }
+  return picked;
+}
+
+/// AI 후보 수집 — 지정관광지(환급) + TourAPI 관광지·맛집을 이름 기준으로 병합.
+/// 맛집이 빠져 있던 문제의 근본 픽스: 취향 1순위가 맛집이어도 후보에 맛집이 있어야 뽑힌다.
+Future<List<_AiCand>> _buildAiCandidates(dynamic controller, int regionId) async {
+  final repo = controller.repository;
+  final cands = <_AiCand>[];
+  final seen = <String>{};
+
+  void add(_AiCand c) {
+    final key = _aiNormName(c.name);
+    if (key.isEmpty || seen.contains(key)) return;
+    seen.add(key);
+    cands.add(c);
+  }
+
+  // ① 지정관광지(환급 인정) — 좌표·설명 보유.
+  try {
+    final detail = await repo.getPlaceInfoDetail(regionId);
+    for (final p in detail.halfPricePlaces) {
+      add(_AiCand(
+        name: p.name, category: '관광지', address: p.address,
+        description: p.description, refund: true,
+        latitude: p.latitude, longitude: p.longitude, placeId: p.id,
+      ));
+    }
+  } catch (_) {}
+
+  // ② TourAPI 관광지·맛집 — 지정과 이름이 겹치면 지정(환급) 쪽 유지.
+  for (final type in const ['관광지', '맛집']) {
+    try {
+      final tour = await repo.getRegionAttractions(regionId, type: type);
+      for (final a in tour) {
+        add(_AiCand(
+          name: a.title,
+          category: a.category.isEmpty ? type : a.category,
+          address: a.address,
+          description: '',
+          refund: a.eligibleForRefund,
+          latitude: a.latitude,
+          longitude: a.longitude,
+        ));
+      }
+    } catch (_) {}
+  }
+  return cands;
+}
+
+/// 생성 결과에 환급 인정 관광지가 2곳 미만이면 후보에서 채워 넣는다 (DAY1 뒤쪽에 추가).
+List<CourseStop> _ensureAiRefund(List<CourseStop> stops, List<_AiCand> cands) {
+  final refundCount = stops.where((s) => s.refund).length;
+  if (refundCount >= 2) return stops;
+  final have = {for (final s in stops) _aiNormName(s.name)};
+  final extras = cands
+      .where((c) => c.refund && !have.contains(_aiNormName(c.name)))
+      .take(2 - refundCount)
+      .map((c) => _aiCandToStop(c, 1));
+  return [...stops, ...extras];
+}
+
+/// 후보 목록 → nights 기준으로 DAY 배분 (하루 약 4곳). 취향·환급 반영은 상위에서 이미 정렬됨.
+List<CourseStop> _scheduleAiCands(List<_AiCand> cands, int nights) {
+  final days = nights + 1;
+  final perDay = (cands.length / days).ceil().clamp(2, 5);
+  final stops = <CourseStop>[];
+  var day = 1, inDay = 0;
+  for (final c in cands) {
+    if (inDay >= perDay && day < days) {
+      day++;
+      inDay = 0;
+    }
+    stops.add(_aiCandToStop(c, day));
+    inDay++;
+  }
+  return stops;
 }
 
 /// S1-4a 코스 만들기 (방식 선택).
@@ -182,11 +283,15 @@ class CourseCreateScreen extends StatelessWidget {
         builder: (_) => CourseRegionScreen(onPicked: builder)));
   }
 
-  /// 코스함의 같은 지역 코스 중 하나를 골라 이 여행의 확정 코스로 연결한다.
+  /// 코스함(실스토어)의 같은 지역 코스 중 하나를 골라 이 여행의 확정 코스로 연결한다.
   Future<void> _pickFromSaved(BuildContext context, Trip trip) async {
-    final candidates =
-        AppState.I.courses.where((c) => c.region == trip.region).toList();
-    final picked = await showAppSheet<Course>(
+    final controller = AppScope.of(context);
+    // 원본은 기기 영속 코스함 — 인메모리 목업(AppState.I.courses)이 아니라 실스토어를 보여준다.
+    final saved = controller.savedCourses
+        .where((c) => c.regionName == trip.region)
+        .toList();
+    final candidates = [for (final s in saved) courseFromSaved(s)];
+    final picked = await showAppSheet<int>(
       context,
       scrollable: true,
       child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -201,6 +306,18 @@ class CourseCreateScreen extends StatelessWidget {
                     color: AppColors.ink9)),
           ),
         ),
+        if (candidates.isEmpty)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(24, 8, 24, 18),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text('이 지역으로 저장한 코스가 아직 없어요.',
+                  style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.ink5)),
+            ),
+          ),
         Flexible(
           child: ListView.builder(
             shrinkWrap: true,
@@ -221,7 +338,7 @@ class CourseCreateScreen extends StatelessWidget {
                         color: AppColors.ink5)),
                 trailing: const Icon(Icons.chevron_right_rounded,
                     size: 20, color: AppColors.ink4),
-                onTap: () => Navigator.of(ctx).pop(c),
+                onTap: () => Navigator.of(ctx).pop(i),
               );
             },
           ),
@@ -230,10 +347,13 @@ class CourseCreateScreen extends StatelessWidget {
       ]),
     );
     if (picked == null || !context.mounted) return;
-    trip.course = picked;
-    AppState.I.update();
+    final pickedSaved = saved[picked];
+    // 실스토어 기준으로 여행-코스 연결 (여행 상세가 selectedCourseForTrip으로 읽는다).
+    await controller.selectCourseForTrip(
+        tripId: trip.backendId ?? 0, courseId: pickedSaved.id);
+    if (!context.mounted) return;
     Navigator.of(context).pop(); // 방식 선택 화면 닫고 여행 상세 복귀
-    showMock(context, '코스함의 "${picked.title}" 코스를 이 여행에 연결했어요.');
+    showMock(context, '코스함의 "${pickedSaved.title}" 코스를 이 여행에 연결했어요.');
   }
 
   @override
@@ -314,16 +434,24 @@ class CourseCreateScreen extends StatelessWidget {
           desc: '가고 싶은 장소를 검색해서 내 마음대로 코스를 구성해요',
           // 저장 전에는 아무것도 만들지 않는다 — 그냥 뒤로 나가면 코스가 남지 않게
           // 초안만 들고 편집 화면으로 가고, "변경사항 저장"에서 코스함 추가·여행 연결.
-          onTap: () => _go(context, (r) => CourseEditScreen(
-                course: Course(
-                  emoji: r.emoji, region: r.name, province: r.province,
-                  title: '${r.name} 나만의 코스', source: CourseSource.manual,
-                  durationLabel: '1박 2일', placeCount: 0, refundOk: false,
-                  savedAgo: '방금 저장', stops: [],
-                ),
-                isNew: true,
-                forTrip: forTrip,
-              )),
+          onTap: () {
+            // 여행에서 만들면 그 여행 기간, 아니면 당일치기 기본(1박2일 고정 금지).
+            final nights = forTrip?.nights;
+            final duration = nights == null || nights == 0
+                ? '당일치기'
+                : '$nights박 ${nights + 1}일';
+            _go(context, (r) => CourseEditScreen(
+                  course: Course(
+                    emoji: r.emoji, region: r.name, province: r.province,
+                    title: '${r.name} 나만의 코스', source: CourseSource.manual,
+                    durationLabel: duration,
+                    placeCount: 0, refundOk: false,
+                    savedAgo: '방금 저장', stops: [],
+                  ),
+                  isNew: true,
+                  forTrip: forTrip,
+                ));
+          },
         ),
       ],
     );
@@ -506,47 +634,48 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
       if (matched.isEmpty) {
         throw Exception('연결된 지역 정보를 찾을 수 없습니다.');
       }
-      final detail = await controller.repository.getRegionDetail(
-        matched.first.id,
-        residence: controller.currentUser?.residence,
-      );
-      final candidates = detail.halfPricePlaces;
-      if (candidates.isEmpty) {
+      // 후보 = 지정관광지(환급) + TourAPI 관광지 + 맛집. category·좌표 포함해 취향/동선 반영.
+      final cands = await _buildAiCandidates(controller, matched.first.id);
+      if (cands.isEmpty) {
         throw Exception('추천할 장소 데이터가 없습니다.');
       }
-      List<PlaceItem> places;
       try {
-        // FastAPI LLM으로 실제 코스 생성(테마·환급조건 반영, 후보 중에서만 선정).
+        // FastAPI LLM으로 실제 코스 생성 — 테마 우선순위·환급조건·일수(nights) 반영.
         final aiService = CourseAiService(AppConfig.fromEnvironment());
         final result = await aiService.generate(
           regionName: widget.region.name,
           nights: _nights,
           people: _people,
           themePriority: preferences,
-          candidates: candidates
-              .map((place) => {
-                    'name': place.name,
-                    'category': '',
-                    'address': place.address,
-                    'description': place.description,
-                    'eligibleForRefund': place.eligibleForRefund,
-                  })
-              .toList(),
+          candidates: cands.map((c) => c.toAiJson()).toList(),
         );
-        final byName = {for (final place in candidates) place.name: place};
-        places = result.stops
-            .map((stop) => byName[stop.name])
-            .whereType<PlaceItem>()
-            .toList();
-        if (places.isEmpty) {
-          // LLM이 후보 밖 이름을 반환했거나 빈 결과 — 규칙 기반으로 안전하게 대체.
-          places = _rankAiPlaces(candidates, preferences);
+        final byName = {for (final c in cands) _aiNormName(c.name): c};
+        final sorted = [...result.stops]..sort((a, b) =>
+            a.day != b.day ? a.day.compareTo(b.day) : a.order.compareTo(b.order));
+        final built = <CourseStop>[];
+        for (final rs in sorted) {
+          final cand = byName[_aiNormName(rs.name)];
+          if (cand == null) continue; // 후보 밖 이름은 버림
+          // 카테고리는 LLM이 주면 우선, 아니면 후보값. 일차는 nights 범위로 클램프.
+          final cat = rs.category.isNotEmpty ? rs.category : cand.category;
+          built.add(_aiCandToStop(
+            _AiCand(
+              name: cand.name, category: cat, address: cand.address,
+              description: cand.description, refund: cand.refund,
+              latitude: cand.latitude, longitude: cand.longitude, placeId: cand.placeId,
+            ),
+            rs.day.clamp(1, _nights + 1),
+          ));
         }
+        stops = built.isNotEmpty
+            ? built
+            : _scheduleAiCands(_rankAiCands(cands, preferences, _nights), _nights);
       } catch (_) {
-        // FastAPI 호출 실패(네트워크/키 미설정 등) — 클라이언트 규칙 기반으로 대체.
-        places = _rankAiPlaces(candidates, preferences);
+        // FastAPI 호출 실패(네트워크/키 미설정 등) — 클라이언트 규칙 기반 대체.
+        stops = _scheduleAiCands(_rankAiCands(cands, preferences, _nights), _nights);
       }
-      stops = _scheduleAiStops(places);
+      // 환급 인정 관광지 2곳 보장.
+      stops = _ensureAiRefund(stops, cands);
     } catch (error) {
       errorMessage = '$error';
     }
@@ -1266,7 +1395,7 @@ Widget _buildStopsMap(BuildContext context, List<CourseStop> stops,
       kakaoEnabled: config.canUseKakaoMap,
       routeMarkers: routeMarkers,
       connectSequentially: true,
-      height: 280,
+      height: 188,
       highlightedMarkerId: focusId,
       initialCenterLatitude: focusStop?.latitude,
       initialCenterLongitude: focusStop?.longitude,
@@ -1362,18 +1491,13 @@ class _TimelineSection extends StatelessWidget {
             child: Text('DAY $day · 6.1${3 + day} (${day == 1 ? '토' : '일'})',
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: .3)),
           ),
-          for (final s in list.where((s) => s.day == day))
-            onStopTap == null
-                ? TimelineStop(stop: s)
-                : GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => onStopTap!(s),
-                    child: TimelineStop(
-                      stop: s,
-                      selected:
-                          (s.placeId ?? s.name.hashCode) == selectedStopId,
-                    ),
-                  ),
+          for (final (i, s) in list.where((s) => s.day == day).indexed)
+            _CourseStopRow(
+              stop: s,
+              number: i + 1,
+              selected: (s.placeId ?? s.name.hashCode) == selectedStopId,
+              onTap: onStopTap == null ? null : () => onStopTap!(s),
+            ),
         ],
     ]);
   }
@@ -1386,22 +1510,20 @@ class CourseViewScreen extends StatefulWidget {
   const CourseViewScreen({
     super.key,
     required this.course,
-    this.editInAppBar = false,
-    this.onEdit,
     this.onMore,
     this.onEdited,
+    this.onDelete,
   });
   final Course course;
-  final bool editInAppBar;
 
-  /// 편집 동작 교체 — 여행 코스는 목업 편집기 대신 여행 계획표(PlannerScreen)로 보낸다.
-  final VoidCallback? onEdit;
-
-  /// 우측 상단 ⋯ — 여행 코스의 등록취소·코스함삭제 시트.
+  /// 우측 상단 ⋯ — 여행 코스일 때만: 등록취소/코스함삭제 시트.
   final VoidCallback? onMore;
 
-  /// 기본 편집기(CourseEditScreen)에서 돌아온 뒤 호출 — 실스토어에 변경을 반영할 때 쓴다.
+  /// 편집기(CourseEditScreen)에서 돌아온 뒤 호출 — 실스토어에 변경을 반영할 때 쓴다.
   final VoidCallback? onEdited;
+
+  /// 우측 상단 삭제 — 코스함에서 볼 때(⋯ 없이 바로 삭제).
+  final VoidCallback? onDelete;
 
   @override
   State<CourseViewScreen> createState() => _CourseViewScreenState();
@@ -1414,11 +1536,8 @@ class _CourseViewScreenState extends State<CourseViewScreen> {
   /// 상세 일정에서 탭한 장소 — 지도를 그 핀으로 이동시키고 정보창을 연다.
   int? _focusStopId;
 
+  /// 편집은 어느 진입이든 통일된 CourseEditScreen 하나로.
   void _openEdit() {
-    if (widget.onEdit != null) {
-      widget.onEdit!();
-      return;
-    }
     Navigator.of(context)
         .push(MaterialPageRoute(builder: (_) => CourseEditScreen(course: widget.course)))
         .then((_) {
@@ -1435,26 +1554,26 @@ class _CourseViewScreenState extends State<CourseViewScreen> {
         c.stops.where((s) => days.length < 2 || s.day == _mapDay).toList();
     return DetailScaffold(
       title: c.title,
-      actions: widget.editInAppBar
-          ? [
-              IconButton(
-                icon: const Icon(Icons.edit_rounded, size: 21),
-                tooltip: '코스 수정',
-                onPressed: _openEdit,
-              ),
-              if (widget.onMore != null)
-                IconButton(
-                  icon: const Icon(Icons.more_horiz_rounded, size: 22),
-                  tooltip: '더보기',
-                  onPressed: widget.onMore,
-                ),
-            ]
-          : null,
-      cta: widget.editInAppBar
-          ? null
-          : CtaBar(children: [
-              PrimaryButton('코스 편집하기', icon: Icons.edit_rounded, onTap: _openEdit),
-            ]),
+      // 수정은 우측 상단 연필로 통일. 여행 코스면 ⋯(등록취소/삭제), 코스함이면 삭제 아이콘.
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.edit_rounded, size: 21),
+          tooltip: '코스 수정',
+          onPressed: _openEdit,
+        ),
+        if (widget.onMore != null)
+          IconButton(
+            icon: const Icon(Icons.more_horiz_rounded, size: 22),
+            tooltip: '더보기',
+            onPressed: widget.onMore,
+          )
+        else if (widget.onDelete != null)
+          IconButton(
+            icon: const Icon(Icons.delete_outline_rounded, size: 21),
+            tooltip: '코스 삭제',
+            onPressed: widget.onDelete,
+          ),
+      ],
       children: [
         if (c.refundOk)
           const FitBanner(
@@ -1503,73 +1622,106 @@ class _CourseViewScreenState extends State<CourseViewScreen> {
   }
 }
 
-class TimelineStop extends StatelessWidget {
-  const TimelineStop({super.key, required this.stop, this.selected = false});
+/// 코스 일정 항목 — 뷰·편집 공용. 앞의 [number] 원은 지도 핀 번호와 일치한다.
+/// [editable]이면 삭제(×)·드래그 핸들을 붙인다. 시간은 표시하지 않는다.
+class _CourseStopRow extends StatelessWidget {
+  const _CourseStopRow({
+    super.key,
+    required this.stop,
+    required this.number,
+    this.editable = false,
+    this.selected = false,
+    this.index,
+    this.onTap,
+    this.onDelete,
+  });
   final CourseStop stop;
 
-  /// 지도 연동 등에서 이 장소가 선택된 상태 — 파란 테두리·틴트로 표시.
+  /// 1부터 시작하는 방문 순번 (DAY별로 리셋 — 지도 핀 번호와 동일).
+  final int number;
+  final bool editable;
+
+  /// 지도 연동에서 이 장소가 선택된 상태 — 파란 테두리·틴트.
   final bool selected;
+
+  /// 편집 모드에서 드래그 핸들에 쓸 인덱스.
+  final int? index;
+  final VoidCallback? onTap;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
-    return IntrinsicHeight(
-      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        SizedBox(
-          width: 40,
-          child: Padding(
-            padding: const EdgeInsets.only(top: 25),
-            child: Text(stop.time,
-                textAlign: TextAlign.right,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.ink5)),
-          ),
+    final tag = stop.tag;
+    final isFood = tag.contains('맛집') || tag.contains('음식') || tag.contains('식당');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+        // 지도 핀과 같은 번호 원 — 카드 밖 왼쪽.
+        Container(
+          width: 26,
+          height: 26,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(color: AppColors.p500, shape: BoxShape.circle),
+          child: Text('$number',
+              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900, color: Colors.white)),
         ),
-        SizedBox(
-          width: 28,
-          child: Stack(alignment: Alignment.topCenter, children: [
-            Positioned.fill(child: Center(child: Container(width: 2, color: AppColors.line))),
-            Padding(
-              padding: const EdgeInsets.only(top: 26),
-              child: Container(
-                width: 13,
-                height: 13,
-                decoration: BoxDecoration(
-                  color: stop.refund ? AppColors.p500 : Colors.white,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: stop.refund ? AppColors.p500 : AppColors.p200, width: 3),
-                ),
-              ),
-            ),
-          ]),
-        ),
-        const SizedBox(width: 4),
+        const SizedBox(width: 10),
         Expanded(
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              decoration: BoxDecoration(
                 color: selected ? AppColors.p50 : Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: selected
-                    ? Border.all(color: AppColors.p500, width: 1.4)
-                    : null,
-                boxShadow: AppShadows.card),
-            child: Row(children: [
-              EmojiBox(stop.emoji, size: 40, fontSize: 20, color: AppColors.surf, radius: 13),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(stop.name,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink9)),
-                  const SizedBox(height: 5),
-                  Wrap(spacing: 5, runSpacing: 4, children: [
-                    _tag(stop.tag, stop.tag == '맛집' ? const Color(0xFFFFF1E0) : AppColors.p100,
-                        stop.tag == '맛집' ? const Color(0xFFB8731B) : AppColors.p700),
-                    if (stop.refund)
-                      _tag(stop.stay ? '숙박 필수 ✓' : '환급 인정', AppColors.mintTint, AppColors.mintDeep),
-                  ]),
-                ]),
+                borderRadius: BorderRadius.circular(16),
+                border: selected ? Border.all(color: AppColors.p500, width: 1.4) : null,
+                boxShadow: AppShadows.soft,
               ),
-            ]),
+              child: Row(children: [
+                // 이동(드래그) 핸들 — 카드 안 왼쪽.
+                if (editable && index != null) ...[
+                  ReorderableDragStartListener(
+                    index: index!,
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 4),
+                      child: Icon(Icons.drag_indicator_rounded, size: 20, color: AppColors.ink4),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                EmojiBox(courseStopEmoji(tag), size: 38, fontSize: 19, color: AppColors.surf, radius: 12),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(stop.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink9)),
+                    const SizedBox(height: 5),
+                    Wrap(spacing: 5, runSpacing: 4, children: [
+                      // 카테고리 칩 — 태그가 있으면 그대로. '환급 인정'은 아래 민트 칩으로만 보여 중복 방지.
+                      if (tag.isNotEmpty && tag != '환급 인정')
+                        _tag(tag, isFood ? const Color(0xFFFFF1E0) : AppColors.p100,
+                            isFood ? const Color(0xFFB8731B) : AppColors.p700),
+                      if (stop.refund)
+                        _tag(stop.stay ? '숙박 필수 ✓' : '환급 인정', AppColors.mintTint, AppColors.mintDeep),
+                    ]),
+                  ]),
+                ),
+                // 삭제(×) — 카드 안 오른쪽.
+                if (editable) ...[
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: onDelete,
+                    child: const Padding(
+                      padding: EdgeInsets.all(2),
+                      child: Icon(Icons.close_rounded, size: 18, color: AppColors.ink4),
+                    ),
+                  ),
+                ],
+              ]),
+            ),
           ),
         ),
       ]),
@@ -1661,18 +1813,27 @@ class _CourseSavedScreenState extends State<CourseSavedScreen> {
       course: c,
       onTap: () => Navigator.of(context)
           .push(MaterialPageRoute(
-              builder: (_) => CourseViewScreen(
-                    course: c,
-                    onEdited: () => controller.saveCourse(SavedCourse(
-                      id: saved.id,
-                      regionId: saved.regionId,
-                      regionName: saved.regionName,
-                      title: c.title,
-                      preferences: saved.preferences,
-                      stops: savedStopsFromCourse(c.stops),
-                      createdAt: saved.createdAt,
-                    )),
-                  )))
+              builder: (_) => Builder(builder: (viewContext) {
+                    return CourseViewScreen(
+                      course: c,
+                      onEdited: () => controller.saveCourse(SavedCourse(
+                        id: saved.id,
+                        regionId: saved.regionId,
+                        regionName: saved.regionName,
+                        title: c.title,
+                        preferences: saved.preferences,
+                        stops: savedStopsFromCourse(c.stops),
+                        createdAt: saved.createdAt,
+                      )),
+                      // 코스함 진입 — 우측 상단 삭제로 바로 코스함에서 제거.
+                      onDelete: () async {
+                        await controller.deleteSavedCourse(saved.id);
+                        if (viewContext.mounted) {
+                          Navigator.of(viewContext).pop();
+                        }
+                      },
+                    );
+                  })))
           .then((_) => setState(() {})),
     );
   }
@@ -1767,21 +1928,55 @@ class CourseEditScreen extends StatefulWidget {
 }
 
 class _CourseEditScreenState extends State<CourseEditScreen> {
+  /// 지도에 표시할 일차 (1박2일이면 DAY 1/2 토글).
+  int _mapDay = 1;
+
+  /// 리스트에서 탭한 장소 — 지도를 그 핀 중심으로 이동시키고 정보창을 연다.
+  int? _focusStopId;
+
+  /// 코스가 며칠짜리인지 — 여행이면 여행 기간, 아니면 durationLabel/담긴 일차에서 유추.
+  int _dayCount(Course c, Trip? trip) {
+    if (trip != null) return trip.nights + 1;
+    var maxDay = 1;
+    for (final s in c.stops) {
+      if (s.day > maxDay) maxDay = s.day;
+    }
+    final m = RegExp(r'(\d+)\s*박\s*(\d+)\s*일').firstMatch(c.durationLabel);
+    final labelDays = m != null ? int.parse(m.group(2)!) : 1;
+    return labelDays > maxDay ? labelDays : maxDay;
+  }
+
+  /// 리스트 행 탭 → 지도의 해당 핀을 가운데로 + 정보창 열기.
+  void _focusStop(CourseStop s) {
+    if (s.latitude == null || s.longitude == null) return;
+    setState(() {
+      final days = widget.course.stops.map((e) => e.day).toSet();
+      if (days.length >= 2) _mapDay = s.day;
+      _focusStopId = s.placeId ?? s.name.hashCode;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = widget.course;
-    final refundCount = c.stops.where((s) => s.refund && !s.stay).length;
-    final hasStay = c.stops.any((s) => s.stay);
-    final ok = refundCount >= 2 && hasStay;
+    // 환급 인정 관광지(지정관광지)를 몇 곳 담았는지. 반값여행은 보통 2곳 인증이 조건.
+    final refundCount = c.stops.where((s) => s.refund).length;
+    final refundOk = refundCount >= 2;
+    // 코스 기간에 맞춰 DAY 수 결정 — 여행이면 여행 일정, 아니면 코스 기간/담긴 일차. (1박2일 고정 아님)
+    final dayCount = _dayCount(c, widget.forTrip);
+    final days = [for (var d = 1; d <= dayCount; d++) d];
+    final activeDay = days.contains(_mapDay) ? _mapDay : 1;
+    // 상단 지도 — 선택한 일차의 장소만 순서대로.
+    final mapStops = c.stops.where((s) => s.day == activeDay).toList();
 
     return DetailScaffold(
       title: '코스 편집',
       cta: CtaBar(children: [
-        PrimaryButton('변경사항 저장', onTap: () {
-          // 새 코스는 저장 시점에야 코스함에 추가·여행에 연결된다.
-          if (widget.isNew) AppState.I.addCourse(c);
+        PrimaryButton(widget.isNew ? '코스 저장' : '변경사항 저장', onTap: () async {
           final trip = widget.forTrip;
           if (trip != null) {
+            // 여행 연결 경로 — 여행의 확정 코스로.
+            if (widget.isNew) AppState.I.addCourse(c);
             trip.course = c;
             AppState.I.update();
             // 편집 → 방식 선택까지 닫고 여행 상세로 복귀.
@@ -1790,7 +1985,37 @@ class _CourseEditScreenState extends State<CourseEditScreen> {
             showMock(context, '코스를 저장하고 여행에 연결했어요.');
             return;
           }
-          if (widget.isNew) AppState.I.update();
+          if (widget.isNew) {
+            // 새 코스는 기기 영속 스토어(코스함)에 저장해야 CourseSavedScreen에 뜬다.
+            // (예전엔 인메모리 AppState에만 담아서 코스함에 안 보였음)
+            final controller = AppScope.of(context);
+            var regionId = 0;
+            try {
+              final regions = await controller.repository.getRegions();
+              for (final r in regions) {
+                if (r.name == c.region) {
+                  regionId = r.id;
+                  break;
+                }
+              }
+            } catch (_) {}
+            await controller.saveCourse(SavedCourse(
+              id: 'manual-${DateTime.now().millisecondsSinceEpoch}',
+              regionId: regionId,
+              regionName: c.region,
+              title: c.title,
+              preferences: const [],
+              stops: savedStopsFromCourse(c.stops),
+              createdAt: DateTime.now(),
+            ));
+            if (!context.mounted) return;
+            Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const CourseSavedScreen()));
+            showMock(context, '코스를 코스함에 저장했어요.');
+            return;
+          }
+          // 기존 코스 편집: 뷰로 돌아가면 onEdited가 영속 반영.
+          AppState.I.update();
           Navigator.of(context).pop();
           showMock(context, '코스를 저장했어요.');
         }),
@@ -1810,46 +2035,74 @@ class _CourseEditScreenState extends State<CourseEditScreen> {
             ),
           ]),
         ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-          decoration: BoxDecoration(
-            color: ok ? AppColors.successTint : const Color(0xFFFFF6E9),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Row(children: [
-            Icon(ok ? Icons.check_circle_rounded : Icons.error_outline_rounded,
-                size: 17, color: ok ? AppColors.success : AppColors.warning),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                ok
-                    ? '환급 조건 충족 · 지정관광지 $refundCount곳 · 1박 포함'
-                    : '환급 조건 미충족 · 지정관광지 $refundCount/2곳${hasStay ? '' : ' · 숙박 없음'}',
-                style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w800,
-                    color: ok ? const Color(0xFF177D43) : const Color(0xFF9A6800)),
-              ),
+        // 환급 인정 관광지 포함 여부 — 담은 스톱 중 지정관광지 개수로 판단(숙박은 미판정).
+        if (c.stops.isNotEmpty)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            decoration: BoxDecoration(
+              color: refundOk ? AppColors.successTint : const Color(0xFFFFF6E9),
+              borderRadius: BorderRadius.circular(14),
             ),
+            child: Row(children: [
+              Icon(refundOk ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+                  size: 17, color: refundOk ? AppColors.success : AppColors.warning),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  refundOk
+                      ? '환급 인정 관광지 $refundCount곳 포함'
+                      : '환급 인정 관광지 $refundCount/2곳',
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      color: refundOk ? const Color(0xFF177D43) : const Color(0xFF9A6800)),
+                ),
+              ),
+            ]),
+          ),
+        // 상단 지도 + 일차 토글(1박2일 고정) — 뷰 화면과 동일 구성. 추가·이동 시 즉시 반영.
+        if (c.stops.isNotEmpty)
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _buildStopsMap(context, mapStops, focusId: _focusStopId),
+            if (dayCount >= 2) ...[
+              const SizedBox(height: 8),
+              Center(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    for (final d in days) ...[
+                      if (d != 1) const SizedBox(width: 8),
+                      _DayChip(
+                        label: 'DAY $d',
+                        active: activeDay == d,
+                        onTap: () => setState(() {
+                          _mapDay = d;
+                          _focusStopId = null;
+                        }),
+                      ),
+                    ],
+                  ]),
+                ),
+              ),
+            ],
           ]),
-        ),
-        for (final day in [1, 2]) ...[
+        for (final day in days) ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(2, 6, 2, 0),
             child: Row(children: [
               Text('DAY $day · 6.1${3 + day} (${day == 1 ? '토' : '일'})',
                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.2)),
               const Spacer(),
-              Text('${c.stops.where((s) => s.day == day).length}곳 · 이동 ${day == 1 ? 38 : 22}분',
+              Text('${c.stops.where((s) => s.day == day).length}곳',
                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink4)),
             ]),
           ),
           _reorderableDayList(day),
           GestureDetector(
             onTap: () async {
-              final added = await Navigator.of(context).push<CourseStop>(
-                  MaterialPageRoute(builder: (_) => CourseSearchScreen(day: day)));
-              if (added != null) setState(() => c.stops.add(added));
+              final added = await Navigator.of(context).push<List<CourseStop>>(
+                  MaterialPageRoute(builder: (_) => CourseSearchScreen(day: day, regionName: c.region)));
+              if (added != null && added.isNotEmpty) setState(() => c.stops.addAll(added));
             },
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 13),
@@ -1902,17 +2155,13 @@ class _CourseEditScreenState extends State<CourseEditScreen> {
     AppState.I.update();
   }
 
-  /// DAY 안에서 장소 순서를 드래그로 바꾼다. 시간 슬롯은 자리에 남고 장소만 이동.
+  /// DAY 안에서 장소 순서를 드래그로 바꾼다. 순서만 이동(시간 개념 없음) → 지도도 그 순서로 갱신.
   void _reorderDay(int day, int oldIndex, int newIndex) {
     setState(() {
       final c = widget.course;
       final dayStops = c.stops.where((s) => s.day == day).toList();
       if (newIndex > oldIndex) newIndex--;
-      final slotTimes = dayStops.map((s) => s.time).toList();
       dayStops.insert(newIndex, dayStops.removeAt(oldIndex));
-      for (var i = 0; i < dayStops.length; i++) {
-        dayStops[i].time = slotTimes[i];
-      }
       final before = c.stops.where((s) => s.day < day).toList();
       final after = c.stops.where((s) => s.day > day).toList();
       c.stops
@@ -1923,225 +2172,373 @@ class _CourseEditScreenState extends State<CourseEditScreen> {
 
   Widget _reorderableDayList(int day) {
     final dayStops = widget.course.stops.where((s) => s.day == day).toList();
+    if (dayStops.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 10),
+        child: Text('아직 담은 장소가 없어요.',
+            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink4)),
+      );
+    }
     return ReorderableListView(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
       proxyDecorator: (child, _, _) => child,
       onReorder: (o, n) => _reorderDay(day, o, n),
+      padding: const EdgeInsets.only(top: 10),
       children: [
         for (var i = 0; i < dayStops.length; i++)
-          KeyedSubtree(
+          _CourseStopRow(
             key: ObjectKey(dayStops[i]),
-            child: ReorderableDelayedDragStartListener(
-              index: i,
-              child: _editStop(dayStops[i], i),
-            ),
+            stop: dayStops[i],
+            number: i + 1,
+            editable: true,
+            index: i,
+            selected: (dayStops[i].placeId ?? dayStops[i].name.hashCode) == _focusStopId,
+            onTap: () => _focusStop(dayStops[i]),
+            onDelete: () => setState(() {
+              widget.course.stops.remove(dayStops[i]);
+              _focusStopId = null;
+            }),
           ),
       ],
     );
   }
-
-  Widget _editStop(CourseStop s, int index) {
-    return Container(
-      margin: const EdgeInsets.only(top: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-      decoration: BoxDecoration(
-        color: s.stay ? AppColors.mintTint : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppShadows.soft,
-      ),
-      child: Row(children: [
-        ReorderableDragStartListener(
-          index: index,
-          child: const Padding(
-            padding: EdgeInsets.symmetric(vertical: 4),
-            child: Icon(Icons.drag_indicator_rounded, size: 20, color: AppColors.ink4),
-          ),
-        ),
-        const SizedBox(width: 8),
-        EmojiBox(s.emoji, size: 40, fontSize: 20, color: s.stay ? Colors.white : AppColors.surf, radius: 13),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(s.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink9)),
-            const SizedBox(height: 5),
-            Row(children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: AppColors.p50, borderRadius: BorderRadius.circular(999)),
-                child: Row(children: [
-                  const Icon(Icons.schedule_rounded, size: 11, color: AppColors.p700),
-                  const SizedBox(width: 4),
-                  Text(s.time,
-                      style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.p700)),
-                ]),
-              ),
-              const SizedBox(width: 5),
-              if (s.refund)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: AppColors.mintTint, borderRadius: BorderRadius.circular(999)),
-                  child: Text(s.stay ? '숙박 필수 ✓' : '환급 인정',
-                      style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.mintDeep)),
-                ),
-            ]),
-          ]),
-        ),
-        GestureDetector(
-          onTap: () => setState(() => widget.course.stops.remove(s)),
-          child: const Padding(
-            padding: EdgeInsets.all(2),
-            child: Icon(Icons.close_rounded, size: 18, color: AppColors.ink4),
-          ),
-        ),
-      ]),
-    );
-  }
 }
 
-/// 장소 검색 (코스에 추가).
+/// 장소 검색 (코스에 추가) — TourAPI 관광지/맛집/숙소 실시간.
 class CourseSearchScreen extends StatefulWidget {
-  const CourseSearchScreen({super.key, required this.day});
+  const CourseSearchScreen({super.key, required this.day, required this.regionName});
   final int day;
+  final String regionName;
 
   @override
   State<CourseSearchScreen> createState() => _CourseSearchScreenState();
 }
 
 class _CourseSearchScreenState extends State<CourseSearchScreen> {
+  static const _cats = ['전체', '관광지', '맛집', '숙소'];
   int _cat = 0;
-  int? _added;
+  int? _regionId;
+  bool _regionResolved = false;
+  String _query = '';
+  List<PlaceItem> _designated = const [];
+  final List<TourAttraction> _selected = [];
+  Future<List<TourAttraction>>? _future;
+  final _searchCtl = TextEditingController();
+  bool _initialized = false;
 
-  static const _results = [
-    ('백련사', '사찰 · 강진군 도암면 만덕리', true, '🛕'),
-    ('다산초당', '관광지 · 강진군 도암면 만덕리', false, '🏯'),
-    ('가우도 오션뷰 카페', '카페 · 강진군 대구면 저두리', false, '☕'),
-    ('병영 설성식당', '한정식 · 강진군 병영면 성동리', false, '🍖'),
-    ('영랑생가', '관광지 · 강진군 강진읍 남성리', true, '🏡'),
-  ];
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    _initialized = true;
+    _resolveAndLoad();
+  }
+
+  @override
+  void dispose() {
+    _searchCtl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _resolveAndLoad() async {
+    final repo = AppScope.of(context).repository;
+    try {
+      final regions = await repo.getRegions();
+      final match = regions.where(
+          (r) => widget.regionName.startsWith(r.name) || r.name.startsWith(widget.regionName));
+      _regionId = match.isNotEmpty
+          ? match.first.id
+          : (regions.isNotEmpty ? regions.first.id : null);
+      // 환급 인정 관광지(지정관광지)도 검색에 섞기 위해 미리 로드.
+      if (_regionId != null) {
+        _designated = (await repo.getPlaceInfoDetail(_regionId!)).halfPricePlaces;
+      }
+    } catch (_) {
+      _regionId = null;
+    }
+    _regionResolved = true;
+    _reload();
+  }
+
+  void _reload() {
+    final id = _regionId;
+    final type = _cat == 0 ? null : _cats[_cat];
+    setState(() {
+      _future = id == null
+          ? Future.value(const <TourAttraction>[])
+          : _loadMerged(id, type, _query.isEmpty ? null : _query);
+    });
+  }
+
+  /// TourAPI 결과에 환급 인정 관광지(지정관광지)를 섞는다. 이름이 겹치면 하나로(TourAPI 쪽에 환급 표시).
+  Future<List<TourAttraction>> _loadMerged(int regionId, String? type, String? keyword) async {
+    final tour = await AppScope.of(context)
+        .repository
+        .getRegionAttractions(regionId, type: type, keyword: keyword);
+    // 지정관광지는 관광지 성격 → 전체/관광지 탭에서만 섞는다.
+    if (type != null && type != '관광지') return tour;
+    var designated = _designated;
+    if (keyword != null && keyword.isNotEmpty) {
+      designated = designated.where((d) => d.name.contains(keyword)).toList();
+    }
+    if (designated.isEmpty) return tour;
+    final designatedNames = {for (final d in designated) _norm(d.name)};
+    final matched = <String>{};
+    final tourMarked = tour.map((r) {
+      final key = _norm(r.title);
+      if (designatedNames.contains(key)) {
+        matched.add(key);
+        return r.copyWith(eligibleForRefund: true);
+      }
+      return r;
+    }).toList();
+    final designatedOnly = designated
+        .where((d) => !matched.contains(_norm(d.name)))
+        .map((d) => TourAttraction(
+              contentId: '',
+              contentTypeId: '12',
+              title: d.name,
+              address: d.address,
+              category: '환급 인정',
+              tel: '',
+              latitude: d.latitude,
+              longitude: d.longitude,
+              eligibleForRefund: true,
+            ));
+    return [...designatedOnly, ...tourMarked];
+  }
+
+  String _norm(String s) => s.replaceAll(RegExp(r'\s+|\(.*\)'), '').trim();
+
+  /// 선택 식별 키 — contentId가 없는 지정관광지는 이름+주소로 구분(빈 contentId 충돌 방지).
+  String _key(TourAttraction a) =>
+      a.contentId.isNotEmpty ? a.contentId : '${a.title}|${a.address}';
 
   @override
   Widget build(BuildContext context) {
     return DetailScaffold(
       title: 'DAY ${widget.day}에 장소 추가',
       cta: CtaBar(children: [
-        PrimaryButton(_added == null ? '장소를 선택하세요' : '1곳 추가하고 돌아가기',
-            disabled: _added == null,
+        PrimaryButton(_selected.isEmpty ? '장소를 선택하세요' : '${_selected.length}곳 추가하고 돌아가기',
+            disabled: _selected.isEmpty,
             onTap: () {
-              final r = _results[_added!];
-              Navigator.of(context).pop(CourseStop(
-                day: widget.day,
-                time: '16:00',
-                emoji: r.$4,
-                name: r.$1,
-                tag: r.$2.split(' ').first,
-                refund: r.$3,
-              ));
+              Navigator.of(context).pop(<CourseStop>[
+                for (final a in _selected)
+                  CourseStop(
+                    day: widget.day,
+                    time: '',
+                    emoji: courseStopEmoji(a.category),
+                    name: a.title,
+                    tag: a.category,
+                    refund: a.eligibleForRefund,
+                    stay: a.category.contains('숙'),
+                    latitude: a.latitude,
+                    longitude: a.longitude,
+                    address: a.address,
+                  ),
+              ]);
             }),
       ]),
       children: [
+        // 검색바 — 흰 카드 배경 + 넉넉한 높이
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
           decoration: BoxDecoration(
               color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: AppShadows.card),
-          child: const Row(children: [
-            Icon(Icons.search_rounded, size: 20, color: AppColors.ink4),
-            SizedBox(width: 10),
-            Text('강진 가볼만한 곳',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink9)),
+          child: Row(children: [
+            const Icon(Icons.search_rounded, size: 20, color: AppColors.ink4),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextField(
+                controller: _searchCtl,
+                onSubmitted: (v) {
+                  _query = v.trim();
+                  _reload();
+                },
+                onChanged: (v) => _query = v.trim(),
+                textInputAction: TextInputAction.search,
+                style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: AppColors.ink9),
+                decoration: const InputDecoration(
+                  isCollapsed: true,
+                  border: InputBorder.none,
+                  hintText: '관광지·맛집·숙소 검색',
+                  hintStyle: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w500, color: AppColors.ink4),
+                ),
+              ),
+            ),
           ]),
         ),
         CatChips(
-          labels: const ['전체', '관광지', '맛집', '카페', '숙소'],
+          labels: _cats,
           selected: _cat,
-          onChanged: (i) => setState(() => _cat = i),
+          onChanged: (i) {
+            setState(() => _cat = i);
+            _reload();
+          },
         ),
-        Container(
-          height: 188,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(color: const Color(0xFFEDF4FA), borderRadius: BorderRadius.circular(18)),
-          child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(Icons.map_outlined, size: 40, color: AppColors.p400),
-            SizedBox(height: 8),
-            Text('강진군 일대 · 검색 결과 지도 (목업)',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink5)),
-          ]),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(left: 2),
-          child: Row(children: [
-            const Text('검색 결과',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink5)),
-            const Spacer(),
-            Text('${_results.length}곳',
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink4)),
-          ]),
-        ),
-        for (var i = 0; i < _results.length; i++)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-            decoration: BoxDecoration(
-              color: _added == i ? AppColors.p50 : Colors.transparent,
-              borderRadius: BorderRadius.circular(14),
-              border: _added == i
-                  ? null
-                  : const Border(bottom: BorderSide(color: AppColors.line)),
-            ),
-            child: Row(children: [
-              Container(
-                width: 28,
-                height: 28,
-                alignment: Alignment.center,
-                decoration: const BoxDecoration(color: AppColors.p500, shape: BoxShape.circle),
-                child: Text('${i + 1}',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white)),
-              ),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(_results[i].$1,
-                      style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: AppColors.ink9)),
-                  const SizedBox(height: 4),
-                  Row(children: [
-                    Flexible(
-                      child: Text(_results[i].$2,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink5)),
-                    ),
-                    if (_results[i].$3) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                            color: AppColors.mintTint, borderRadius: BorderRadius.circular(999)),
-                        child: const Text('환급 인정',
-                            style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.mintDeep)),
-                      ),
-                    ],
-                  ]),
+        FutureBuilder<List<TourAttraction>>(
+          future: _future,
+          builder: (context, snapshot) {
+            if (!_regionResolved || snapshot.connectionState != ConnectionState.done) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            final results = snapshot.data ?? const <TourAttraction>[];
+            if (results.isEmpty) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Center(
+                  child: Text('검색 결과가 없어요.',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink4)),
+                ),
+              );
+            }
+            final markers = <PlaceMapMarkerData>[
+              for (var i = 0; i < results.length; i++)
+                if (results[i].latitude != null && results[i].longitude != null)
+                  PlaceMapMarkerData(
+                    id: i,
+                    name: results[i].title,
+                    address: results[i].address,
+                    latitude: results[i].latitude!,
+                    longitude: results[i].longitude!,
+                    selected: _selected.any((s) => _key(s) == _key(results[i])),
+                  ),
+            ];
+            return Column(children: [
+              if (markers.isNotEmpty)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: PlaceMapView(
+                    // 선택 집합이 바뀌면 재마운트 — 웹 구글맵이 마커 아이콘 변경(하늘→코랄)을
+                    // 제자리 업데이트로는 반영하지 못해서 통째로 다시 그린다.
+                    key: ValueKey(
+                        'search-map-${markers.length}-${_selected.map(_key).join(',').hashCode}'),
+                    markers: markers,
+                    numberedMarkers: true,
+                    emptyMessage: '지도에 표시할 위치가 없어요.',
+                    kakaoEnabled: AppConfig.fromEnvironment().canUseKakaoMap,
+                    height: 188,
+                  ),
+                ),
+              const SizedBox(height: 14),
+              Padding(
+                padding: const EdgeInsets.only(left: 2, bottom: 2),
+                child: Row(children: [
+                  const Text('검색 결과',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink5)),
+                  const Spacer(),
+                  Text('${results.length}곳',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink4)),
                 ]),
               ),
-              GestureDetector(
-                onTap: () => setState(() => _added = _added == i ? null : i),
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: _added == i ? AppColors.success : AppColors.p50,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(_added == i ? Icons.check_rounded : Icons.add_rounded,
-                      size: 21, color: _added == i ? Colors.white : AppColors.p600),
+              const SizedBox(height: 4),
+              for (var i = 0; i < results.length; i++)
+                _ResultRow(
+                  index: i,
+                  regionId: _regionId,
+                  attraction: results[i],
+                  selected: _selected.any((s) => _key(s) == _key(results[i])),
+                  onAdd: () => setState(() {
+                    final existing =
+                        _selected.indexWhere((s) => _key(s) == _key(results[i]));
+                    if (existing >= 0) {
+                      _selected.removeAt(existing);
+                    } else {
+                      _selected.add(results[i]);
+                    }
+                  }),
                 ),
-              ),
+            ]);
+          },
+        ),
+      ],
+    );
+  }
+}
+
+/// 코스 검색 결과 행 — 번호 + 이름/카테고리·주소 + 추가(＋/✓). 이름 탭 시 TourAPI 상세.
+class _ResultRow extends StatelessWidget {
+  const _ResultRow(
+      {required this.index,
+      required this.attraction,
+      required this.selected,
+      required this.onAdd,
+      this.regionId});
+  final int index;
+  final TourAttraction attraction;
+  final bool selected;
+  final VoidCallback onAdd;
+  final int? regionId;
+
+  @override
+  Widget build(BuildContext context) {
+    final a = attraction;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: AppShadows.soft,
+      ),
+      child: Row(children: [
+        Container(
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(color: AppColors.p500, shape: BoxShape.circle),
+          child: Text('${index + 1}',
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white)),
+        ),
+        const SizedBox(width: 13),
+        Expanded(
+          child: GestureDetector(
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => TourPlaceDetailScreen(attraction: a, regionId: regionId))),
+            behavior: HitTestBehavior.opaque,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Flexible(
+                  child: Text(a.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: AppColors.ink9)),
+                ),
+                if (a.eligibleForRefund) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                    decoration: BoxDecoration(color: AppColors.mintTint, borderRadius: BorderRadius.circular(999)),
+                    child: const Text('환급 인정',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.mintDeep)),
+                  ),
+                ],
+              ]),
+              const SizedBox(height: 4),
+              Text('${a.category.isEmpty ? '' : '${a.category} · '}${a.address}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink5)),
             ]),
           ),
-      ],
+        ),
+        const SizedBox(width: 8),
+        GestureDetector(
+          onTap: onAdd,
+          child: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(color: AppColors.p50, borderRadius: BorderRadius.circular(12)),
+            child: Icon(selected ? Icons.check_rounded : Icons.add_rounded,
+                size: 21, color: AppColors.p600),
+          ),
+        ),
+      ]),
     );
   }
 }
