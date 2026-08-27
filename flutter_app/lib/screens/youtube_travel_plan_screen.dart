@@ -17,12 +17,17 @@ import '../widgets/place_map_view.dart';
 class YoutubeTravelPlanScreen extends StatefulWidget {
   const YoutubeTravelPlanScreen({
     super.key,
-    required this.job,
+    this.job,
+    this.course,
     this.tripDetail,
     this.onDocumentSaved,
-  });
+  }) : assert(job != null || course != null, 'job 또는 course 중 하나는 필요');
 
-  final YoutubeCourseJobItem job;
+  /// 유튜브 분석 결과에서 열 때.
+  final YoutubeCourseJobItem? job;
+
+  /// 코스함 코스에서 열 때 (직접·AI·유튜브 공통) — job 없이 코스 스톱으로 계획표 생성.
+  final SavedCourse? course;
   final TripDetail? tripDetail;
   final Future<void> Function(TravelPlanDocument document)? onDocumentSaved;
 
@@ -49,11 +54,16 @@ class _YoutubeTravelPlanScreenState extends State<YoutubeTravelPlanScreen> {
 
   Future<void> _load() async {
     try {
-      final store = await TravelPlanStore.load(
-        job: widget.job,
-        tripDetail: widget.tripDetail,
-        onSaved: widget.onDocumentSaved,
-      );
+      final store = widget.job != null
+          ? await TravelPlanStore.load(
+              job: widget.job!,
+              tripDetail: widget.tripDetail,
+              onSaved: widget.onDocumentSaved,
+            )
+          : await TravelPlanStore.loadForCourse(
+              widget.course!,
+              onSaved: widget.onDocumentSaved,
+            );
       if (!mounted) {
         store.dispose();
         return;
@@ -86,12 +96,15 @@ class _YoutubeTravelPlanScreenState extends State<YoutubeTravelPlanScreen> {
         ),
         actions: [
           if (store != null)
-            IconButton(
-              tooltip: '직접 저장',
+            TextButton(
               onPressed: store.saveNow,
-              // 문서 저장 글리프 — 숙박확인서 'PDF 저장'과 동일한 다운로드 아이콘.
-              icon: const Icon(Icons.download_rounded),
+              child: const Text('저장',
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.p600)),
             ),
+          const SizedBox(width: 4),
         ],
       ),
       body: switch ((store, _loadError)) {
@@ -211,7 +224,8 @@ class _YoutubeTravelPlanScreenState extends State<YoutubeTravelPlanScreen> {
           store: store,
           onFilter: () => _showFilterSheet(store),
           onSort: () => _showSortSheet(store),
-          onMore: () => _showMoreSheet(store),
+          // 더보기에 남은 항목이 지도뿐이라 버튼을 '지도'로 바꾸고 바로 연다.
+          onMore: () => _showMobileMap(store),
         ),
       ],
     );
@@ -281,43 +295,6 @@ class _YoutubeTravelPlanScreenState extends State<YoutubeTravelPlanScreen> {
           ),
     );
     if (selected != null) store.setSort(selected);
-  }
-
-  Future<void> _showMoreSheet(TravelPlanStore store) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder:
-          (context) => SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const _SheetMenuTitle(title: '더보기'),
-                  ListTile(
-                    leading: const Icon(Icons.map_outlined),
-                    title: const Text('지도에서 일정 보기'),
-                    subtitle: const Text('입력된 좌표를 일정 순서대로 표시합니다.'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _showMobileMap(store);
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.edit_note_rounded),
-                    title: const Text('여행 정보 수정'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _editHeader(store);
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-    );
   }
 
   Future<void> _showMobileMap(TravelPlanStore store) async {
@@ -843,14 +820,17 @@ class _MobilePlannerHeader extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  const Icon(
-                    Icons.smart_display_outlined,
+                  Icon(
+                    // 유튜브 분석 문서만 영상 아이콘 — 코스에서 연 계획표는 장소 아이콘.
+                    document.youtubeUrl.isNotEmpty
+                        ? Icons.smart_display_outlined
+                        : Icons.place_outlined,
                     size: 14,
                     color: _plannerPurple,
                   ),
                   const SizedBox(width: 3),
                   Text(
-                    '분석 장소 ${document.items.length}곳',
+                    '${document.youtubeUrl.isNotEmpty ? '분석 장소' : '장소'} ${document.items.length}곳',
                     style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -884,8 +864,9 @@ class _MobilePlannerHeader extends StatelessWidget {
                   ),
                   icon: const Icon(Icons.edit_outlined, size: 15),
                   label: Text(
+                    // 날짜를 채우면 버튼 라벨이 여행 기간으로 바뀐다.
                     document.startDate == null && document.endDate == null
-                        ? '빈칸과 여행 정보 입력'
+                        ? '여행 정보 입력'
                         : _dateRange(document),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -934,41 +915,54 @@ class _MobileSpreadsheet extends StatelessWidget {
   final ValueChanged<TravelPlanItem> onSelect;
   final VoidCallback onAdd;
 
-  static const _widths = <double>[
-    34,
-    46,
-    80,
-    60,
-    60,
-    118,
-    72,
-    104,
-    86,
-    94,
-    124,
-  ];
-  static const _headers = <String>[
-    '',
-    'No',
-    '날짜',
-    '시작',
-    '종료',
-    '장소명',
-    '유형',
-    '먹은 음식',
-    '메뉴 가격',
-    '식당 가격대',
-    '메모',
-  ];
+  static final _dayMemo = RegExp(r'^DAY\s*\d+$');
+
+  /// 항목이 속한 그룹 라벨 — 날짜가 있으면 날짜, 없으면 "DAY n" 메모(코스에서 온 골격).
+  static String? _groupOf(TravelPlanItem item) {
+    final date = item.date;
+    if (date != null && date.isNotEmpty) return date;
+    final memo = item.memo.trim();
+    if (_dayMemo.hasMatch(memo)) return memo;
+    return null;
+  }
+
+  /// DAY 그룹행으로 승격된 메모는 셀에서 비운다(중복 방지).
+  static String _memoOf(TravelPlanItem item) =>
+      _dayMemo.hasMatch(item.memo.trim()) ? '' : item.memo;
 
   @override
   Widget build(BuildContext context) {
-    final rowCount = items.length < 10 ? 10 : items.length;
+    final columns = <_PlanColumn>[
+      _PlanColumn('No', 40, (i) => '${i.order}',
+          color: _plannerPurple, weight: FontWeight.w900),
+      _PlanColumn('날짜', 78, (i) => i.date ?? ''),
+      _PlanColumn('시작', 56, (i) => i.startTime ?? ''),
+      _PlanColumn('종료', 56, (i) => i.endTime ?? ''),
+      _PlanColumn('장소명', 132, (i) => i.placeName,
+          weight: FontWeight.w800, align: TextAlign.left),
+      _PlanColumn('유형', 62, (i) => i.category.label, categoryTint: true),
+      _PlanColumn('먹은 음식', 112, (i) => i.foodName ?? ''),
+      _PlanColumn('메뉴 가격', 88, _menuPrice),
+      _PlanColumn('식당 가격대', 96, _restaurantPrice),
+      _PlanColumn('메모', 140, _memoOf, align: TextAlign.left),
+    ];
+    final tableWidth =
+        columns.fold<double>(0, (sum, c) => sum + c.width);
+
+    // 현재 표시 순서 기준으로 날짜/DAY가 바뀌는 지점에 그룹 구분행 삽입.
+    final rows = <Widget>[];
+    String? lastGroup;
+    for (final item in items) {
+      final group = _groupOf(item);
+      if (group != null && group != lastGroup) {
+        rows.add(_buildGroupRow(group, tableWidth));
+        lastGroup = group;
+      }
+      rows.add(_buildDataRow(context, item, columns));
+    }
+
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border.symmetric(horizontal: BorderSide(color: _plannerGrid)),
-      ),
+      decoration: const BoxDecoration(color: Colors.white),
       child: Stack(
         children: [
           ScrollConfiguration(
@@ -976,25 +970,20 @@ class _MobileSpreadsheet extends StatelessWidget {
             child: Scrollbar(
               thumbVisibility: true,
               notificationPredicate: (notification) => notification.depth == 0,
-              child: SingleChildScrollView(
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: SingleChildScrollView(
                 key: const ValueKey('travel-plan-horizontal-scroll'),
                 scrollDirection: Axis.horizontal,
                 physics: const ClampingScrollPhysics(),
                 child: SizedBox(
-                  width: _widths.fold<double>(0, (sum, width) => sum + width),
-                  child: ListView.builder(
-                    padding: EdgeInsets.zero,
-                    itemCount: rowCount + 2,
-                    itemBuilder: (context, index) {
-                      if (index == 0) return _buildLetterRow();
-                      if (index == 1) return _buildHeaderRow();
-                      final itemIndex = index - 2;
-                      final item =
-                          itemIndex < items.length ? items[itemIndex] : null;
-                      return _buildDataRow(context, itemIndex, item);
-                    },
+                  width: tableWidth,
+                  child: ListView(
+                    padding: const EdgeInsets.only(bottom: 76),
+                    children: [_buildHeaderRow(columns), ...rows],
                   ),
                 ),
+              ),
               ),
             ),
           ),
@@ -1014,89 +1003,100 @@ class _MobileSpreadsheet extends StatelessWidget {
     );
   }
 
-  Widget _buildLetterRow() {
+  Widget _buildHeaderRow(List<_PlanColumn> columns) {
     return Row(
       children: [
-        for (var index = 0; index < _widths.length; index++)
-          _GridCell(
-            width: _widths[index],
-            height: 28,
-            text: index == 0 ? '' : String.fromCharCode(64 + index),
-            background: const Color(0xFFF6F7F9),
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
+        for (final column in columns)
+          Container(
+            width: column.width,
+            height: 40,
+            alignment: column.align == TextAlign.left
+                ? Alignment.centerLeft
+                : Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: const BoxDecoration(
+              color: Color(0xFFE8F5FE),
+              border: Border(
+                  bottom: BorderSide(color: Color(0xFFD3EBFB))),
+            ),
+            child: Text(column.header,
+                style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0369A1))),
           ),
       ],
     );
   }
 
-  Widget _buildHeaderRow() {
-    return Row(
-      children: [
-        for (var index = 0; index < _headers.length; index++)
-          _GridCell(
-            width: _widths[index],
-            height: 38,
-            text: _headers[index],
-            background: index == 0 ? const Color(0xFFF6F7F9) : Colors.white,
-            fontSize: 10,
-            fontWeight: FontWeight.w800,
-          ),
-      ],
+  Widget _buildGroupRow(String label, double width) {
+    return Container(
+      width: width,
+      height: 30,
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF8FAFC),
+        border: Border(bottom: BorderSide(color: Color(0xFFEEF2F7))),
+      ),
+      child: Text(label,
+          style: const TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF64748B),
+              letterSpacing: .2)),
     );
   }
 
   Widget _buildDataRow(
     BuildContext context,
-    int rowIndex,
-    TravelPlanItem? item,
+    TravelPlanItem item,
+    List<_PlanColumn> columns,
   ) {
-    final selected = item?.id == selectedItemId;
-    final values =
-        item == null
-            ? List<String>.filled(_headers.length - 1, '')
-            : <String>[
-              '${item.order}',
-              item.date ?? '',
-              item.startTime ?? '',
-              item.endTime ?? '',
-              item.placeName,
-              item.category.label,
-              item.foodName ?? '',
-              _menuPrice(item),
-              _restaurantPrice(item),
-              item.memo,
-            ];
+    final selected = item.id == selectedItemId;
     return InkWell(
-      key: item == null ? null : ValueKey('travel-plan-row-${item.id}'),
-      onTap: item == null ? null : () => onSelect(item),
-      child: Row(
-        children: [
-          _GridCell(
-            width: _widths.first,
-            height: 46,
-            text: '${rowIndex + 1}',
-            background: selected ? _plannerPurpleSoft : const Color(0xFFF6F7F9),
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
+      key: ValueKey('travel-plan-row-${item.id}'),
+      onTap: () => onSelect(item),
+      child: Container(
+        decoration: BoxDecoration(
+          color: selected ? _plannerPurpleSoft : Colors.white,
+          border: Border(
+            bottom: const BorderSide(color: Color(0xFFEEF2F7)),
+            left: selected
+                ? const BorderSide(color: _plannerPurple, width: 2.4)
+                : BorderSide.none,
           ),
-          for (var index = 0; index < values.length; index++)
-            _GridCell(
-              width: _widths[index + 1],
-              height: 46,
-              text: values[index],
-              background: selected ? _plannerPurpleSoft : Colors.white,
-              selected: selected,
-              fontSize: 10,
-              fontWeight:
-                  index == 0 || index == 4 ? FontWeight.w700 : FontWeight.w500,
-            ),
-        ],
+        ),
+        child: Row(
+          children: [
+            for (final column in columns)
+              Container(
+                width: column.width,
+                height: 50,
+                alignment: column.align == TextAlign.left
+                    ? Alignment.centerLeft
+                    : Alignment.center,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  column.valueOf(item),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: column.align,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    height: 1.2,
+                    fontWeight: column.weight,
+                    color: column.colorFor(item),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
 
-  String _menuPrice(TravelPlanItem item) {
+  static String _menuPrice(TravelPlanItem item) {
     final amount = item.menuPriceAmount;
     if (amount == null) return '';
     final currency = item.menuPriceCurrency?.trim();
@@ -1105,7 +1105,7 @@ class _MobileSpreadsheet extends StatelessWidget {
         : '$amount $currency';
   }
 
-  String _restaurantPrice(TravelPlanItem item) {
+  static String _restaurantPrice(TravelPlanItem item) {
     final min = item.restaurantPriceMin;
     final max = item.restaurantPriceMax;
     final currency = item.restaurantPriceCurrency?.trim();
@@ -1121,6 +1121,39 @@ class _MobileSpreadsheet extends StatelessWidget {
   }
 }
 
+/// 계획표 컬럼 정의 — 헤더·너비·값·정렬·강조.
+class _PlanColumn {
+  const _PlanColumn(
+    this.header,
+    this.width,
+    this.valueOf, {
+    this.weight = FontWeight.w500,
+    this.color,
+    this.align = TextAlign.center,
+    this.categoryTint = false,
+  });
+
+  final String header;
+  final double width;
+  final String Function(TravelPlanItem) valueOf;
+  final FontWeight weight;
+  final Color? color;
+  final TextAlign align;
+
+  /// 유형 컬럼 — 맛집·카페는 주황, 나머지는 하늘색 텍스트.
+  final bool categoryTint;
+
+  Color colorFor(TravelPlanItem item) {
+    if (categoryTint) {
+      final isFood = item.category == TravelCategory.food ||
+          item.category == TravelCategory.cafe;
+      return isFood ? const Color(0xFFB8731B) : const Color(0xFF0369A1);
+    }
+    if (valueOf(item).isEmpty) return _plannerMuted;
+    return color ?? const Color(0xFF171A22);
+  }
+}
+
 class _PlannerScrollBehavior extends MaterialScrollBehavior {
   const _PlannerScrollBehavior();
 
@@ -1132,61 +1165,6 @@ class _PlannerScrollBehavior extends MaterialScrollBehavior {
     PointerDeviceKind.invertedStylus,
     PointerDeviceKind.trackpad,
   };
-}
-
-class _GridCell extends StatelessWidget {
-  const _GridCell({
-    required this.width,
-    required this.height,
-    required this.text,
-    required this.background,
-    required this.fontSize,
-    required this.fontWeight,
-    this.selected = false,
-  });
-
-  final double width;
-  final double height;
-  final String text;
-  final Color background;
-  final double fontSize;
-  final FontWeight fontWeight;
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      height: height,
-      alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(horizontal: 3),
-      decoration: BoxDecoration(
-        color: background,
-        border: Border(
-          right: BorderSide(
-            color: selected ? const Color(0xFF38BDF8) : _plannerGrid,
-            width: selected ? 1.2 : 1,
-          ),
-          bottom: BorderSide(
-            color: selected ? const Color(0xFF38BDF8) : _plannerGrid,
-            width: selected ? 1.2 : 1,
-          ),
-        ),
-      ),
-      child: Text(
-        text,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          color: text.isEmpty ? _plannerMuted : const Color(0xFF171A22),
-          fontSize: fontSize,
-          fontWeight: fontWeight,
-          height: 1.15,
-        ),
-      ),
-    );
-  }
 }
 
 class _MobileBottomToolbar extends StatelessWidget {
@@ -1245,8 +1223,8 @@ class _MobileBottomToolbar extends StatelessWidget {
                 onTap: onSort,
               ),
               _BottomTool(
-                icon: Icons.more_horiz_rounded,
-                label: '더보기',
+                icon: Icons.map_outlined,
+                label: '지도',
                 onTap: onMore,
               ),
             ],
