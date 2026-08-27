@@ -7,11 +7,12 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">
+        <!-- MainActivity에 taskAffinity=""(Flutter 3.22+ 템플릿 기본값)가 있으면 네이버 로그인
+             동의 후 앱 복귀가 끊겨 동의 화면이 반복된다(flutter_naver_login#111) — 다시 넣지 말 것 -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
-            android:taskAffinity=""
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
