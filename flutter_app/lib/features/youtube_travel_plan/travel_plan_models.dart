@@ -346,6 +346,61 @@ class TravelPlanItem {
     );
   }
 
+  /// 코스함 코스(SavedCourseStop) → 계획표 행. 유튜브 job 없이 코스에서 계획표를
+  /// 열 때 쓴다 — 영상 근거·메뉴 검증 같은 유튜브 전용 필드는 비워둔다.
+  factory TravelPlanItem.fromCourseStop(
+    SavedCourseStop stop, {
+    required String docKey,
+    required int order,
+  }) {
+    final cat = stop.category;
+    final category = cat.contains('맛집') || cat.contains('식당') || cat.contains('음식')
+        ? TravelCategory.food
+        : cat.contains('카페')
+            ? TravelCategory.cafe
+            : cat.contains('숙') || cat.contains('호텔') || cat.contains('펜션')
+                ? TravelCategory.accommodation
+                : cat.contains('쇼핑')
+                    ? TravelCategory.shopping
+                    : TravelCategory.tour;
+    return TravelPlanItem(
+      id: '$docKey-$order',
+      order: order,
+      date: null,
+      startTime: null,
+      endTime: null,
+      placeId: stop.placeId == 0 ? null : '${stop.placeId}',
+      placeName: stop.name,
+      address: stop.address.isEmpty ? null : stop.address,
+      latitude: stop.latitude == 0 ? null : stop.latitude,
+      longitude: stop.longitude == 0 ? null : stop.longitude,
+      category: category,
+      activity: '',
+      participantCount: null,
+      transportType: null,
+      transportMinutes: null,
+      reservationStatus: ReservationStatus.unknown,
+      memo: 'DAY ${stop.day}',
+      videoTimestampSeconds: null,
+      videoEndTimestampSeconds: null,
+      videoEvidenceText: null,
+      foodName: null,
+      foodDescription: null,
+      foodVerificationStatus: FoodVerificationStatus.notApplicable,
+      menuPriceAmount: null,
+      menuPriceCurrency: null,
+      menuPriceSource: 'NONE',
+      restaurantPriceLevel: null,
+      restaurantPriceMin: null,
+      restaurantPriceMax: null,
+      restaurantPriceCurrency: null,
+      restaurantPriceSource: RestaurantPriceSource.none,
+      sourceType: TravelPlanSourceType.user,
+      verificationStatus: TravelPlanVerificationStatus.unconfirmed,
+      completed: false,
+    );
+  }
+
   factory TravelPlanItem.fromYoutubeStop(
     YoutubeCourseJobStop stop, {
     required String jobId,

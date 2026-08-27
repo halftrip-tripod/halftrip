@@ -4,6 +4,7 @@ import '../../core/app_scope.dart';
 import '../../models/app_models.dart';
 import '../../screens/auth_photo_upload_screen.dart';
 import '../../screens/youtube_course_start_screen.dart';
+import '../../screens/youtube_travel_plan_screen.dart';
 import '../../screens/lodging_form_screen.dart';
 import '../../screens/receipt_evidence_screen.dart';
 import '../../screens/settlement_screen.dart';
@@ -122,6 +123,9 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                 Navigator.of(context).pop();
               }
             },
+            // 상세 계획표 — 코스 스톱을 날짜·시간표로.
+            onOpenPlan: () => _push(YoutubeTravelPlanScreen(
+                course: course, tripDetail: detail)),
           ),
         ))
         .then((_) => setState(() {}));
