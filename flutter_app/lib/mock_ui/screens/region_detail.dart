@@ -135,7 +135,7 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
               SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  '아직 접수 전이에요. 아래 조건은 지자체 사업 공고 기준 — 미리 확인하고 오픈되면 바로 신청하세요.',
+                  '아직 접수 전이에요. 아래 조건은 지자체 사업 공고 기준이에요.',
                   style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink5, height: 1.5),
                 ),
               ),
@@ -154,12 +154,23 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink7)),
             ]),
           ),
+          // 접수중 지역은 신청한 회차의 여행 가능 기간을 함께 보여준다 (visitkorea 동기화 값).
+          if (r.travelPeriodStart != null && r.travelPeriodEnd != null)
+            _Kv(
+              '여행 기간',
+              '${r.roundLabel != null ? '${r.roundLabel} · ' : ''}'
+                  '${r.travelPeriodStart!.month}.${r.travelPeriodStart!.day} ~ '
+                  '${r.travelPeriodEnd!.month}.${r.travelPeriodEnd!.day}',
+            ),
           _Kv(
             '결제 수단',
             r.paymentMethods.isNotEmpty
-                ? r.paymentMethods
-                    .map((code) => PaymentTypeWire.fromWire(code).label)
-                    .join(' · ')
+                // 서버 값이 CARD 같은 코드면 라벨로, 공고 원문 문구면 그대로 표시.
+                // (V69부터 실데이터가 문구라 코드 매핑에만 기대면 "판별 실패"로 떴다)
+                ? r.paymentMethods.map((code) {
+                    final type = PaymentTypeWire.fromWire(code);
+                    return type == PaymentType.unknown ? code : type.label;
+                  }).join(' · ')
                 : _paymentSummary(guideText),
           ),
           _Kv('인증 조건', _proofSummary(guideText)),
