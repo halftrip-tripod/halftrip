@@ -465,11 +465,22 @@ Future<RegionSummary?> _showRegionApplicationSheet(BuildContext context) async {
 /// ② "{지역} 여행 추가" — 일정(캘린더)·인원 → createTrip.
 Future<void> _showTripInfoSheet(BuildContext context, RegionSummary region) {
   var people = 2;
+  // 회차 여행기간이 미래에 시작하면 초기 선택을 그 시작일로 — 대부분 그 기간에 갈 거라서.
+  final periodStart = region.travelPeriodStart;
+  final defaultStart = periodStart != null && periodStart.isAfter(DateTime.now())
+      ? periodStart
+      : DateTime.now().add(const Duration(days: 7));
   var range = DateTimeRange(
-    start: DateTime.now().add(const Duration(days: 7)),
-    end: DateTime.now().add(const Duration(days: 8)),
+    start: defaultStart,
+    end: defaultStart.add(const Duration(days: 1)),
   );
   var saving = false;
+  // 캘린더 안내 칩·기간 밖 경고용 — 회차 여행기간(둘 다 있을 때만).
+  final allowedRange = region.travelPeriodStart != null && region.travelPeriodEnd != null
+      ? DateTimeRange(start: region.travelPeriodStart!, end: region.travelPeriodEnd!)
+      : null;
+  final allowedLabel =
+      '${region.name} ${region.roundLabel != null ? '${region.roundLabel} ' : ''}여행기간';
 
   return showModalBottomSheet<void>(
     context: context,
@@ -535,6 +546,8 @@ Future<void> _showTripInfoSheet(BuildContext context, RegionSummary region) {
                   initial: range,
                   firstDate: DateTime.now().subtract(const Duration(days: 90)),
                   lastDate: DateTime.now().add(const Duration(days: 365)),
+                  allowedRange: allowedRange,
+                  allowedLabel: allowedLabel,
                 );
                 if (picked != null) setSheet(() => range = picked);
               },
