@@ -572,6 +572,7 @@ class RegionSummary {
     this.maxRefundPerPerson,
     this.paymentMethods = const [],
     this.localCurrencyAppUrl,
+    this.roundLabel,
   });
 
   final int id;
@@ -603,6 +604,9 @@ class RegionSummary {
   final int? maxRefundPerPerson;
   final List<String> paymentMethods;
   final String? localCurrencyAppUrl;
+
+  /// 현재(또는 다음) 접수 차수 라벨 — "5차". visitkorea 동기화가 채우며 없으면 null.
+  final String? roundLabel;
 
   String get statusLabel => switch (statusCode.toUpperCase()) {
         'APPLYING' => '접수중',
@@ -641,6 +645,7 @@ class RegionSummary {
       refundConditionText: json['refundConditionText'] as String?,
       refundRate: json['refundRate'] as int?,
       maxRefundPerPerson: json['maxRefundPerPerson'] as int?,
+      roundLabel: json['roundLabel'] as String?,
       paymentMethods: ((json['paymentMethods'] as List<dynamic>?) ?? [])
           .map((e) => e as String)
           .toList(),
