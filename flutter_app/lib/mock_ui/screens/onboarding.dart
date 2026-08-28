@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_naver_login/flutter_naver_login.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_naver_login/interface/types/naver_login_status.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' as kakao;
 
@@ -29,6 +30,7 @@ class LoginScreen extends StatelessWidget {
       final accessToken = switch (provider) {
         LoginProvider.kakao => await _kakaoAccessToken(context, config),
         LoginProvider.naver => await _naverAccessToken(context),
+        LoginProvider.google => await _googleAccessToken(context),
         _ => null,
       };
       if (accessToken == null) return; // 취소 또는 키 미설정 (안내는 내부에서)
@@ -80,6 +82,27 @@ class LoginScreen extends StatelessWidget {
     return null;
   }
 
+  /// 구글 로그인 → 액세스 토큰. 서버(SocialAuthClient)가 이 토큰으로 userinfo를 검증한다.
+  /// Firebase 콘솔에 업로드키·디버그키 SHA-1이 등록돼 있어야 동작(미등록이면 sign_in_failed).
+  Future<String?> _googleAccessToken(BuildContext context) async {
+    if (kIsWeb) {
+      showMock(context, '구글 로그인은 앱에서 이용할 수 있어요.');
+      return null;
+    }
+    try {
+      final signIn = GoogleSignIn(scopes: const ['email', 'profile']);
+      final account = await signIn.signIn();
+      if (account == null) return null; // 사용자 취소
+      final token = (await account.authentication).accessToken;
+      return (token == null || token.isEmpty) ? null : token;
+    } on PlatformException {
+      if (context.mounted) {
+        showMock(context, '구글 로그인 준비 중이에요. (콘솔 SHA-1 등록 대기)');
+      }
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // AppScope는 InheritedNotifier — 로그인 진행(isBusy) 변화에 맞춰 오버레이가 갱신된다.
@@ -115,10 +138,13 @@ class LoginScreen extends StatelessWidget {
               onTap: () => _social(context, LoginProvider.kakao),
             ),
             const SizedBox(height: 10),
-            _OfficialLoginButton(
-              asset: 'assets/brand/naver_login.png',
-              onTap: () => _social(context, LoginProvider.naver),
-            ),
+            // 네이버는 보류 — flutter_naver_login(SDK 5.10 고정)이 최신 네이버앱·삼성인터넷과
+            // 호환이 깨져 인가 코드를 못 받는다. 플러그인이 SDK 5.12를 지원하면 되살릴 것.
+            // _OfficialLoginButton(
+            //   asset: 'assets/brand/naver_login.png',
+            //   onTap: () => _social(context, LoginProvider.naver),
+            // ),
+            _GoogleLoginButton(onTap: () => _social(context, LoginProvider.google)),
             const SizedBox(height: 18),
             Row(
               mainAxisSize: MainAxisSize.min,
@@ -172,12 +198,6 @@ class LoginScreen extends StatelessWidget {
                             fontWeight: FontWeight.w800,
                             color: AppColors.ink9,
                             letterSpacing: -0.3)),
-                    SizedBox(height: 6),
-                    Text('서버 상태에 따라 조금 걸릴 수 있어요',
-                        style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.ink5)),
                   ]),
                 ),
               ),
@@ -200,6 +220,42 @@ class _OfficialLoginButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Image.asset(asset, width: double.infinity, fit: BoxFit.fitWidth),
+    );
+  }
+}
+
+/// 구글 로그인 버튼 — 공식 에셋이 없어 브랜드 가이드(흰 배경·테두리)에 맞춰 그린다.
+class _GoogleLoginButton extends StatelessWidget {
+  const _GoogleLoginButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        height: 52,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.line, width: 1.2),
+        ),
+        child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Text('G',
+              style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF4285F4))),
+          SizedBox(width: 8),
+          Text('구글로 시작하기',
+              style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.ink9,
+                  letterSpacing: -0.2)),
+        ]),
+      ),
     );
   }
 }
