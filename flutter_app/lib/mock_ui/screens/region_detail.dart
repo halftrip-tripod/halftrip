@@ -481,7 +481,7 @@ class _AttractionsSectionState extends State<_AttractionsSection> {
                   ),
                 ),
             ],
-            const Text('출처: 한국관광공사 TourAPI',
+            const Text('출처: ⓒ한국관광공사',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.ink4)),
           ]);
         },
@@ -508,7 +508,7 @@ class _FestivalSection extends StatelessWidget {
           child: _DCard(title: '이 지역 축제 소식', children: [
             // 같은 지역·시즌이면 축제는 많아야 한두 개 — 세로로 쌓아 섹션이 늘어나게.
             for (final festival in festivals) _FestivalRow(festival: festival),
-            const Text('출처: 한국관광공사 TourAPI',
+            const Text('출처: ⓒ한국관광공사',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.ink4)),
           ]),
         );
