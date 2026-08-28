@@ -234,21 +234,38 @@ class _LoginScreenState extends State<LoginScreen> {
                 ]),
                 const SizedBox(height: 18),
                 Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  // 카카오 공식 심벌 에셋(개발자센터 배포본)을 브랜드 컬러 원형 위에.
-                  _CircleSocialButton(
-                    background: const Color(0xFFFEE500),
+                  // 카카오: 구글과 동일한 원형 아이콘 — 공식 컨테이너 색(#FEE500) 위에
+                  // 공식 버튼 리소스의 말풍선 심벌(형태·비율·색 무변형)을 얹는다.
+                  GestureDetector(
                     onTap: () => _social(context, LoginProvider.kakao),
-                    child: Image.asset('assets/brand/kakao_symbol.png',
-                        width: 27, height: 27),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFEE500),
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Image.asset('assets/brand/kakao_symbol.png',
+                          width: 24, height: 24),
+                    ),
                   ),
-                  const SizedBox(width: 22),
-                  // 구글은 공식 G 로고 에셋(브랜드 가이드 배포본) 사용.
-                  _CircleSocialButton(
-                    background: Colors.white,
-                    bordered: true,
+                  const SizedBox(width: 14),
+                  // 구글: 공식 gsi-material-button 아이콘 버튼의 뉴트럴 스펙 그대로 —
+                  // 40×40, radius 20, 배경 #F2F2F2, 보더 없음, G 로고 20px.
+                  GestureDetector(
                     onTap: () => _social(context, LoginProvider.google),
-                    child: Image.asset('assets/brand/google_g_logo.png',
-                        width: 24, height: 24),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF2F2F2),
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Image.asset('assets/brand/google_g_logo.png',
+                          width: 20, height: 20),
+                    ),
                   ),
                 ]),
                 const Spacer(flex: 3),
@@ -348,43 +365,6 @@ class _LoginField extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: AppColors.p500, width: 1.6),
         ),
-      ),
-    );
-  }
-}
-
-/// 원형 간편 로그인 버튼 (카카오·구글 공통 틀).
-class _CircleSocialButton extends StatelessWidget {
-  const _CircleSocialButton({
-    required this.background,
-    required this.child,
-    required this.onTap,
-    this.bordered = false,
-  });
-
-  final Color background;
-  final Widget child;
-  final VoidCallback onTap;
-  final bool bordered;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 54,
-        height: 54,
-        decoration: BoxDecoration(
-          color: background,
-          shape: BoxShape.circle,
-          border: bordered ? Border.all(color: AppColors.line, width: 1.2) : null,
-          boxShadow: const [
-            BoxShadow(
-                color: Color(0x14101828), blurRadius: 10, offset: Offset(0, 4)),
-          ],
-        ),
-        alignment: Alignment.center,
-        child: child,
       ),
     );
   }
