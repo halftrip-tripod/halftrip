@@ -34,9 +34,11 @@
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="${GOOGLE_MAP_API_KEY}" />
-        <!-- 카카오 로그인 리다이렉트 (kakao{네이티브 앱 키}://oauth) — 키는 local.properties 주입 -->
+        <!-- 카카오 로그인 리다이렉트 (kakao{네이티브 앱 키}://oauth) — 키는 local.properties 주입.
+             kakao_flutter_sdk 2.x의 수신 액티비티는 auth.AuthCodeHandlerActivity다. 1.x 시절 이름인
+             AuthCodeCustomTabsActivity를 쓰면 리다이렉트 순간 ClassNotFound 크래시(동의 화면 무한 반복). -->
         <activity
-            android:name="com.kakao.sdk.flutter.AuthCodeCustomTabsActivity"
+            android:name="com.kakao.sdk.flutter.auth.AuthCodeHandlerActivity"
             android:exported="true">
             <intent-filter android:label="flutter_web_auth">
                 <action android:name="android.intent.action.VIEW" />

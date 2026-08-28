@@ -183,7 +183,10 @@ class ApiTravelRepository implements TravelRepository {
     return SocialLoginResult(
       user: user,
       newUser: data['newUser'] as bool? ?? false,
-      needsResidence: data['needsResidence'] as bool? ?? false,
+      // 서버 필드명은 residenceRequired다(AuthDtos.SocialLoginResponse).
+      needsResidence: data['residenceRequired'] as bool? ??
+          data['needsResidence'] as bool? ??
+          false,
     );
   }
 
