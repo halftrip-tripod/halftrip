@@ -755,8 +755,14 @@ class AppController extends ChangeNotifier {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
       return;
     }
-    final token = await FirebaseMessaging.instance.getToken();
-    await _registerFcmTokenIfPossible(token);
+    // 로그인·세션복원 체인 한가운데서 불린다 — Firebase 미설정 기기에서 여기가 던지면
+    // 로그인은 성공했는데 "실패" 토스트가 뜨고 세션 복원까지 끊긴다. 푸시는 비치명.
+    try {
+      final token = await FirebaseMessaging.instance.getToken();
+      await _registerFcmTokenIfPossible(token);
+    } catch (error) {
+      debugPrint('[FCM] 토큰 동기화 실패(무시): $error');
+    }
   }
 
   Future<void> _registerFcmTokenIfPossible(String? token) async {
