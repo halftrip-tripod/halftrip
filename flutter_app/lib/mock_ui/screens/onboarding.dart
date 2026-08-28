@@ -82,8 +82,11 @@ class LoginScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // AppScope는 InheritedNotifier — 로그인 진행(isBusy) 변화에 맞춰 오버레이가 갱신된다.
+    final controller = AppScope.of(context);
     return Scaffold(
-      body: SafeArea(
+      body: Stack(children: [
+        SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
           child: Column(children: [
@@ -141,7 +144,46 @@ class LoginScreen extends StatelessWidget {
             ),
           ]),
         ),
-      ),
+        ),
+        // 소셜 인증 후 서버 확인 단계 — 무료 서버 콜드스타트면 수십 초 걸릴 수 있어
+        // 전체 화면으로 진행 상태를 보여준다 (터치도 이 스크림이 막는다).
+        if (controller.isBusy)
+          Positioned.fill(
+            child: ColoredBox(
+              color: const Color(0x73101828),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(28, 26, 28, 22),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Column(mainAxisSize: MainAxisSize.min, children: [
+                    SizedBox(
+                      width: 30,
+                      height: 30,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 3, color: AppColors.p600),
+                    ),
+                    SizedBox(height: 16),
+                    Text('로그인하고 있어요',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.ink9,
+                            letterSpacing: -0.3)),
+                    SizedBox(height: 6),
+                    Text('서버 상태에 따라 조금 걸릴 수 있어요',
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.ink5)),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+      ]),
     );
   }
 }
