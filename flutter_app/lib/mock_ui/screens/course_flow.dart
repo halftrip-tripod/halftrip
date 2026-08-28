@@ -187,6 +187,22 @@ List<_AiCand> _rankAiCands(List<_AiCand> cands, List<String> prefs, int nights) 
   return picked;
 }
 
+/// 지역에 환급 인정(지정관광지) 장소가 있는지 — 영월·제천처럼 지정관광지 제도가
+/// 없는 지역은 환급 안내·카운터를 숨기고 코스도 지정관광지 상관없이 짠다.
+/// 판단이 안 되면(네트워크 등) true — 기존 동작 유지.
+Future<bool> regionHasDesignatedPlaces(dynamic controller, String regionName) async {
+  try {
+    final repo = controller.repository;
+    final regions = await repo.getRegions();
+    final matched = regions.where((r) => r.name == regionName);
+    if (matched.isEmpty) return true;
+    final detail = await repo.getPlaceInfoDetail(matched.first.id);
+    return detail.halfPricePlaces.isNotEmpty;
+  } catch (_) {
+    return true;
+  }
+}
+
 /// AI 후보 수집 — 지정관광지(환급) + TourAPI 관광지·맛집을 이름 기준으로 병합.
 /// 맛집이 빠져 있던 문제의 근본 픽스: 취향 1순위가 맛집이어도 후보에 맛집이 있어야 뽑힌다.
 Future<List<_AiCand>> _buildAiCandidates(dynamic controller, int regionId) async {
@@ -681,6 +697,10 @@ class CourseAiScreen extends StatefulWidget {
 }
 
 class _CourseAiScreenState extends State<CourseAiScreen> {
+  /// 지역에 지정관광지가 있는지 — 없으면 환급 조건 안내를 숨긴다.
+  bool _hasDesignated = true;
+  bool _designatedChecked = false;
+
   // 여행에서 진입하면 여행 일정·인원을 그대로 프리필.
   late int _nights = widget.forTrip?.nights ?? 1;
   late int _people = widget.forTrip?.people ?? 2;
@@ -692,6 +712,17 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
   ];
 
   static const _rankColors = [AppColors.p600, AppColors.p500, AppColors.p400, AppColors.p300];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_designatedChecked) return;
+    _designatedChecked = true;
+    final controller = AppScope.of(context);
+    regionHasDesignatedPlaces(controller, widget.region.name).then((has) {
+      if (mounted) setState(() => _hasDesignated = has);
+    });
+  }
 
   void _generate() async {
     showDialog(
@@ -889,7 +920,9 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
               ),
           ],
         ),
-        const NoteRow('환급 조건(지정관광지 2곳·숙박 포함)은 자동으로 충족되게 코스를 짜드려요.'),
+        // 지정관광지 제도가 없는 지역(영월·제천)에서는 환급 조건 안내를 뺀다.
+        if (_hasDesignated)
+          const NoteRow('환급 조건(지정관광지 2곳·숙박 포함)은 자동으로 충족되게 코스를 짜드려요.'),
       ],
     );
   }
@@ -2033,8 +2066,23 @@ class CourseEditScreen extends StatefulWidget {
 }
 
 class _CourseEditScreenState extends State<CourseEditScreen> {
+  /// 지역에 지정관광지가 있는지 — 없으면 환급 카운터("N/2곳")를 숨긴다.
+  bool _hasDesignated = true;
+  bool _designatedChecked = false;
+
   /// 지도에 표시할 일차 (1박2일이면 DAY 1/2 토글).
   int _mapDay = 1;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_designatedChecked) return;
+    _designatedChecked = true;
+    final controller = AppScope.of(context);
+    regionHasDesignatedPlaces(controller, widget.course.region).then((has) {
+      if (mounted) setState(() => _hasDesignated = has);
+    });
+  }
 
   /// 리스트에서 탭한 장소 — 지도를 그 핀 중심으로 이동시키고 정보창을 연다.
   int? _focusStopId;
@@ -2141,7 +2189,8 @@ class _CourseEditScreenState extends State<CourseEditScreen> {
           ]),
         ),
         // 환급 인정 관광지 포함 여부 — 담은 스톱 중 지정관광지 개수로 판단(숙박은 미판정).
-        if (c.stops.isNotEmpty)
+        // 지정관광지 제도가 없는 지역은 카운터 숨김(담긴 환급 장소가 있으면 예외적으로 표시).
+        if (c.stops.isNotEmpty && (_hasDesignated || refundCount > 0))
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             decoration: BoxDecoration(
