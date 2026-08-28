@@ -311,6 +311,12 @@ class _MapPane extends StatelessWidget {
           final placedRects = <Rect>[];
           const labelHeight = 16.0;
           for (final r in ordered) {
+            // 마감 지역은 글씨 없이 작은 핀만, 다녀온 지역은 마그넷이 곧 지역 표시라
+            // 이름 생략 — 지도가 접수중·오픈예정 지역 위주로 읽히게.
+            if (visitedRegionIds.contains(r.id) ||
+                r.statusCode.toUpperCase() == 'CLOSED') {
+              continue;
+            }
             final o = Offset(px(pinOffset(r)), py(pinOffset(r)));
             final labelWidth = r.name.length * 12.5 + 4;
             final candidates = [
@@ -585,8 +591,11 @@ class _UrgCard extends StatelessWidget {
             Row(children: [
               DdayChip(
                 // 마감일이 지났으면 D-음수 대신 상태 문구로. (상태 갱신 지연 대비)
+                // 마감일이 없는 지역은 선착순·예산 소진 마감 — 접수 시작일을 보여준다.
                 dday == null
-                    ? '마감일 확인 필요'
+                    ? (region.applyStartDate != null
+                        ? '${region.applyStartDate!.month}.${region.applyStartDate!.day} 접수 시작'
+                        : '선착순 접수')
                     : dday.$1 < 0
                         ? '접수 마감'
                         : dday.$1 == 0
@@ -798,6 +807,15 @@ const _regionLatLng = <String, (double, double)>{
   '해남': (34.573, 126.599),
   '고흥': (34.611, 127.285),
   '완도': (34.311, 126.755),
+  '화천': (38.106, 127.708),
+  '영천': (35.973, 128.938),
+  '함양': (35.520, 127.725),
+  '산청': (35.415, 127.873),
+  '고성': (34.973, 128.322), // 경남 고성
+  '안동': (36.568, 128.729),
+  '서천': (36.080, 126.691),
+  '태안': (36.745, 126.298),
+  '장흥': (34.681, 126.907),
 };
 
 /// 거주지(시/도) 대표 위경도 — 내 지역 코랄 핀용.

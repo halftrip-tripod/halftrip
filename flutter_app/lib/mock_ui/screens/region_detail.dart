@@ -110,7 +110,12 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
                 r.statusCode.toUpperCase() == 'CLOSED'
                     ? '접수 마감'
                     : dday == null
-                        ? (_isPreparing ? '오픈일 확인 필요' : '마감일 확인 필요')
+                        // 마감일 없는 접수중 지역 = 선착순·예산 소진 마감 — 접수 시작일을 보여준다.
+                        ? (_isPreparing
+                            ? '오픈일 확인 필요'
+                            : (r.applyStartDate != null
+                                ? '${r.applyStartDate!.month}.${r.applyStartDate!.day} 접수 시작'
+                                : '선착순 접수'))
                         : dday.$1 < 0
                             ? (_isPreparing ? '오픈 예정' : '접수 마감')
                             : dday.$1 == 0
@@ -130,13 +135,14 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(color: AppColors.p50, borderRadius: BorderRadius.circular(16)),
-            child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Icon(Icons.campaign_outlined, size: 20, color: AppColors.p600),
-              SizedBox(width: 10),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.campaign_outlined, size: 20, color: AppColors.p600),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  '아직 접수 전이에요. 아래 조건은 지자체 사업 공고 기준이에요.',
-                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink5, height: 1.5),
+                  // keepWords: 어절 중간("기준이에/요")에서 줄바꿈되지 않게.
+                  keepWords('아직 접수 전이에요. 아래 조건은 지자체 사업 공고 기준이에요.'),
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink5, height: 1.5),
                 ),
               ),
             ]),
@@ -232,22 +238,21 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
             ),
         ]),
         // 인정 관광지 — 실 API(RegionDetail.halfPricePlaces) 연동.
-        _DCard(title: '환급 인정 관광지', children: [
-          SizedBox(
-            height: 148,
-            child: FutureBuilder<RegionDetail>(
-              future: _placesFuture,
-              builder: (context, snapshot) {
+        // 지정관광지 제도가 없는 지역(영월·제천 등)은 카드 자체를 숨긴다.
+        FutureBuilder<RegionDetail>(
+          future: _placesFuture,
+          builder: (context, snapshot) {
+            if (snapshot.hasData && snapshot.data!.halfPricePlaces.isEmpty) {
+              return const SizedBox.shrink();
+            }
+            return _DCard(title: '환급 인정 관광지', children: [
+              SizedBox(
+                height: 148,
+                child: Builder(builder: (context) {
                 if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
                 }
                 final places = snapshot.data!.halfPricePlaces;
-                if (places.isEmpty) {
-                  return const Center(
-                    child: Text('등록된 관광지 정보가 아직 없어요.',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink4)),
-                  );
-                }
                 return ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: places.length,
@@ -292,10 +297,11 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
                     ),
                   ),
                 );
-              },
-            ),
-          ),
-        ]),
+                }),
+              ),
+            ]);
+          },
+        ),
         // 축제 + 볼거리·맛집 (TourAPI) — 한 슬롯으로 묶어 빈 섹션이 유령 간격을 안 만들게 한다.
         Column(children: [
           _FestivalSection(future: _festivalsFuture),
@@ -475,7 +481,7 @@ class _AttractionsSectionState extends State<_AttractionsSection> {
                   ),
                 ),
             ],
-            const Text('출처: 한국관광공사 TourAPI',
+            const Text('출처: ⓒ한국관광공사',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.ink4)),
           ]);
         },
@@ -502,7 +508,7 @@ class _FestivalSection extends StatelessWidget {
           child: _DCard(title: '이 지역 축제 소식', children: [
             // 같은 지역·시즌이면 축제는 많아야 한두 개 — 세로로 쌓아 섹션이 늘어나게.
             for (final festival in festivals) _FestivalRow(festival: festival),
-            const Text('출처: 한국관광공사 TourAPI',
+            const Text('출처: ⓒ한국관광공사',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.ink4)),
           ]),
         );
@@ -681,8 +687,10 @@ String _paymentSummary(String guideText) {
 
 String _proofSummary(String guideText) {
   if (guideText.contains('인증샷') || guideText.contains('사진')) return '영수증 + 여행 인증 사진';
+  // 지정관광지 제도가 없는 지역(영월=전통시장, 제천=지역화폐 소비)은 관광지 인증샷을 말하지 않는다.
+  if (guideText.contains('전통시장')) return '영수증 + 전통시장 이용 내역';
+  if (!guideText.contains('관광지')) return '영수증 제출';
   // 앱이 실제로 요구하는 증빙(인증샷 2곳 + 영수증)과 같은 기준으로 말한다.
-  // "영수증 제출"만 적으면 목록 카드("지정관광지 2곳 인증")와 어긋난다.
   return '영수증 + 지정관광지 2곳 인증샷';
 }
 

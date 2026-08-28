@@ -55,8 +55,19 @@ class AppState extends ChangeNotifier {
   int get spentAmount =>
       120000 + receipts.skip(3).fold(0, (s, r) => s + r.amount);
 
-  Region regionByName(String name) =>
-      regions.firstWhere((r) => r.name == name, orElse: () => regions[1]);
+  /// 이름으로 목업 지역 찾기 — 목업 목록(7곳)에 없는 지역이면 이름 그대로 만들어
+  /// 돌려준다. (예전엔 regions[1]=강진 폴백이라 횡성 여행의 AI 코스가 강진으로 생성됐음)
+  Region regionByName(String name) => regions.firstWhere(
+        (r) => r.name == name,
+        orElse: () => Region(
+          name: name,
+          province: '',
+          emoji: '🗺️',
+          status: RegionStatus.open,
+          condition: '',
+          dday: 0,
+        ),
+      );
 
   /// 이 지역 여행에 연결할 코스 (없으면 null → 코스 만들기 유도).
   Course? courseFor(String region) {

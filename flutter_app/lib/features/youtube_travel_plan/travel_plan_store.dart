@@ -109,6 +109,62 @@ class TravelPlanStore extends ChangeNotifier {
     return result;
   }
 
+  /// 코스함 코스에서 계획표 열기 — 유튜브 job 없이 SavedCourse 기반.
+  /// 문서 키는 'course-{id}'로 job과 같은 저장 공간을 쓰되 충돌하지 않는다.
+  static Future<TravelPlanStore> loadForCourse(
+    SavedCourse course, {
+    Future<void> Function(TravelPlanDocument document)? onSaved,
+  }) async {
+    final preferences = await SharedPreferences.getInstance();
+    final docKey = 'course-${course.id}';
+    final raw = preferences.getString('$_storagePrefix$docKey');
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map<String, dynamic>) {
+          return TravelPlanStore._(
+            preferences: preferences,
+            document: TravelPlanDocument.fromJson(decoded),
+            onSaved: onSaved,
+          );
+        }
+      } catch (_) {
+        // 로컬 초안이 깨졌어도 코스로부터 새로 만들면 된다.
+      }
+    }
+
+    // DAY·방문 순서대로 계획표 행 생성.
+    final sorted = [...course.stops]..sort((a, b) =>
+        a.day != b.day ? a.day.compareTo(b.day) : 0);
+    final items = <TravelPlanItem>[
+      for (var i = 0; i < sorted.length; i++)
+        TravelPlanItem.fromCourseStop(sorted[i], docKey: docKey, order: i + 1),
+    ];
+    final document = TravelPlanDocument(
+      jobId: docKey,
+      tripId: null,
+      title: course.title,
+      city: course.regionName,
+      startDate: null,
+      endDate: null,
+      participantCount: null,
+      youtubeUrl: '',
+      videoTitle: '',
+      items: items,
+      updatedAt: DateTime.now(),
+      lastExportedAt: null,
+      spreadsheetId: null,
+      spreadsheetUrl: null,
+    );
+    final store = TravelPlanStore._(
+      preferences: preferences,
+      document: document,
+      onSaved: onSaved,
+    );
+    await store.saveNow();
+    return store;
+  }
+
   static Future<TravelPlanStore> load({
     required YoutubeCourseJobItem job,
     TripDetail? tripDetail,

@@ -6,6 +6,7 @@ import '../../core/app_config.dart';
 import '../../core/app_scope.dart';
 import '../../models/app_models.dart';
 import '../../screens/youtube_course_start_screen.dart';
+import '../../screens/youtube_travel_plan_screen.dart';
 import '../../services/course_ai_service.dart';
 import '../../widgets/place_map_view.dart';
 import '../data/mock_data.dart';
@@ -13,6 +14,7 @@ import '../data/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui.dart';
+import 'my_trips_tab.dart' show regionEmojiOf;
 import 'tour_place_detail.dart';
 
 // ───────────────────────── 코스 영속화 변환 (목업 Course ↔ 실스토어 SavedCourse)
@@ -183,6 +185,22 @@ List<_AiCand> _rankAiCands(List<_AiCand> cands, List<String> prefs, int nights) 
     picked.addAll(more);
   }
   return picked;
+}
+
+/// 지역에 환급 인정(지정관광지) 장소가 있는지 — 영월·제천처럼 지정관광지 제도가
+/// 없는 지역은 환급 안내·카운터를 숨기고 코스도 지정관광지 상관없이 짠다.
+/// 판단이 안 되면(네트워크 등) true — 기존 동작 유지.
+Future<bool> regionHasDesignatedPlaces(dynamic controller, String regionName) async {
+  try {
+    final repo = controller.repository;
+    final regions = await repo.getRegions();
+    final matched = regions.where((r) => r.name == regionName);
+    if (matched.isEmpty) return true;
+    final detail = await repo.getPlaceInfoDetail(matched.first.id);
+    return detail.halfPricePlaces.isNotEmpty;
+  } catch (_) {
+    return true;
+  }
 }
 
 /// AI 후보 수집 — 지정관광지(환급) + TourAPI 관광지·맛집을 이름 기준으로 병합.
@@ -516,19 +534,35 @@ class CourseRegionScreen extends StatefulWidget {
 class _CourseRegionScreenState extends State<CourseRegionScreen> {
   int _filter = 0;
   String _query = '';
+  Future<List<RegionSummary>>? _future;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 실서버 지역 목록 — 접수중/오픈예정 상태·차수는 visitkorea 동기화 값을 그대로 쓴다.
+    _future ??= AppScope.of(context).repository.getRegions();
+  }
+
+  /// 선택한 서버 지역 → 목업 Region (코스 생성 화면들이 이름·이모지·도만 쓴다).
+  Region _toMockRegion(RegionSummary r) {
+    final mock = AppState.I.regions.where((m) => m.name == r.name);
+    if (mock.isNotEmpty) return mock.first;
+    return Region(
+      name: r.name,
+      province: r.province,
+      emoji: regionEmojiOf(r.name),
+      status: RegionStatus.open,
+      condition: '',
+      dday: 0,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final s = AppState.I;
+    final controller = AppScope.of(context);
+    final favoriteIds =
+        (controller.currentUser?.favoriteRegions ?? const []).map((r) => r.id).toSet();
     final q = _query.trim();
-    final list = switch (_filter) {
-      0 => s.regions.where((r) => r.status == RegionStatus.open),
-      1 => s.regions.where((r) => r.status == RegionStatus.soon),
-      2 => s.regions.where((r) => r.favorite.value),
-      _ => s.regions,
-    }
-        .where((r) => q.isEmpty || r.name.contains(q) || r.province.contains(q))
-        .toList();
 
     return DetailScaffold(
       title: '여행 지역 선택',
@@ -561,32 +595,92 @@ class _CourseRegionScreenState extends State<CourseRegionScreen> {
           selected: _filter,
           onChanged: (i) => setState(() => _filter = i),
         ),
-        for (final r in list)
-          AppCard(
-            padding: const EdgeInsets.all(15),
-            radius: 18,
-            onTap: () => Navigator.of(context).pushReplacement(
-                MaterialPageRoute(
-                    settings:
-                        const RouteSettings(name: kCourseCreationFlowRoute),
-                    builder: (_) => widget.onPicked(r))),
-            child: Row(children: [
-              EmojiBox(r.emoji, size: 46, fontSize: 23),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(r.name,
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink9)),
-                  const SizedBox(height: 3),
-                  Text('${r.province} · 지정관광지 ${5 + r.name.length}곳',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink4)),
-                ]),
-              ),
-              Pill(r.status == RegionStatus.open ? '접수중' : '오픈예정',
-                  tone: r.status == RegionStatus.open ? PillTone.sky : PillTone.gray),
-              const Icon(Icons.chevron_right_rounded, color: AppColors.ink4),
-            ]),
-          ),
+        FutureBuilder<List<RegionSummary>>(
+          future: _future,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            final all = snapshot.data ?? const <RegionSummary>[];
+            final list = switch (_filter) {
+              0 => all.where((r) => r.statusCode.toUpperCase() == 'APPLYING'),
+              1 => all.where((r) => r.statusCode.toUpperCase() == 'PREPARING'),
+              2 => all.where((r) => favoriteIds.contains(r.id)),
+              _ => all,
+            }
+                .where((r) =>
+                    q.isEmpty || r.name.contains(q) || r.province.contains(q))
+                .toList();
+            if (list.isEmpty) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 36),
+                child: Center(
+                  child: Text('조건에 맞는 지역이 없어요.',
+                      style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.ink4)),
+                ),
+              );
+            }
+            return Column(children: [
+              for (final r in list)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: AppCard(
+                    padding: const EdgeInsets.all(15),
+                    radius: 18,
+                    onTap: () => Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(
+                            settings: const RouteSettings(
+                                name: kCourseCreationFlowRoute),
+                            builder: (_) =>
+                                widget.onPicked(_toMockRegion(r)))),
+                    child: Row(children: [
+                      EmojiBox(regionEmojiOf(r.name), size: 46, fontSize: 23),
+                      const SizedBox(width: 13),
+                      Expanded(
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(r.name,
+                                  style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.ink9)),
+                              const SizedBox(height: 3),
+                              Text(
+                                  r.roundLabel != null
+                                      ? '${r.province} · ${r.roundLabel} 접수'
+                                      : r.province,
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.ink4)),
+                            ]),
+                      ),
+                      Pill(
+                          switch (r.statusCode.toUpperCase()) {
+                            'APPLYING' => '접수중',
+                            'PREPARING' => '오픈예정',
+                            _ => '마감',
+                          },
+                          tone: switch (r.statusCode.toUpperCase()) {
+                            'APPLYING' => PillTone.sky,
+                            'PREPARING' => PillTone.mint,
+                            _ => PillTone.gray,
+                          }),
+                      const Icon(Icons.chevron_right_rounded,
+                          color: AppColors.ink4),
+                    ]),
+                  ),
+                ),
+            ]);
+          },
+        ),
       ],
     );
   }
@@ -603,6 +697,10 @@ class CourseAiScreen extends StatefulWidget {
 }
 
 class _CourseAiScreenState extends State<CourseAiScreen> {
+  /// 지역에 지정관광지가 있는지 — 없으면 환급 조건 안내를 숨긴다.
+  bool _hasDesignated = true;
+  bool _designatedChecked = false;
+
   // 여행에서 진입하면 여행 일정·인원을 그대로 프리필.
   late int _nights = widget.forTrip?.nights ?? 1;
   late int _people = widget.forTrip?.people ?? 2;
@@ -614,6 +712,17 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
   ];
 
   static const _rankColors = [AppColors.p600, AppColors.p500, AppColors.p400, AppColors.p300];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_designatedChecked) return;
+    _designatedChecked = true;
+    final controller = AppScope.of(context);
+    regionHasDesignatedPlaces(controller, widget.region.name).then((has) {
+      if (mounted) setState(() => _hasDesignated = has);
+    });
+  }
 
   void _generate() async {
     showDialog(
@@ -652,13 +761,13 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
         final byName = {for (final c in cands) _aiNormName(c.name): c};
         final sorted = [...result.stops]..sort((a, b) =>
             a.day != b.day ? a.day.compareTo(b.day) : a.order.compareTo(b.order));
-        final built = <CourseStop>[];
+        final picked = <(_AiCand, int)>[];
         for (final rs in sorted) {
           final cand = byName[_aiNormName(rs.name)];
           if (cand == null) continue; // 후보 밖 이름은 버림
           // 카테고리는 LLM이 주면 우선, 아니면 후보값. 일차는 nights 범위로 클램프.
           final cat = rs.category.isNotEmpty ? rs.category : cand.category;
-          built.add(_aiCandToStop(
+          picked.add((
             _AiCand(
               name: cand.name, category: cat, address: cand.address,
               description: cand.description, refund: cand.refund,
@@ -667,6 +776,16 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
             rs.day.clamp(1, _nights + 1),
           ));
         }
+        // LLM이 요청 일수보다 적은 날만 채워 보내는 경우가 있어(3박4일인데 DAY 2까지만),
+        // 빈 DAY가 생기면 방문 순서는 유지한 채 일차만 고르게 재배분한다.
+        final dayTotal = _nights + 1;
+        final rebalance = picked.length >= dayTotal &&
+            picked.map((p) => p.$2).toSet().length < dayTotal;
+        final built = <CourseStop>[
+          for (var i = 0; i < picked.length; i++)
+            _aiCandToStop(picked[i].$1,
+                rebalance ? (i * dayTotal ~/ picked.length) + 1 : picked[i].$2),
+        ];
         stops = built.isNotEmpty
             ? built
             : _scheduleAiCands(_rankAiCands(cands, preferences, _nights), _nights);
@@ -718,7 +837,7 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
                 const Text('여행 지역',
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.p600)),
                 const SizedBox(height: 2),
-                Text('${r.name} · ${r.province}',
+                Text(r.province.isEmpty ? r.name : '${r.name} · ${r.province}',
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.3)),
               ]),
             ),
@@ -801,7 +920,9 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
               ),
           ],
         ),
-        const NoteRow('환급 조건(지정관광지 2곳·숙박 포함)은 자동으로 충족되게 코스를 짜드려요.'),
+        // 지정관광지 제도가 없는 지역(영월·제천)에서는 환급 조건 안내를 뺀다.
+        if (_hasDesignated)
+          const NoteRow('환급 조건(지정관광지 2곳·숙박 포함)은 자동으로 충족되게 코스를 짜드려요.'),
       ],
     );
   }
@@ -1004,7 +1125,7 @@ class _CourseYoutubeScreenState extends State<CourseYoutubeScreen> {
               const Text('여행 지역',
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.p600)),
               const SizedBox(height: 2),
-              Text('${r.name} · ${r.province}',
+              Text(r.province.isEmpty ? r.name : '${r.name} · ${r.province}',
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.ink9)),
             ]),
           ),
@@ -1513,6 +1634,7 @@ class CourseViewScreen extends StatefulWidget {
     this.onMore,
     this.onEdited,
     this.onDelete,
+    this.onOpenPlan,
   });
   final Course course;
 
@@ -1524,6 +1646,10 @@ class CourseViewScreen extends StatefulWidget {
 
   /// 우측 상단 삭제 — 코스함에서 볼 때(⋯ 없이 바로 삭제).
   final VoidCallback? onDelete;
+
+  /// 상세 계획표 열기 — 날짜·시간·메모를 표로 관리(스프레드시트 내보내기 포함).
+  /// 코스는 장소·순서만 다루고, 시간 계획은 계획표가 맡는다.
+  final VoidCallback? onOpenPlan;
 
   @override
   State<CourseViewScreen> createState() => _CourseViewScreenState();
@@ -1555,6 +1681,7 @@ class _CourseViewScreenState extends State<CourseViewScreen> {
     return DetailScaffold(
       title: c.title,
       // 수정은 우측 상단 연필로 통일. 여행 코스면 ⋯(등록취소/삭제), 코스함이면 삭제 아이콘.
+      // 계획표는 하단 풀버튼(저장 버튼 자리) — 뷰의 대표 액션.
       actions: [
         IconButton(
           icon: const Icon(Icons.edit_rounded, size: 21),
@@ -1574,6 +1701,12 @@ class _CourseViewScreenState extends State<CourseViewScreen> {
             onPressed: widget.onDelete,
           ),
       ],
+      cta: widget.onOpenPlan == null
+          ? null
+          : CtaBar(children: [
+              PrimaryButton('상세 계획표 보기',
+                  icon: Icons.event_note_rounded, onTap: widget.onOpenPlan!),
+            ]),
       children: [
         if (c.refundOk)
           const FitBanner(
@@ -1832,6 +1965,11 @@ class _CourseSavedScreenState extends State<CourseSavedScreen> {
                           Navigator.of(viewContext).pop();
                         }
                       },
+                      // 상세 계획표 — 코스 스톱을 날짜·시간표로 (직접·AI·유튜브 공통).
+                      onOpenPlan: () => Navigator.of(viewContext).push(
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  YoutubeTravelPlanScreen(course: saved))),
                     );
                   })))
           .then((_) => setState(() {})),
@@ -1928,8 +2066,23 @@ class CourseEditScreen extends StatefulWidget {
 }
 
 class _CourseEditScreenState extends State<CourseEditScreen> {
+  /// 지역에 지정관광지가 있는지 — 없으면 환급 카운터("N/2곳")를 숨긴다.
+  bool _hasDesignated = true;
+  bool _designatedChecked = false;
+
   /// 지도에 표시할 일차 (1박2일이면 DAY 1/2 토글).
   int _mapDay = 1;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_designatedChecked) return;
+    _designatedChecked = true;
+    final controller = AppScope.of(context);
+    regionHasDesignatedPlaces(controller, widget.course.region).then((has) {
+      if (mounted) setState(() => _hasDesignated = has);
+    });
+  }
 
   /// 리스트에서 탭한 장소 — 지도를 그 핀 중심으로 이동시키고 정보창을 연다.
   int? _focusStopId;
@@ -2036,7 +2189,8 @@ class _CourseEditScreenState extends State<CourseEditScreen> {
           ]),
         ),
         // 환급 인정 관광지 포함 여부 — 담은 스톱 중 지정관광지 개수로 판단(숙박은 미판정).
-        if (c.stops.isNotEmpty)
+        // 지정관광지 제도가 없는 지역은 카운터 숨김(담긴 환급 장소가 있으면 예외적으로 표시).
+        if (c.stops.isNotEmpty && (_hasDesignated || refundCount > 0))
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             decoration: BoxDecoration(
