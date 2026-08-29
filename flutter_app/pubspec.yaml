@@ -48,6 +48,7 @@ flutter:
     - assets/spot/
     - assets/illust/region/
     - assets/region_hero/
+    - assets/mall_icons/
     - assets/magnet/
   fonts:
     - family: Pretendard

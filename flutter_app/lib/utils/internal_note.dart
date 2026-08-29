@@ -8,6 +8,8 @@ const _internalMarkers = <String>[
   'TODO',
   'SAMPLE_SEED',
   'sample data',
+  'sample seed', // 온라인몰 description('sample seed online mall link')
+
   '연동 예정',
   '확인 예정',
   '정리 중',
