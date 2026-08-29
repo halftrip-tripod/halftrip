@@ -471,11 +471,13 @@ class _ResidenceScreenState extends State<ResidenceScreen> {
     setState(() => _city = c);
   }
 
-  void _done() {
+  Future<void> _done() async {
     final controller = AppScope.of(context);
     final residence = '$_province $_city';
     if (widget.editMode) {
-      controller.updateResidence(residence);
+      // 서버 반영을 기다린 뒤 닫는다 — 안 그러면 복귀한 화면이 옛 거주지를 읽는다.
+      await controller.updateResidence(residence);
+      if (!mounted) return;
       Navigator.of(context).pop();
       showMock(context, '거주지를 $residence(으)로 바꿨어요.');
     } else {
