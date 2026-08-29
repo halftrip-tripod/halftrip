@@ -22,7 +22,8 @@ class _MallData {
   final List<TripSummary> settled;
   final Map<int, List<OnlineMallItem>> mallsByRegion;
   final Map<int, String?> localCurrencyUrlByRegion;
-  final List<(String, OnlineMallItem)> allRegionMallEntries;
+  /// (지역 id, 지역 이모지, 몰) — 지역 id로 몰 사이트 파비콘 에셋을 찾는다.
+  final List<(int, String, OnlineMallItem)> allRegionMallEntries;
 }
 
 class _MallTabState extends State<MallTab> {
@@ -62,7 +63,7 @@ class _MallTabState extends State<MallTab> {
       }
     }
 
-    final allRegionMallEntries = <(String, OnlineMallItem)>[];
+    final allRegionMallEntries = <(int, String, OnlineMallItem)>[];
     try {
       final regions = await controller.repository.getRegions(
         residence: controller.currentUser?.residence,
@@ -81,7 +82,7 @@ class _MallTabState extends State<MallTab> {
         final detail = details[i];
         if (detail == null) continue;
         for (final mall in detail.onlineMalls) {
-          allRegionMallEntries.add((_regionEmoji(regions[i].name), mall));
+          allRegionMallEntries.add((regions[i].id, _regionEmoji(regions[i].name), mall));
         }
       }
     } catch (_) {}
@@ -96,7 +97,8 @@ class _MallTabState extends State<MallTab> {
       builder: (context, snapshot) {
         final data = snapshot.data;
         final settled = data?.settled ?? const <TripSummary>[];
-        final mallEntries = data?.allRegionMallEntries ?? const <(String, OnlineMallItem)>[];
+        final mallEntries =
+            data?.allRegionMallEntries ?? const <(int, String, OnlineMallItem)>[];
 
         return ListView(
           padding: const EdgeInsets.fromLTRB(22, 8, 22, 28),
@@ -135,18 +137,18 @@ class _MallTabState extends State<MallTab> {
                 child: Column(children: [
                   for (final entry in mallEntries)
                     InkWell(
-                      onTap: () => _openMallUrl(context, entry.$2.name, entry.$2.mallUrl),
+                      onTap: () => _openMallUrl(context, entry.$3.name, entry.$3.mallUrl),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 11),
                         child: Row(children: [
-                          EmojiBox(entry.$1, size: 42, fontSize: 21, color: AppColors.surf, radius: 13),
+                          _MallIcon(regionId: entry.$1),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              Text(entry.$2.name,
+                              Text(entry.$3.name,
                                   style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: AppColors.ink9)),
                               // 내부 메모("TODO: 실제 온라인몰 연동 예정")가 그대로 노출되던 자리.
-                              if (userFacingNote(entry.$2.description) case final note?) ...[
+                              if (userFacingNote(entry.$3.description) case final note?) ...[
                                 const SizedBox(height: 2),
                                 Text(note,
                                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink5)),
@@ -270,6 +272,36 @@ class _RegionUsageCard extends StatelessWidget {
             onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => MerchantMapScreen(regionId: trip.regionId, regionName: trip.regionName)))),
       ]),
+    );
+  }
+}
+
+/// 온라인몰 아이콘 — 몰 사이트에서 받아둔 파비콘(assets/mall_icons/{지역id}.png)을 쓰고,
+/// 파비콘을 못 구한 지역(영월몰·수려한합천)은 쇼핑백 아이콘으로 대신한다.
+/// 지역 이모지로 대신하면 지역 상징과 헷갈려서 쇼핑몰이라는 게 안 읽힌다.
+class _MallIcon extends StatelessWidget {
+  const _MallIcon({required this.regionId});
+
+  final int regionId;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 42,
+      height: 42,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.surf,
+        borderRadius: BorderRadius.circular(13),
+      ),
+      child: Image.asset(
+        'assets/mall_icons/$regionId.png',
+        width: 24,
+        height: 24,
+        filterQuality: FilterQuality.medium,
+        errorBuilder: (_, _, _) => const Icon(Icons.shopping_bag_outlined,
+            size: 21, color: AppColors.p600),
+      ),
     );
   }
 }
