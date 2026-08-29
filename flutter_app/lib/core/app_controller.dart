@@ -205,10 +205,12 @@ class AppController extends ChangeNotifier {
     await mock.AppState.I.attachCommunityServer(_repository, user.id);
   }
 
-  /// 거주지 온보딩 완료 — 현재 사용자 거주지를 갱신하고 메인으로 진입한다.
+  /// 거주지 온보딩 완료 — 거주지를 서버에 저장하고 메인으로 진입한다.
   void completeResidenceSetup(String residence) {
-    currentUser = currentUser?.copyWith(residence: residence);
     needsResidenceSetup = false;
+    // 저장은 updateResidence(낙관 갱신 + 서버 PATCH)가 담당 — 홈 카드·세션 복원이
+    // 서버 값을 읽으므로 로컬만 바꾸면 "미설정"으로 남고 재시작 시 온보딩이 또 뜬다.
+    unawaited(updateResidence(residence));
     notifyListeners();
   }
 
