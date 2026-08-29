@@ -49,7 +49,15 @@ class GoogleSheetsExportService {
 
   Future<void> disconnect() => _googleSignIn.disconnect();
 
-  Future<GoogleSheetsExportResult> export(TravelPlanDocument plan) async {
+  /// 계획을 Google 스프레드시트로 내보낸다.
+  ///
+  /// [targetSpreadsheetId]를 주면 그 문서를 덮어쓰고, 없으면 새로 만든다.
+  /// 덮어쓸 문서가 지워졌거나 권한이 없으면 새로 만들어 폴백한다(내보내기 자체가
+  /// 실패하는 것보다 낫다).
+  Future<GoogleSheetsExportResult> export(
+    TravelPlanDocument plan, {
+    String? targetSpreadsheetId,
+  }) async {
     final account = currentUser ?? await connect();
     if (account == null) {
       throw Exception('Google 계정 연결이 취소되었습니다.');
@@ -63,6 +71,31 @@ class GoogleSheetsExportService {
       'Authorization': 'Bearer $accessToken',
       'Content-Type': 'application/json; charset=utf-8',
     };
+
+    final reuseId = targetSpreadsheetId?.trim() ?? '';
+    if (reuseId.isNotEmpty) {
+      final sheetIds = await _existingSheetIds(reuseId, headers);
+      if (sheetIds != null) {
+        // 행이 줄었을 때 옛 데이터가 남지 않게 먼저 비운다.
+        await _clearValues(spreadsheetId: reuseId, headers: headers);
+        await _writeValues(
+          spreadsheetId: reuseId,
+          headers: headers,
+          plan: plan,
+        );
+        await _applyFormatting(
+          spreadsheetId: reuseId,
+          headers: headers,
+          scheduleSheetId: sheetIds['전체 일정'] ?? 0,
+          infoSheetId: sheetIds['여행 정보'] ?? 0,
+          scheduleRowCount: plan.items.length + 1,
+        );
+        return GoogleSheetsExportResult(
+          spreadsheetId: reuseId,
+          spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/$reuseId/edit',
+        );
+      }
+    }
 
     final createResponse = await _client.post(
       Uri.parse(_apiBase),
@@ -115,6 +148,75 @@ class GoogleSheetsExportService {
       spreadsheetUrl:
           'https://docs.google.com/spreadsheets/d/$spreadsheetId/edit',
     );
+  }
+
+  /// 덮어쓸 문서의 시트 탭 id를 읽는다. 문서가 없거나(404) 권한이 없으면(403)
+  /// null을 돌려줘 호출부가 새로 만들도록 한다. 탭이 지워졌으면 다시 만든다.
+  Future<Map<String, int>?> _existingSheetIds(
+    String spreadsheetId,
+    Map<String, String> headers,
+  ) async {
+    final response = await _client.get(
+      Uri.parse('$_apiBase/$spreadsheetId?fields=sheets.properties'),
+      headers: headers,
+    );
+    if (response.statusCode == 404 || response.statusCode == 403) return null;
+    final decoded = _decodeSuccess(response, '기존 스프레드시트 확인');
+
+    final ids = <String, int>{};
+    for (final raw in (decoded['sheets'] as List<dynamic>? ?? const [])) {
+      if (raw is! Map) continue;
+      final properties = raw['properties'];
+      if (properties is! Map) continue;
+      final title = properties['title']?.toString();
+      final sheetId = properties['sheetId'];
+      if (title != null && sheetId is num) ids[title] = sheetId.toInt();
+    }
+
+    final missing =
+        ['전체 일정', '여행 정보'].where((title) => !ids.containsKey(title)).toList();
+    if (missing.isEmpty) return ids;
+
+    final addResponse = await _client.post(
+      Uri.parse('$_apiBase/$spreadsheetId:batchUpdate'),
+      headers: headers,
+      body: jsonEncode({
+        'requests': [
+          for (final title in missing)
+            {
+              'addSheet': {
+                'properties': {'title': title},
+              },
+            },
+        ],
+      }),
+    );
+    final added = _decodeSuccess(addResponse, '시트 탭 추가');
+    for (final raw in (added['replies'] as List<dynamic>? ?? const [])) {
+      final properties = (raw is Map ? raw['addSheet'] : null) is Map
+          ? ((raw as Map)['addSheet'] as Map)['properties']
+          : null;
+      if (properties is! Map) continue;
+      final title = properties['title']?.toString();
+      final sheetId = properties['sheetId'];
+      if (title != null && sheetId is num) ids[title] = sheetId.toInt();
+    }
+    return ids;
+  }
+
+  /// 덮어쓰기 전 기존 값을 비운다 — 이번 계획의 행이 더 적으면 옛 행이 남는다.
+  Future<void> _clearValues({
+    required String spreadsheetId,
+    required Map<String, String> headers,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_apiBase/$spreadsheetId/values:batchClear'),
+      headers: headers,
+      body: jsonEncode({
+        'ranges': ["'전체 일정'!A1:AA10000", "'여행 정보'!A1:B100"],
+      }),
+    );
+    _decodeSuccess(response, '기존 시트 비우기');
   }
 
   Future<void> _writeValues({

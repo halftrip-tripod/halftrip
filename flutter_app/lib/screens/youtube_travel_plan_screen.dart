@@ -40,6 +40,9 @@ class _YoutubeTravelPlanScreenState extends State<YoutubeTravelPlanScreen> {
   TravelPlanStore? _store;
   Object? _loadError;
   bool _exporting = false;
+
+  /// 내보내기 방식 — true면 마지막에 만든 시트를 덮어쓴다(기본은 새 시트 생성).
+  bool _exportOverwrite = false;
   late final GoogleSheetsExportService _sheetsService;
 
   @override
@@ -527,6 +530,34 @@ class _YoutubeTravelPlanScreenState extends State<YoutubeTravelPlanScreen> {
     end.selection = const TextSelection.collapsed(offset: 0);
   }
 
+  /// 덮어쓰기 확인 — 구글 시트에서 직접 고친 내용은 이 계획표 값으로 대체된다.
+  Future<bool> _confirmOverwrite(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('기존 시트를 덮어쓸까요?',
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+        content: const Text(
+          '마지막에 내보낸 스프레드시트의 내용이 지금 계획표로 바뀌어요.\n'
+          '시트에서 직접 고친 내용이 있으면 사라집니다.',
+          style: TextStyle(fontSize: 13.5, height: 1.5, color: _plannerMuted),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: _plannerPurple),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('덮어쓰기'),
+          ),
+        ],
+      ),
+    );
+    return ok ?? false;
+  }
+
   Future<void> _showExportDialog(TravelPlanStore store) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
@@ -568,56 +599,17 @@ class _YoutubeTravelPlanScreenState extends State<YoutubeTravelPlanScreen> {
                           const SizedBox(height: 24),
                           const _ExportSectionLabel(title: '내보내기 옵션'),
                           const SizedBox(height: 10),
-                          DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(18),
-                              boxShadow: const [
-                                BoxShadow(
-                                    color: Color(0x0F1B3A5B),
-                                    blurRadius: 14,
-                                    offset: Offset(0, 4)),
-                              ],
-                            ),
-                            child: const Column(
-                              children: [
-                                ListTile(
-                                  leading: Icon(
-                                    Icons.radio_button_checked_rounded,
-                                    color: _plannerPurple,
-                                  ),
-                                  title: Text(
-                                    '새 시트 생성',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                  subtitle: Text('새 Google 스프레드시트를 만듭니다.'),
-                                ),
-                                Divider(height: 1),
-                                ListTile(
-                                  enabled: false,
-                                  leading: Icon(
-                                    Icons.radio_button_unchecked_rounded,
-                                  ),
-                                  title: Text('기존 시트 덮어쓰기'),
-                                  subtitle: Text('현재 버전에서는 지원하지 않습니다.'),
-                                ),
-                              ],
-                            ),
+                          _ExportOptionCard(
+                            overwrite: _exportOverwrite,
+                            // 이전에 내보낸 시트가 있어야 덮어쓸 대상이 생긴다.
+                            lastSpreadsheetId: document.spreadsheetId,
+                            onChanged: (value) =>
+                                setRouteState(() => _exportOverwrite = value),
                           ),
                           const SizedBox(height: 20),
                           const _ExportSectionLabel(title: '파일 이름'),
                           const SizedBox(height: 8),
-                          TextFormField(
-                            initialValue: document.title,
-                            readOnly: true,
-                            decoration: const InputDecoration(
-                              suffixText: '.xlsx',
-                              filled: true,
-                              fillColor: Colors.white,
-                            ),
-                          ),
+                          _ExportFileNameField(title: document.title),
                           if (document.lastExportedAt != null) ...[
                             const SizedBox(height: 12),
                             Text(
@@ -656,10 +648,23 @@ class _YoutubeTravelPlanScreenState extends State<YoutubeTravelPlanScreen> {
                                   _exporting
                                       ? null
                                       : () async {
+                                        final reuseId =
+                                            store.document.spreadsheetId;
+                                        final overwrite = _exportOverwrite &&
+                                            reuseId != null &&
+                                            reuseId.isNotEmpty;
+                                        // 시트에서 손으로 고친 내용이 지워질 수 있어 먼저 확인받는다.
+                                        if (overwrite &&
+                                            !await _confirmOverwrite(
+                                                routeContext)) {
+                                          return;
+                                        }
                                         setRouteState(() => _exporting = true);
                                         try {
                                           final result = await _sheetsService
-                                              .export(store.document);
+                                              .export(store.document,
+                                                  targetSpreadsheetId:
+                                                      overwrite ? reuseId : null);
                                           await store.markExported(
                                             spreadsheetId: result.spreadsheetId,
                                             spreadsheetUrl:
@@ -970,20 +975,31 @@ class _MobileSpreadsheet extends StatelessWidget {
             child: Scrollbar(
               thumbVisibility: true,
               notificationPredicate: (notification) => notification.depth == 0,
-              child: Align(
-                alignment: Alignment.topLeft,
-                child: SingleChildScrollView(
-                key: const ValueKey('travel-plan-horizontal-scroll'),
-                scrollDirection: Axis.horizontal,
-                physics: const ClampingScrollPhysics(),
-                child: SizedBox(
-                  width: tableWidth,
-                  child: ListView(
-                    padding: const EdgeInsets.only(bottom: 76),
-                    children: [_buildHeaderRow(columns), ...rows],
+              // 헤더 행은 세로 스크롤 밖(Column 첫 칸)에 둬서 고정한다 —
+              // 아래로 내려도 지금 보는 값이 어느 항목인지 알 수 있게.
+              // 가로 스크롤은 헤더와 본문이 같이 움직여야 칸이 어긋나지 않는다.
+              child: LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  key: const ValueKey('travel-plan-horizontal-scroll'),
+                  scrollDirection: Axis.horizontal,
+                  physics: const ClampingScrollPhysics(),
+                  child: SizedBox(
+                    width: tableWidth,
+                    height: constraints.maxHeight,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildHeaderRow(columns),
+                        Expanded(
+                          child: ListView(
+                            padding: const EdgeInsets.only(bottom: 76),
+                            children: rows,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
               ),
             ),
           ),
@@ -1355,6 +1371,192 @@ class _ExportIntroCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// 내보내기 방식 선택 — 머티리얼 ListTile 기본 룩 대신 앱 카드 톤(흰 카드·라운드·
+/// 하늘 선택 표시)으로. 지금은 '새 시트 생성'만 지원한다.
+class _ExportOptionCard extends StatelessWidget {
+  const _ExportOptionCard({
+    required this.overwrite,
+    required this.lastSpreadsheetId,
+    required this.onChanged,
+  });
+
+  final bool overwrite;
+
+  /// 마지막으로 내보낸 시트 id — 없으면 덮어쓸 대상이 없어 선택할 수 없다.
+  final String? lastSpreadsheetId;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final canOverwrite = (lastSpreadsheetId ?? '').isNotEmpty;
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [
+          BoxShadow(color: Color(0x0F1B3A5B), blurRadius: 14, offset: Offset(0, 4)),
+        ],
+      ),
+      padding: const EdgeInsets.all(10),
+      child: Column(children: [
+        _ExportOptionRow(
+          icon: Icons.add_circle_outline_rounded,
+          title: '새 시트 생성',
+          description: '새 Google 스프레드시트를 만들어요',
+          selected: !overwrite || !canOverwrite,
+          onTap: () => onChanged(false),
+        ),
+        const SizedBox(height: 8),
+        _ExportOptionRow(
+          icon: Icons.upload_file_rounded,
+          title: '기존 시트 덮어쓰기',
+          description: canOverwrite
+              ? '마지막에 내보낸 시트를 최신 내용으로 갱신해요'
+              : '먼저 한 번 내보내면 선택할 수 있어요',
+          selected: overwrite && canOverwrite,
+          onTap: canOverwrite ? () => onChanged(true) : null,
+          badge: canOverwrite ? null : '내보내기 기록 없음',
+        ),
+      ]),
+    );
+  }
+}
+
+class _ExportOptionRow extends StatelessWidget {
+  const _ExportOptionRow({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.selected,
+    this.onTap,
+    this.badge,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+  final bool selected;
+
+  /// null이면 고를 수 없는 옵션(회색 처리).
+  final VoidCallback? onTap;
+
+  /// 왜 못 고르는지 알리는 회색 배지.
+  final String? badge;
+
+  @override
+  Widget build(BuildContext context) {
+    final disabled = onTap == null;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: selected ? _plannerPurpleSoft : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: selected ? _plannerPurple : _plannerGrid,
+          width: selected ? 1.6 : 1,
+        ),
+      ),
+      child: Row(children: [
+        Container(
+          width: 34,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? _plannerPurple : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(11),
+          ),
+          child: Icon(icon,
+              size: 19, color: selected ? Colors.white : const Color(0xFF94A3B8)),
+        ),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Text(title,
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: disabled ? const Color(0xFF94A3B8) : const Color(0xFF171A22))),
+              if (badge != null) ...[
+                const SizedBox(width: 7),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(badge!,
+                      style: const TextStyle(
+                          fontSize: 10.5, fontWeight: FontWeight.w800, color: _plannerMuted)),
+                ),
+              ],
+            ]),
+            const SizedBox(height: 2),
+            Text(description,
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: disabled ? const Color(0xFFB3BDCC) : _plannerMuted)),
+          ]),
+        ),
+        if (selected)
+          const Icon(Icons.check_circle_rounded, size: 20, color: _plannerPurple),
+      ]),
+      ),
+    );
+  }
+}
+
+/// 내보낼 파일 이름 — 계획표 제목을 따라간다(읽기 전용).
+/// 머티리얼 기본 입력 필드가 앱 톤과 겉돌아, 카드형 표시로 바꿨다.
+class _ExportFileNameField extends StatelessWidget {
+  const _ExportFileNameField({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _plannerGrid),
+        ),
+        child: Row(children: [
+          const Icon(Icons.description_outlined, size: 18, color: _plannerMuted),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF171A22))),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: _plannerPurpleSoft,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: const Text('.xlsx',
+                style: TextStyle(
+                    fontSize: 11.5, fontWeight: FontWeight.w800, color: Color(0xFF0369A1))),
+          ),
+        ]),
+      ),
+      const SizedBox(height: 7),
+      const Text('계획표 제목을 바꾸면 파일 이름도 함께 바뀌어요.',
+          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: _plannerMuted)),
+    ]);
   }
 }
 
