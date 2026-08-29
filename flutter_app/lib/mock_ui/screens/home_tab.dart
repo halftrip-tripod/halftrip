@@ -28,6 +28,25 @@ class _HomeTabState extends State<HomeTab> {
   bool _initialized = false;
 
   @override
+  void initState() {
+    super.initState();
+    // 셸이 IndexedStack이라 탭을 오가도 이 State가 살아있다 — 홈이 다시 보일 때마다
+    // 갱신해야 다른 탭에서 한 작업(정산 신청·거주지 변경)이 반영된다.
+    AppState.I.tabShownTick.addListener(_onTabShown);
+  }
+
+  @override
+  void dispose() {
+    AppState.I.tabShownTick.removeListener(_onTabShown);
+    super.dispose();
+  }
+
+  void _onTabShown() {
+    if (!mounted || AppState.I.shownTab != 0 || _future == null) return;
+    _refresh();
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_initialized) return;
@@ -604,7 +623,8 @@ class _UrgCard extends StatelessWidget {
                 warn: dday != null && dday.$1 >= 0 && dday.$2,
               ),
               const Spacer(),
-              const Text('신청 정보 보기',
+              // "신청 정보 보기"는 D-day 칩("M.D 접수 시작")과 한 줄에 두면 꽉 차서 축약.
+              const Text('정보 보기',
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.p600)),
               const Icon(Icons.chevron_right_rounded, size: 17, color: AppColors.p600),
             ]),
@@ -878,6 +898,15 @@ String _regionEmoji(String regionName) {
     '해남': '🌾',
     '고흥': '🚀',
     '완도': '🏝️',
+    '화천': '🎣', // 산천어
+    '영천': '🔭', // 보현산 천문대
+    '함양': '🌱', // 산삼
+    '산청': '🍵', // 동의보감·한방
+    '고성': '🦕', // 공룡
+    '안동': '🎭', // 하회탈
+    '서천': '🐦', // 철새
+    '태안': '🌅', // 해변
+    '장흥': '🌲', // 편백숲
   };
   return map[regionName] ?? '📍';
 }
@@ -931,8 +960,11 @@ class _HomeTopBarState extends State<_HomeTopBar> {
         const SizedBox(width: 10),
         _HeaderIconButton(
           icon: Icons.person_outline_rounded,
+          // 마이페이지에서 거주지·닉네임을 바꾸면 홈 인사말·지역 목록이 달라진다 —
+          // 복귀 시 홈 탭에 갱신 신호를 보낸다(탭 구독자가 재조회).
           onTap: () => Navigator.of(context)
-              .push(MaterialPageRoute(builder: (_) => const MyPageScreen())),
+              .push(MaterialPageRoute(builder: (_) => const MyPageScreen()))
+              .then((_) => AppState.I.notifyTabShown(0)),
         ),
       ]),
     );

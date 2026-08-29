@@ -39,10 +39,17 @@ class _MainShellState extends State<MainShell> {
     super.dispose();
   }
 
+  /// 탭 전환 — IndexedStack이라 State가 살아있으므로, 보이게 되는 탭에
+  /// 갱신 신호를 보내 다른 탭에서 한 작업이 반영되게 한다.
+  void _selectTab(int tab) {
+    setState(() => _tab = tab);
+    AppState.I.notifyTabShown(tab);
+  }
+
   void _onTabRequest() {
     final t = AppState.I.tabRequest.value;
     if (t == null || !mounted) return;
-    setState(() => _tab = t);
+    _selectTab(t);
     AppState.I.tabRequest.value = null;
   }
 
@@ -78,7 +85,7 @@ class _MainShellState extends State<MainShell> {
                   Expanded(
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTap: () => setState(() => _tab = i),
+                      onTap: () => _selectTab(i),
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
                         Icon(_tabs[i].$1,
                             size: 24,
