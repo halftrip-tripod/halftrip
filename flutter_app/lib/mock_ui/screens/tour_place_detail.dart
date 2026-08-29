@@ -10,17 +10,15 @@ import '../widgets/ui.dart';
 
 /// TourAPI 관광지 상세. contentId로 개요·운영정보를 실시간 조회 —
 /// 있으면 소개·이용정보·지도, 없으면 이름·주소·지도만.
-/// 코스 흐름에서 열면 [onAddToCourse] 로 하단에 "코스에 추가" 버튼이 붙는다.
+/// 코스 담기는 코스 편집의 장소 검색에서만 한다(여기선 보기 전용).
 class TourPlaceDetailScreen extends StatefulWidget {
   const TourPlaceDetailScreen({
     super.key,
     required this.attraction,
-    this.onAddToCourse,
     this.regionId,
   });
 
   final TourAttraction attraction;
-  final VoidCallback? onAddToCourse;
 
   /// contentId가 없는 지정관광지 등은 이 지역에서 이름으로 TourAPI를 찾아 상세를 붙인다.
   final int? regionId;
@@ -76,14 +74,6 @@ class _TourPlaceDetailScreenState extends State<TourPlaceDetailScreen> {
     final a = widget.attraction;
     return DetailScaffold(
       title: '장소 정보',
-      cta: widget.onAddToCourse == null
-          ? null
-          : CtaBar(children: [
-              PrimaryButton('코스에 추가', icon: Icons.add_rounded, onTap: () {
-                widget.onAddToCourse!();
-                Navigator.of(context).pop();
-              }),
-            ]),
       children: [
         // 헤더 (사진 없음)
         Padding(
@@ -210,15 +200,13 @@ class _TourPlaceDetailScreenState extends State<TourPlaceDetailScreen> {
 
 /// 볼거리·맛집 행 (아이콘 없이 이름 + 카테고리 칩 + 주소). 탭 시 TourAPI 상세.
 class TourAttractionRow extends StatelessWidget {
-  const TourAttractionRow({super.key, required this.attraction, this.onAddToCourse});
+  const TourAttractionRow({super.key, required this.attraction});
   final TourAttraction attraction;
-  final VoidCallback? onAddToCourse;
-
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () => Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => TourPlaceDetailScreen(attraction: attraction, onAddToCourse: onAddToCourse))),
+          builder: (_) => TourPlaceDetailScreen(attraction: attraction))),
       behavior: HitTestBehavior.opaque,
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
