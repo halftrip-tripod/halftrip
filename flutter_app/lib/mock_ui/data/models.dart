@@ -103,6 +103,7 @@ class Trip {
     this.nights = 1,
     this.course,
     this.backendId,
+    this.startDate,
   });
 
   final String emoji;
@@ -120,6 +121,9 @@ class Trip {
   /// 실서버 여행 id — 여행 상세에서 프록시로 만들 때 채워져,
   /// 코스함 가져오기 등 실스토어 연결(selectCourseForTrip)에 쓴다.
   final int? backendId;
+
+  /// 실제 여행 시작일 — 코스 일정의 DAY별 날짜 라벨에 쓴다. 없으면 날짜 없이 DAY만.
+  final DateTime? startDate;
 }
 
 enum PostTag { review, course, ask, info }
