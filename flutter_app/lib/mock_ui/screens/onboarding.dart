@@ -10,7 +10,9 @@ import '../../core/app_config.dart';
 import '../../core/app_scope.dart';
 import '../../models/app_models.dart';
 import '../../screens/info_screens.dart';
-import '../data/mock_data.dart';
+// 거주지 목록은 전국 17개 시도 실데이터를 쓴다 — mock_data의 축약본(6개 시도)은
+// 목업 시절 잔재라 없는 지역 사용자는 가입 자체가 막혔다.
+import '../../data/residence_options.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui.dart';
 
