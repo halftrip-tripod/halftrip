@@ -206,6 +206,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       stage: mock.TripStage.before,
       nights: trip.endDate.difference(trip.startDate).inDays,
       backendId: trip.id,
+      startDate: trip.startDate,
     );
     await Navigator.of(context).push(
       MaterialPageRoute(
