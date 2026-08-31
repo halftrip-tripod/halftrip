@@ -341,7 +341,27 @@ class AppController extends ChangeNotifier {
     await _runBusy(() async {
       trips = await _repository.getTrips(user.id);
     }, resetError: false);
+    _adoptServerCourseSelections();
     await _pruneStaleCourseSelections();
+  }
+
+  /// 서버가 기억하는 여행-코스 연결(V90)을 로컬 맵에 반영한다.
+  /// 이게 없으면 재설치·기기 변경 후 코스함에는 코스가 있는데 여행에는 안 붙는다.
+  void _adoptServerCourseSelections() {
+    final next = {...selectedCourseIdsByTrip};
+    var changed = false;
+    for (final trip in trips) {
+      final serverId = trip.selectedCourseId;
+      if (serverId == null) continue;
+      final courseId = '$serverId';
+      if (next[trip.id] != courseId) {
+        next[trip.id] = courseId;
+        changed = true;
+      }
+    }
+    if (!changed) return;
+    selectedCourseIdsByTrip = next;
+    unawaited(_persistLocalDashboardData());
   }
 
   /// 존재하지 않는 여행을 가리키는 확정 코스 매핑 제거.
@@ -518,6 +538,9 @@ class AppController extends ChangeNotifier {
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
+  /// 여행에 확정 코스를 연결한다.
+  /// 서버에도 저장해야 재설치·기기 변경에서 연결이 사라지지 않는다(V90).
+  /// 로컬 맵은 서버 응답을 기다리지 않고 바로 화면에 반영하기 위한 것.
   Future<void> selectCourseForTrip({
     required int tripId,
     required String courseId,
@@ -527,6 +550,7 @@ class AppController extends ChangeNotifier {
     selectedCourseIdsByTrip = next;
     await _persistLocalDashboardData();
     notifyListeners();
+    await _syncSelectedCourse(tripId, courseId);
   }
 
   /// 여행의 확정 코스 등록을 취소한다 (코스 자체는 코스함에 남는다).
@@ -535,6 +559,23 @@ class AppController extends ChangeNotifier {
     selectedCourseIdsByTrip = next;
     await _persistLocalDashboardData();
     notifyListeners();
+    await _syncSelectedCourse(tripId, null);
+  }
+
+  /// 연결 상태를 서버에 반영. 서버가 아직 이 API를 모르면 조용히 넘어간다
+  /// (로컬 맵은 이미 갱신돼 있어 화면은 그대로 동작한다).
+  Future<void> _syncSelectedCourse(int tripId, String? courseId) async {
+    final userId = currentUser?.id;
+    if (userId == null) return;
+    try {
+      await repository.updateTripSelectedCourse(
+        tripId: tripId,
+        userId: userId,
+        courseId: courseId == null ? null : int.tryParse(courseId),
+      );
+    } catch (_) {
+      // 서버 미배포·네트워크 실패 — 로컬 연결은 유지된다.
+    }
   }
 
   /// 코스함에서 코스를 삭제한다. 이 코스를 확정 코스로 쓰던 여행의 연결도 함께 해제.

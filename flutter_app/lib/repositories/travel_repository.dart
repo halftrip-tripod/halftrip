@@ -78,6 +78,14 @@ abstract class TravelRepository {
     required int regionId,
     required int merchantId,
   });
+  /// 여행에 확정 코스를 연결하거나(courseId) 해제한다(null).
+  /// 서버 저장이라 재설치·기기 변경에도 유지된다.
+  Future<void> updateTripSelectedCourse({
+    required int tripId,
+    required int userId,
+    required int? courseId,
+  });
+
   Future<TripSummary> createTrip({
     required int userId,
     required TripDraft draft,

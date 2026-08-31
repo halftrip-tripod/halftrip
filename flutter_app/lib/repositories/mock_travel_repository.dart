@@ -957,6 +957,13 @@ class MockTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<void> updateTripSelectedCourse({
+    required int tripId,
+    required int userId,
+    required int? courseId,
+  }) async {}
+
+  @override
   Future<TripSummary> createTrip({
     required int userId,
     required TripDraft draft,

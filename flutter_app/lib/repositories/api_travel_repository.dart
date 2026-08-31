@@ -424,6 +424,19 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<void> updateTripSelectedCourse({
+    required int tripId,
+    required int userId,
+    required int? courseId,
+  }) async {
+    await _jsonRequest(
+      'PATCH',
+      '/trips/$tripId/selected-course',
+      body: {'userId': userId, 'courseId': courseId},
+    );
+  }
+
+  @override
   Future<TripSummary> createTrip({
     required int userId,
     required TripDraft draft,

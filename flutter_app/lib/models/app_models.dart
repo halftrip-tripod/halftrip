@@ -1146,6 +1146,7 @@ class TripSummary {
     this.checklistDoneCount,
     this.checklistTotal,
     this.settlementDeadline,
+    this.selectedCourseId,
   });
 
   final int id;
@@ -1166,6 +1167,9 @@ class TripSummary {
   final int? checklistDoneCount;
   final int? checklistTotal;
   final DateTime? settlementDeadline;
+
+  /// 여행에 연결한 확정 코스 id — 서버 저장(V90). 미지원 서버면 null.
+  final int? selectedCourseId;
 
   TripSummary copyWith({
     int? travelerCount,
@@ -1190,6 +1194,7 @@ class TripSummary {
       checklistDoneCount: checklistDoneCount,
       checklistTotal: checklistTotal,
       settlementDeadline: settlementDeadline,
+      selectedCourseId: selectedCourseId,
     );
   }
 
@@ -1213,6 +1218,7 @@ class TripSummary {
       settlementDeadline: json['settlementDeadline'] == null
           ? null
           : DateTime.tryParse(json['settlementDeadline'] as String),
+      selectedCourseId: (json['selectedCourseId'] as num?)?.toInt(),
     );
   }
 }
