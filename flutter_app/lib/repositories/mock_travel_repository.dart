@@ -957,6 +957,21 @@ class MockTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<List<SavedCourse>> getSavedCourses(int userId) async => const [];
+
+  @override
+  Future<SavedCourse> saveCourseToServer({
+    required int userId,
+    required SavedCourse course,
+  }) async => course;
+
+  @override
+  Future<void> deleteSavedCourseOnServer({
+    required int userId,
+    required String courseId,
+  }) async {}
+
+  @override
   Future<void> updateTripSelectedCourse({
     required int tripId,
     required int userId,

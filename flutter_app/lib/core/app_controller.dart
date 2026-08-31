@@ -341,6 +341,7 @@ class AppController extends ChangeNotifier {
     await _runBusy(() async {
       trips = await _repository.getTrips(user.id);
     }, resetError: false);
+    await refreshSavedCourses();
     _adoptServerCourseSelections();
     await _pruneStaleCourseSelections();
   }
@@ -457,6 +458,8 @@ class AppController extends ChangeNotifier {
         ),
       ];
 
+  /// 코스함에 저장. 서버에도 올려 재설치·기기 변경에도 남게 한다.
+  /// 서버가 새 id를 주면 그 id로 교체한다(여행-코스 연결이 서버 id 기준이라 중요).
   Future<void> saveCourse(SavedCourse course) async {
     final next = [...savedCourses];
     next.removeWhere((item) => item.id == course.id);
@@ -464,6 +467,46 @@ class AppController extends ChangeNotifier {
     savedCourses = next;
     await _persistLocalDashboardData();
     notifyListeners();
+
+    final userId = currentUser?.id;
+    if (userId == null) return;
+    try {
+      final saved = await _repository.saveCourseToServer(userId: userId, course: course);
+      if (saved.id == course.id) return;
+      savedCourses = [
+        for (final item in savedCourses)
+          if (item.id == course.id) saved else item,
+      ];
+      // 이 코스를 확정 코스로 쓰던 여행의 연결도 새 id로 옮긴다.
+      final remapped = {
+        for (final entry in selectedCourseIdsByTrip.entries)
+          entry.key: entry.value == course.id ? saved.id : entry.value,
+      };
+      selectedCourseIdsByTrip = remapped;
+      await _persistLocalDashboardData();
+      notifyListeners();
+    } catch (_) {
+      // 서버 미배포·네트워크 실패 — 로컬 코스함은 그대로 쓴다.
+    }
+  }
+
+  /// 서버 코스함을 받아 로컬과 합친다. 같은 id는 서버 값을 우선한다.
+  Future<void> refreshSavedCourses() async {
+    final userId = currentUser?.id;
+    if (userId == null) return;
+    try {
+      final remote = await _repository.getSavedCourses(userId);
+      if (remote.isEmpty) return;
+      final remoteIds = {for (final course in remote) course.id};
+      savedCourses = [
+        ...remote,
+        ...savedCourses.where((item) => !remoteIds.contains(item.id)),
+      ];
+      await _persistLocalDashboardData();
+      notifyListeners();
+    } catch (_) {
+      // 서버 미지원 — 로컬 코스함만 보여준다.
+    }
   }
 
   Future<bool> saveCompletedYoutubeCourse(
@@ -580,6 +623,12 @@ class AppController extends ChangeNotifier {
 
   /// 코스함에서 코스를 삭제한다. 이 코스를 확정 코스로 쓰던 여행의 연결도 함께 해제.
   Future<void> deleteSavedCourse(String courseId) async {
+    final userId = currentUser?.id;
+    if (userId != null) {
+      unawaited(_repository
+          .deleteSavedCourseOnServer(userId: userId, courseId: courseId)
+          .catchError((_) {}));
+    }
     savedCourses = [...savedCourses]..removeWhere((item) => item.id == courseId);
     selectedCourseIdsByTrip = {...selectedCourseIdsByTrip}
       ..removeWhere((_, id) => id == courseId);
