@@ -43,7 +43,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
     final name = _nickname.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
