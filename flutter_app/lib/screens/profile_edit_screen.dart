@@ -43,20 +43,23 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
     final name = _nickname.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('닉네임을 입력해 주세요.')));
       return;
     }
-    AppScope.of(context).updateProfile(
+    // 서버 반영을 기다린 뒤 닫는다 — await 없이 pop하면 돌아간 화면이
+    // 아직 갱신 안 된 사용자 정보를 다시 읽어 옛 닉네임·아바타가 보인다.
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    await AppScope.of(context).updateProfile(
       nickname: name,
       avatarPreset: encodeAvatar(_colorIndex, _emojiIndex),
     );
-    Navigator.of(context).pop();
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('프로필을 수정했어요.')));
+    navigator.pop();
+    messenger.showSnackBar(const SnackBar(content: Text('프로필을 수정했어요.')));
   }
 
   @override

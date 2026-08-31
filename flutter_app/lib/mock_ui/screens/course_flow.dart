@@ -13,6 +13,7 @@ import '../data/mock_data.dart';
 import '../data/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_colors.dart';
+import '../widgets/trip_calendar_sheet.dart' show kdate;
 import '../widgets/ui.dart';
 import 'my_trips_tab.dart' show regionEmojiOf;
 import 'tour_place_detail.dart';
@@ -186,6 +187,11 @@ List<_AiCand> _rankAiCands(List<_AiCand> cands, List<String> prefs, int nights) 
   }
   return picked;
 }
+
+/// 코스 일정의 DAY 헤더 라벨. 여행 시작일을 알면 실제 날짜를, 모르면 DAY만 보여준다.
+/// (예전에는 '6.14 (토)'가 모든 코스에 하드코딩돼 있었다.)
+String courseDayLabel(int day, DateTime? startDate) =>
+    startDate == null ? 'DAY $day' : 'DAY $day · ${kdate(startDate.add(Duration(days: day - 1)))}';
 
 /// 지역에 환급 인정(지정관광지) 장소가 있는지 — 영월·제천처럼 지정관광지 제도가
 /// 없는 지역은 환급 안내·카운터를 숨기고 코스도 지정관광지 상관없이 짠다.
@@ -855,6 +861,10 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
           value: _nights == 0 ? '당일치기' : '$_nights박 ${_nights + 1}일',
           onMinus: () => setState(() => _nights = (_nights - 1).clamp(0, 4)),
           onPlus: () => setState(() => _nights = (_nights + 1).clamp(0, 4)),
+          // 여행에서 만든 코스는 그 여행 일정에 맞춰야 한다 — 2박3일 여행에 3박4일
+          // 코스가 붙으면 일정이 어긋난다. 코스함에서 만들 때만 일수를 고른다.
+          locked: widget.forTrip != null,
+          lockedNote: widget.forTrip == null ? null : '이 여행 일정에 맞춰 코스를 만들어요',
         ),
         const _FormLabel('동행 인원'),
         _Stepper(
@@ -951,29 +961,59 @@ class _FormLabel extends StatelessWidget {
 }
 
 class _Stepper extends StatelessWidget {
-  const _Stepper({required this.label, required this.value, required this.onMinus, required this.onPlus});
+  const _Stepper(
+      {required this.label,
+      required this.value,
+      required this.onMinus,
+      required this.onPlus,
+      this.locked = false,
+      this.lockedNote});
+
   final String label;
   final String value;
   final VoidCallback onMinus;
   final VoidCallback onPlus;
+
+  /// 여행에서 진입한 코스처럼 값이 정해져 있으면 +/− 대신 값만 보여준다.
+  final bool locked;
+  final String? lockedNote;
 
   @override
   Widget build(BuildContext context) {
     return AppCard(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
       radius: 18,
-      child: Row(children: [
-        Text(label,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink9)),
-        const Spacer(),
-        _StepBtn('−', onMinus),
-        SizedBox(
-          width: 74,
-          child: Text(value,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.ink9)),
-        ),
-        _StepBtn('+', onPlus),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text(label,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink9)),
+          const Spacer(),
+          if (locked)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              decoration: BoxDecoration(
+                  color: AppColors.p50, borderRadius: BorderRadius.circular(11)),
+              child: Text(value,
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.p700)),
+            )
+          else ...[
+            _StepBtn('−', onMinus),
+            SizedBox(
+              width: 74,
+              child: Text(value,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.ink9)),
+            ),
+            _StepBtn('+', onPlus),
+          ],
+        ]),
+        if (locked && lockedNote != null) ...[
+          const SizedBox(height: 6),
+          Text(lockedNote!,
+              style: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink5)),
+        ],
       ]),
     );
   }
@@ -1429,6 +1469,7 @@ class _CourseSimScreenState extends State<CourseSimScreen> {
           const SizedBox(height: 10),
           _TimelineSection(
             stops: stops,
+            startDate: widget.forTrip?.startDate,
             selectedStopId: _focusStopId,
             onStopTap: (s) {
               if (s.latitude == null || s.longitude == null) return;
@@ -1577,8 +1618,12 @@ Future<PlaceMapMarkerData?> _loadAiMarkerDetails(
 
 /// DAY별 타임라인.
 class _TimelineSection extends StatelessWidget {
-  const _TimelineSection({this.stops, this.onStopTap, this.selectedStopId});
+  const _TimelineSection(
+      {this.stops, this.onStopTap, this.selectedStopId, this.startDate});
   final List<CourseStop>? stops;
+
+  /// 여행 시작일 — 있으면 DAY별 실제 날짜를 붙인다. 없으면 'DAY N'만.
+  final DateTime? startDate;
 
   /// 장소 탭 콜백 — 시뮬 화면에서 지도 이동·정보창 열기에 쓴다.
   final void Function(CourseStop)? onStopTap;
@@ -1605,11 +1650,13 @@ class _TimelineSection extends StatelessWidget {
         child: Text('상세 일정',
             style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.3)),
       ),
-      for (final day in [1, 2])
-        if (list.any((s) => s.day == day)) ...[
+      // 2박3일 이상도 전부 그린다 — 예전엔 [1, 2] 고정이라 지도엔 DAY 3이 있는데
+      // 아래 목록만 이틀치로 잘렸다.
+      for (final day in (list.map((s) => s.day).toSet().toList()..sort()))
+        ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(2, 8, 0, 6),
-            child: Text('DAY $day · 6.1${3 + day} (${day == 1 ? '토' : '일'})',
+            child: Text(courseDayLabel(day, startDate),
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: .3)),
           ),
           for (final (i, s) in list.where((s) => s.day == day).indexed)
@@ -1635,8 +1682,12 @@ class CourseViewScreen extends StatefulWidget {
     this.onEdited,
     this.onDelete,
     this.onOpenPlan,
+    this.startDate,
   });
   final Course course;
+
+  /// 여행에서 열었으면 그 여행 시작일 — DAY별 실제 날짜 라벨에 쓴다.
+  final DateTime? startDate;
 
   /// 우측 상단 ⋯ — 여행 코스일 때만: 등록취소/코스함삭제 시트.
   final VoidCallback? onMore;
@@ -1740,6 +1791,7 @@ class _CourseViewScreenState extends State<CourseViewScreen> {
           ],
           _TimelineSection(
             stops: c.stops,
+            startDate: widget.startDate,
             selectedStopId: _focusStopId,
             onStopTap: (s) {
               if (s.latitude == null || s.longitude == null) return;
@@ -2244,7 +2296,7 @@ class _CourseEditScreenState extends State<CourseEditScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(2, 6, 2, 0),
             child: Row(children: [
-              Text('DAY $day · 6.1${3 + day} (${day == 1 ? '토' : '일'})',
+              Text(courseDayLabel(day, widget.forTrip?.startDate),
                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.2)),
               const Spacer(),
               Text('${c.stops.where((s) => s.day == day).length}곳',

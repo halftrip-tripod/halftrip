@@ -42,17 +42,28 @@ class _CommunityTabState extends State<CommunityTab> {
     // build 안의 소비 로직이 실행된다 (안 그러면 프리셋이 조용히 무시됨).
     AppState.I.communityRegion.addListener(_onPresetRequest);
     AppState.I.communityFilter.addListener(_onPresetRequest);
-    // 서버 모드: 탭 진입마다 최신 피드로 갱신 (다른 사용자 글 반영).
-    AppState.I.refreshCommunityFromServer().then((_) {
-      if (mounted) setState(() {});
-    });
+    // 탭이 다시 보일 때마다 최신 피드로 갱신 (다른 사용자 글·반응 반영).
+    // initState는 앱당 1회라 이것만으론 첫 진입 이후 영영 갱신되지 않는다.
+    AppState.I.tabShownTick.addListener(_onTabShown);
+    _refreshFeed();
   }
 
   @override
   void dispose() {
     AppState.I.communityRegion.removeListener(_onPresetRequest);
     AppState.I.communityFilter.removeListener(_onPresetRequest);
+    AppState.I.tabShownTick.removeListener(_onTabShown);
     super.dispose();
+  }
+
+  void _onTabShown() {
+    if (!mounted || AppState.I.shownTab != 3) return;
+    _refreshFeed();
+  }
+
+  Future<void> _refreshFeed() async {
+    await AppState.I.refreshCommunityFromServer();
+    if (mounted) setState(() {});
   }
 
   void _onPresetRequest() {
@@ -165,7 +176,9 @@ class _CommunityTabState extends State<CommunityTab> {
     }
 
     return Stack(children: [
-      ListView(
+      RefreshIndicator(
+        onRefresh: _refreshFeed,
+        child: ListView(
         padding: const EdgeInsets.fromLTRB(22, 8, 22, 100),
         children: [
           Row(children: [
@@ -196,6 +209,7 @@ class _CommunityTabState extends State<CommunityTab> {
               const SizedBox(height: 14),
             ],
         ],
+        ),
       ),
       // 글쓰기 FAB
       Positioned(

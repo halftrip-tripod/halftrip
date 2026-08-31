@@ -21,6 +21,24 @@ class AppState extends ChangeNotifier {
   /// 메인 셸 탭 전환 요청 (0 홈 / 1 내여행 / 2 온라인몰 / 3 커뮤니티).
   final ValueNotifier<int?> tabRequest = ValueNotifier(null);
 
+  /// 탭이 화면에 나타날 때마다 그 탭 번호를 실어 보내는 갱신 신호.
+  ///
+  /// 셸이 IndexedStack이라 탭을 오가도 State가 살아있어 initState가 다시 돌지 않는다.
+  /// 그래서 다른 탭에서 한 작업(정산 신청·거주지 변경·글쓰기)이 반영되지 않는데,
+  /// 각 탭이 이 신호를 구독해 자기 차례에 재조회하면 해결된다.
+  /// (같은 탭을 다시 눌러도 갱신되도록 값이 아니라 카운터를 증가시킨다)
+  final ValueNotifier<int> tabShownTick = ValueNotifier(0);
+  int _shownTab = 0;
+
+  /// 현재 보이는 탭 — tabShownTick 수신 측이 "내 탭인지" 판별할 때 쓴다.
+  int get shownTab => _shownTab;
+
+  /// 셸이 탭을 띄울 때 호출. 해당 탭 구독자에게 갱신 신호가 나간다.
+  void notifyTabShown(int tab) {
+    _shownTab = tab;
+    tabShownTick.value++;
+  }
+
   /// 커뮤니티 탭 진입 시 적용할 지역 필터 요청 (1회성).
   final ValueNotifier<String?> communityRegion = ValueNotifier(null);
 

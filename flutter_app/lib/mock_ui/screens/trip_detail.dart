@@ -106,16 +106,39 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         .push(MaterialPageRoute(
           builder: (_) => CourseViewScreen(
             course: c,
+            startDate: detail.trip.startDate,
             // 편집 저장 후 실스토어(코스함)에 반영 — 여행 코스도 원본은 코스함.
-            onEdited: () => AppScope.of(context).saveCourse(SavedCourse(
-              id: course.id,
-              regionId: course.regionId,
-              regionName: course.regionName,
-              title: c.title,
-              preferences: course.preferences,
-              stops: savedStopsFromCourse(c.stops),
-              createdAt: course.createdAt,
-            )),
+            // 플래너·지도는 여행 장소(selectedPlaces)를 읽으므로 스톱도 함께 동기화한다
+            // (안 하면 코스만 바뀌고 일정·지도는 옛 장소로 남는다).
+            onEdited: () async {
+              final controller = AppScope.of(context);
+              final stops = savedStopsFromCourse(c.stops);
+              await controller.saveCourse(SavedCourse(
+                id: course.id,
+                regionId: course.regionId,
+                regionName: course.regionName,
+                title: c.title,
+                preferences: course.preferences,
+                stops: stops,
+                createdAt: course.createdAt,
+              ));
+              try {
+                await controller.repository.replaceTripPlaces(detail.trip.id, [
+                  for (var i = 0; i < stops.length; i++)
+                    TripPlaceItem(
+                      id: 0,
+                      placeType: PlaceCategory.halfPrice,
+                      referencePlaceId: stops[i].placeId,
+                      placeName: stops[i].name,
+                      address: stops[i].address,
+                      visitOrder: i + 1,
+                      latitude: stops[i].latitude,
+                      longitude: stops[i].longitude,
+                      checked: false,
+                    ),
+                ]);
+              } catch (_) {}
+            },
             onMore: () async {
               final action = await _openCourseActions(detail, course);
               // 등록취소·삭제됐으면 이 코스 상세는 더 보여줄 게 없다 — 여행 상세로 복귀.
@@ -128,7 +151,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                 course: course, tripDetail: detail)),
           ),
         ))
-        .then((_) => setState(() {}));
+        .then((_) => _reload());
   }
 
   /// SavedCourse(실모델) → 표시용 Course — 코스함과 같은 변환기 사용 (DAY·시간 보존).
@@ -206,6 +229,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       stage: mock.TripStage.before,
       nights: trip.endDate.difference(trip.startDate).inDays,
       backendId: trip.id,
+      startDate: trip.startDate,
     );
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -678,6 +702,9 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           applicantName: detail.trip.applicantName,
           phoneNumber: '',
         ));
+    // repository 직접 호출이라 컨트롤러 캐시(trips)가 낡은 채로 남는다 —
+    // 홈의 방문 지역 표시·온라인몰 사용처가 반영되도록 함께 갱신한다.
+    await controller.refreshTrips();
     await _reload();
     if (mounted) showMock(context, '정산 신청 완료로 표시했어요.');
   }
@@ -711,11 +738,9 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             onTap: () {
               // 이 여행을 명시적으로 실어 후기 작성 화면을 연다. 지역만 넘기면
               // 같은 지역 여행이 여러 개일 때 인증 배지가 엉뚱한 여행을 가리킨다.
-              Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => CommunityWriteScreen(
-                  tripId: detail.trip.id,
-                  regionName: detail.trip.regionName,
-                ),
+              _push(CommunityWriteScreen(
+                tripId: detail.trip.id,
+                regionName: detail.trip.regionName,
               ));
             },
           ),

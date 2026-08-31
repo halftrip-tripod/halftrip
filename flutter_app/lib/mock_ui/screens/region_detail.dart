@@ -319,18 +319,26 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
                 trailingIcon: Icons.open_in_new_rounded,
                 onTap: () => _openUrl(r.digitalTourCardApplyUrl)),
           ]),
-        // 지역화폐
-        _DCard(title: '지역화폐 앱 안내', children: [
-          Text(_localCurrencyAppName(r.name),
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.ink9)),
-          Text(_localCurrencyDescription(r.name),
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.ink5, height: 1.45)),
-          if (r.localCurrencyAppUrl != null && r.localCurrencyAppUrl!.trim().isNotEmpty)
-            OutlineButton('지역화폐 앱 열기',
-                icon: Icons.smartphone_rounded,
-                trailingIcon: Icons.open_in_new_rounded,
-                onTap: () => _openUrl(r.localCurrencyAppUrl!)),
-        ]),
+        // 지역화폐 — 앱 링크가 없는 지역(화천: 개인신용카드만)은 카드를 아예 숨긴다.
+        if ((r.localCurrencyAppUrl ?? '').trim().isNotEmpty) ...[
+          () {
+            final appLabel = _localCurrencyAppLabel(r.localCurrencyAppUrl);
+            final currency = _localCurrencyName(r.name) ?? appLabel;
+            return _DCard(title: '지역화폐 앱 안내', children: [
+              Text(currency,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.ink9)),
+              Text(
+                  currency == appLabel
+                      ? '$appLabel 앱에서 충전·결제 내역을 확인해요.'
+                      : '$appLabel 앱에서 충전·결제하고, 거래내역은 정산 증빙으로 쓸 수 있어요.',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.ink5, height: 1.45)),
+              OutlineButton('$appLabel 열기',
+                  icon: Icons.smartphone_rounded,
+                  trailingIcon: Icons.open_in_new_rounded,
+                  onTap: () => _openUrl(r.localCurrencyAppUrl!)),
+            ]);
+          }(),
+        ],
         // 후기 — 커뮤니티 API 연동 전까지 목업 게시글 데이터 기반.
         if (regionPosts.isNotEmpty)
           _DCard(
@@ -702,41 +710,43 @@ String _minSpendSummary(String guideText) {
   return '지역 공고 기준 확인';
 }
 
-String _localCurrencyAppName(String regionName) => switch (regionName) {
-      '평창' => '평창사랑상품권',
-      '횡성' => '횡성몰 / 홈페이지',
-      '영월' => '영월별빛고운카드',
-      '제천' => '제천화폐 Chak',
-      '거창' => '거창반값여행 상품권',
-      '고창' => '고창사랑카드',
-      '합천' => '합천반값여행 상품권',
-      '영광' => '그리고',
-      '밀양' => '밀양사랑상품권',
-      '영암' => '월출페이',
-      '하동' => '하동반값여행 상품권',
-      '강진' => '강진사랑상품권 Chak',
-      '남해' => '남해사랑상품권',
-      '해남' => '해남사랑상품권',
-      '고흥' => '고흥사랑상품권',
+/// 지역 상품권 이름 — 지자체 공고 표기 기준. 링크로 여는 앱 이름과는 다르다
+/// (예: 완도사랑상품권을 '전남상품권 chak' 앱에서 쓴다).
+String? _localCurrencyName(String regionName) => switch (regionName) {
       '완도' => '완도사랑상품권',
-      _ => '지역화폐 앱',
+      '강진' => '강진사랑상품권',
+      '해남' => '해남사랑상품권',
+      '고흥' => '모바일 고흥사랑상품권',
+      '영광' => '영광사랑상품권',
+      '영암' => '월출페이',
+      '평창' => '평창사랑상품권',
+      '횡성' => '횡성사랑카드',
+      '영월' => '영월별빛고운카드',
+      '제천' => '제천화폐',
+      '고창' => '고창사랑카드',
+      '영천' => '모바일 영천사랑상품권',
+      '거창' => '거창반값여행 상품권',
+      '합천' => '합천반값여행 상품권',
+      '하동' => '하동반값여행 상품권',
+      '밀양' => '모바일 밀양사랑상품권',
+      '남해' => '반반남해 지역사랑상품권',
+      _ => null, // 함양·산청 등 공고에 상품권명이 없으면 앱 이름으로 표시
     };
 
-String _localCurrencyDescription(String regionName) => switch (regionName) {
-      '평창' => '평창사랑상품권 가맹점에서 사용할 수 있어요.',
-      '횡성' => '횡성 지역 공지에 따라 사용 앱이 공개될 예정입니다.',
-      '영월' => '영월 지역화폐 결제 내역과 카드 정보를 함께 확인해요.',
-      '제천' => '제천화폐 사용 내역은 Chak 시스템 기준으로 정산됩니다.',
-      '거창' => '거창 반값여행 상품권 사용 내역을 앱에서 확인해요.',
-      '고창' => '고창사랑카드 결제 내역을 정산 전에 확인해 주세요.',
-      '합천' => '모바일 합천반값여행 상품권 사용 내역이 필요해요.',
-      '영광' => '그리고 앱 또는 카드 거래내역을 준비해 주세요.',
-      '밀양' => '밀양사랑상품권 제로페이 사용 내역이 필요해요.',
-      '영암' => '월출페이 이용내역 상세 화면으로 정산에 활용해요.',
-      '하동' => '하동반값여행 상품권 제로페이 전자영수증이 필요해요.',
-      '강진' => '강진사랑상품권 Chak 거래내역을 확인할 수 있어요.',
-      _ => '지역화폐 거래내역을 정산 증빙으로 활용할 수 있어요.',
-    };
+/// 링크로 여는 실제 앱 이름을 URL(패키지 id)에서 도출한다.
+/// 이름을 따로 하드코딩하면 링크와 어긋나서("완도사랑상품권"인데 전남상품권 앱이 열림)
+/// 사용자가 잘못 찾는다 — 표시와 링크가 항상 같은 값에서 나오게 한다.
+String _localCurrencyAppLabel(String? url) {
+  final id = (url ?? '').split('id=').last;
+  return switch (id) {
+    'com.komscochak.jeonnam.client' => '전남상품권 chak',
+    'com.komscochak.m2.client' => '지역상품권 chak',
+    'com.konai.konadure' => '그리고(지역화폐)',
+    'com.bizplay.bizzeropay' => '비플페이(제로페이)',
+    'com.bizplay.bizzeropay.kangwon' => '강원상품권',
+    _ => '지역화폐 앱',
+  };
+}
 
 String _regionEmoji(String regionName) {
   const map = <String, String>{
@@ -756,6 +766,15 @@ String _regionEmoji(String regionName) {
     '해남': '🌾',
     '고흥': '🚀',
     '완도': '🏝️',
+    '화천': '🎣', // 산천어
+    '영천': '🔭', // 보현산 천문대
+    '함양': '🌱', // 산삼
+    '산청': '🍵', // 동의보감·한방
+    '고성': '🦕', // 공룡
+    '안동': '🎭', // 하회탈
+    '서천': '🐦', // 철새
+    '태안': '🌅', // 해변
+    '장흥': '🌲', // 편백숲
   };
   return map[regionName] ?? '📍';
 }

@@ -5,7 +5,7 @@ import '../models/app_models.dart';
 import '../theme/app_colors.dart';
 import 'local_login_screen.dart';
 
-/// 스플래시 겸 소셜 로그인 화면 (카카오·네이버).
+/// 스플래시 겸 소셜 로그인 화면 (카카오·구글).
 /// 디자인: halftrip-design/login.html
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -47,23 +47,18 @@ class LoginScreen extends StatelessWidget {
                         : () => _handleSocial(context, LoginProvider.kakao),
                   ),
                   const SizedBox(height: 10),
+                  // 네이버는 플러그인이 최신 네이버앱과 호환되지 않아 폐기 — 구글로 대체.
+                  // (약관·개인정보처리방침의 소셜 제공자 표기도 카카오·구글 기준)
                   _SocialButton(
-                    background: const Color(0xFF03C75A),
-                    foreground: Colors.white,
-                    leading: const Text(
-                      'N',
-                      style: TextStyle(
-                        fontFamily: 'Pretendard',
-                        fontSize: 17,
-                        height: 1,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                      ),
-                    ),
-                    label: '네이버로 시작하기',
+                    background: Colors.white,
+                    foreground: const Color(0xFF1F1F1F),
+                    border: const Color(0xFFDADCE0),
+                    leading: Image.asset('assets/brand/google_g_logo.png',
+                        width: 18, height: 18),
+                    label: '구글로 시작하기',
                     onPressed: controller.isBusy
                         ? null
-                        : () => _handleSocial(context, LoginProvider.naver),
+                        : () => _handleSocial(context, LoginProvider.google),
                   ),
                   const SizedBox(height: 16),
                   _TermsLinks(),
@@ -163,10 +158,14 @@ class _SocialButton extends StatelessWidget {
     required this.onPressed,
     this.icon,
     this.leading,
+    this.border,
   });
 
   final Color background;
   final Color foreground;
+
+  /// 흰 배경 버튼(구글)은 테두리가 없으면 카드와 구분되지 않는다.
+  final Color? border;
   final String label;
   final VoidCallback? onPressed;
   final IconData? icon;
@@ -177,6 +176,12 @@ class _SocialButton extends StatelessWidget {
     return Material(
       color: background,
       borderRadius: BorderRadius.circular(18),
+      shape: border == null
+          ? null
+          : RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: BorderSide(color: border!),
+            ),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
         onTap: onPressed,
