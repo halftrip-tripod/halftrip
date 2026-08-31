@@ -598,8 +598,9 @@ class _UrgCard extends StatelessWidget {
             const SizedBox(height: 7),
             Text(
               region.refundConditionAmount > 0
-                  ? '최소 소비 ${_man(region.refundConditionAmount)} · 지정관광지 2곳 인증'
-                  : '지정관광지 2곳 인증 · 1박 숙박',
+                  ? '최소 소비 ${_man(region.refundConditionAmount)}'
+                      ' · ${refundProofRequirement(region.refundConditionText) ?? '관광지 인증'}'
+                  : refundProofRequirement(region.refundConditionText) ?? '관광지 인증 · 1박 숙박',
               style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink5),
             ),
             if (region.digitalBenefitAvailable) ...[

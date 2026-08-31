@@ -826,6 +826,18 @@ class _CourseMapPainter extends CustomPainter {
 }
 
 /// 목업 스낵바.
+/// 환급 조건 원문의 첫 구절이 그 지역의 인증 요건이다.
+/// 지역마다 방식이 달라("관광지 2곳 방문" / "지정관광지 1곳" / "전통시장 소비")
+/// 화면에 "지정관광지 2곳 인증"으로 고정해두면 절반은 틀린 안내가 된다.
+///   "관광지 1곳 방문 + 개인5만/팀10만 이상 · 청년 70%" → "관광지 1곳 방문"
+String? refundProofRequirement(String? conditionText) {
+  final text = (conditionText ?? '').trim();
+  if (text.isEmpty) return null;
+  var head = text.split('·').first.split('+').first.trim();
+  head = head.replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim(); // 괄호 부연은 뺀다
+  return head.isEmpty ? null : head;
+}
+
 void showMock(BuildContext context, String message) {
   ScaffoldMessenger.of(context)
     ..clearSnackBars()

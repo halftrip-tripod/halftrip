@@ -179,7 +179,7 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
                   }).join(' · ')
                 : _paymentSummary(guideText),
           ),
-          _Kv('인증 조건', _proofSummary(guideText)),
+          _Kv('인증 조건', _proofSummary(guideText, r.refundConditionText)),
           // 서버가 내려주는 금액이 먼저다. guideText 문자열 매칭에만 기대면
           // 목록은 "최소 소비 20만원"인데 상세는 "지역 공고 기준 확인"으로 어긋난다.
           _Kv(
@@ -693,13 +693,20 @@ String _paymentSummary(String guideText) {
   return '지역화폐, 카드 결제';
 }
 
-String _proofSummary(String guideText) {
+/// 정산 때 낼 증빙 요약. 인증 요건은 지역 공고(환급 조건)에서 그대로 가져온다 —
+/// "지정관광지 2곳"으로 고정하면 관광지 1곳이면 되는 지역(영암)이나 지정관광지
+/// 제도가 없는 지역(영월=전통시장·제천=지역화폐)에 틀린 안내가 나간다.
+String _proofSummary(String guideText, String? conditionText) {
+  final requirement = refundProofRequirement(conditionText);
+  if (requirement != null) {
+    if (requirement.contains('소비') || requirement.contains('결제') || requirement.contains('이용')) {
+      return '영수증 + $requirement 내역';
+    }
+    return '영수증 + $requirement 사진';
+  }
   if (guideText.contains('인증샷') || guideText.contains('사진')) return '영수증 + 여행 인증 사진';
-  // 지정관광지 제도가 없는 지역(영월=전통시장, 제천=지역화폐 소비)은 관광지 인증샷을 말하지 않는다.
   if (guideText.contains('전통시장')) return '영수증 + 전통시장 이용 내역';
-  if (!guideText.contains('관광지')) return '영수증 제출';
-  // 앱이 실제로 요구하는 증빙(인증샷 2곳 + 영수증)과 같은 기준으로 말한다.
-  return '영수증 + 지정관광지 2곳 인증샷';
+  return '영수증 제출';
 }
 
 String _minSpendSummary(String guideText) {
