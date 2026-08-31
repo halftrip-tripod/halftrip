@@ -604,7 +604,8 @@ class _UrgCard extends StatelessWidget {
                 warn: dday != null && dday.$1 >= 0 && dday.$2,
               ),
               const Spacer(),
-              const Text('신청 정보 보기',
+              // D-day 칩과 한 줄에 두면 꽉 차서 축약.
+              const Text('정보 보기',
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.p600)),
               const Icon(Icons.chevron_right_rounded, size: 17, color: AppColors.p600),
             ]),
@@ -878,6 +879,15 @@ String _regionEmoji(String regionName) {
     '해남': '🌾',
     '고흥': '🚀',
     '완도': '🏝️',
+    '화천': '🎣', // 산천어
+    '영천': '🔭', // 보현산 천문대
+    '함양': '🌱', // 산삼
+    '산청': '🍵', // 동의보감·한방
+    '고성': '🦕', // 공룡
+    '안동': '🎭', // 하회탈
+    '서천': '🐦', // 철새
+    '태안': '🌅', // 해변
+    '장흥': '🌲', // 편백숲
   };
   return map[regionName] ?? '📍';
 }
