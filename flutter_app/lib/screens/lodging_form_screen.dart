@@ -82,10 +82,23 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
     void set(String key, String value) =>
         _textControllers.putIfAbsent(key, TextEditingController.new).text = value;
     nameController.text = selected.title;
-    set('lodging_name', selected.title);
-    set('lodging_name_bottom', selected.title);
-    set('address', selected.address);
-    set('address_bottom', selected.address);
+
+    // 지역마다 템플릿 필드 키·라벨이 달라서(address / 숙박업소 소재지 / 하단 주소 …)
+    // 고정 키만 채우면 일부 칸이 빈 채로 남는다. 숙소 이름·주소에 해당하는 칸을 모두 채운다.
+    // 단 신청인 주소(residence)는 사람 주소라 건드리지 않는다.
+    for (final field in _formData?.template.fields ?? const <LodgingFormFieldItem>[]) {
+      final key = field.key;
+      final label = field.label;
+      if (key == 'residence' || label.contains('신청인') || label.contains('고객')) {
+        continue;
+      }
+      final isName = key.contains('lodging_name') || label.contains('숙박업소명');
+      final isAddress = key.contains('address') ||
+          label.contains('소재지') ||
+          (label.contains('주소') && !label.contains('신청'));
+      if (isName) set(key, selected.title);
+      if (isAddress) set(key, selected.address);
+    }
     setState(() {});
   }
 
@@ -1480,10 +1493,35 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
         ? TextInputType.number
         : (field.multiline ? TextInputType.multiline : TextInputType.text);
 
+    // 숙박업소명은 TourAPI 검색으로 이름·주소를 한 번에 채울 수 있다(직접 입력도 가능).
+    final isLodgingName = key == 'lodging_name' || key == 'lodging_name_bottom';
+
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(field.label,
-          style: const TextStyle(
-              fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink5)),
+      Row(children: [
+        Text(field.label,
+            style: const TextStyle(
+                fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink5)),
+        if (isLodgingName) ...[
+          const Spacer(),
+          GestureDetector(
+            onTap: () => _openLodgingSearch(controller),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: AppColors.p50,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.search_rounded, size: 14, color: AppColors.p600),
+                SizedBox(width: 4),
+                Text('숙소 검색',
+                    style: TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.p700)),
+              ]),
+            ),
+          ),
+        ],
+      ]),
       const SizedBox(height: 8),
       TextFormField(
         controller: controller,

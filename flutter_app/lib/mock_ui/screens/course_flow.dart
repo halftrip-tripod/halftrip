@@ -861,6 +861,10 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
           value: _nights == 0 ? '당일치기' : '$_nights박 ${_nights + 1}일',
           onMinus: () => setState(() => _nights = (_nights - 1).clamp(0, 4)),
           onPlus: () => setState(() => _nights = (_nights + 1).clamp(0, 4)),
+          // 여행에서 만든 코스는 그 여행 일정에 맞춰야 한다 — 2박3일 여행에 3박4일
+          // 코스가 붙으면 일정이 어긋난다. 코스함에서 만들 때만 일수를 고른다.
+          locked: widget.forTrip != null,
+          lockedNote: widget.forTrip == null ? null : '이 여행 일정에 맞춰 코스를 만들어요',
         ),
         const _FormLabel('동행 인원'),
         _Stepper(
@@ -957,29 +961,59 @@ class _FormLabel extends StatelessWidget {
 }
 
 class _Stepper extends StatelessWidget {
-  const _Stepper({required this.label, required this.value, required this.onMinus, required this.onPlus});
+  const _Stepper(
+      {required this.label,
+      required this.value,
+      required this.onMinus,
+      required this.onPlus,
+      this.locked = false,
+      this.lockedNote});
+
   final String label;
   final String value;
   final VoidCallback onMinus;
   final VoidCallback onPlus;
+
+  /// 여행에서 진입한 코스처럼 값이 정해져 있으면 +/− 대신 값만 보여준다.
+  final bool locked;
+  final String? lockedNote;
 
   @override
   Widget build(BuildContext context) {
     return AppCard(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
       radius: 18,
-      child: Row(children: [
-        Text(label,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink9)),
-        const Spacer(),
-        _StepBtn('−', onMinus),
-        SizedBox(
-          width: 74,
-          child: Text(value,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.ink9)),
-        ),
-        _StepBtn('+', onPlus),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text(label,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink9)),
+          const Spacer(),
+          if (locked)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              decoration: BoxDecoration(
+                  color: AppColors.p50, borderRadius: BorderRadius.circular(11)),
+              child: Text(value,
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.p700)),
+            )
+          else ...[
+            _StepBtn('−', onMinus),
+            SizedBox(
+              width: 74,
+              child: Text(value,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.ink9)),
+            ),
+            _StepBtn('+', onPlus),
+          ],
+        ]),
+        if (locked && lockedNote != null) ...[
+          const SizedBox(height: 6),
+          Text(lockedNote!,
+              style: const TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink5)),
+        ],
       ]),
     );
   }
