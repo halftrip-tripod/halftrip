@@ -5,6 +5,7 @@ import '../../core/app_scope.dart';
 import '../../models/app_models.dart';
 import '../../screens/merchant_map_screen.dart';
 import '../../utils/internal_note.dart';
+import '../state/app_state.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui.dart';
 
@@ -29,6 +30,30 @@ class _MallData {
 class _MallTabState extends State<MallTab> {
   Future<_MallData>? _future;
   bool _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // 정산을 신청하고 이 탭으로 오면 "내 환급금 사용처"가 새로 생긴다 —
+    // 셸이 IndexedStack이라 탭 재진입 신호로 재조회해야 반영된다.
+    AppState.I.tabShownTick.addListener(_onTabShown);
+  }
+
+  @override
+  void dispose() {
+    AppState.I.tabShownTick.removeListener(_onTabShown);
+    super.dispose();
+  }
+
+  void _onTabShown() {
+    if (!mounted || AppState.I.shownTab != 2 || _future == null) return;
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    setState(() { _future = _load(); });
+    await _future;
+  }
 
   @override
   void didChangeDependencies() {
@@ -100,7 +125,9 @@ class _MallTabState extends State<MallTab> {
         final mallEntries =
             data?.allRegionMallEntries ?? const <(int, String, OnlineMallItem)>[];
 
-        return ListView(
+        return RefreshIndicator(
+          onRefresh: _refresh,
+          child: ListView(
           padding: const EdgeInsets.fromLTRB(22, 8, 22, 28),
           children: [
             const Text('온라인몰',
@@ -162,6 +189,7 @@ class _MallTabState extends State<MallTab> {
                 ]),
               ),
           ],
+        ),
         );
       },
     );
@@ -195,6 +223,15 @@ String _regionEmoji(String regionName) {
     '해남': '🌾',
     '고흥': '🚀',
     '완도': '🏝️',
+    '화천': '🎣', // 산천어
+    '영천': '🔭', // 보현산 천문대
+    '함양': '🌱', // 산삼
+    '산청': '🍵', // 동의보감·한방
+    '고성': '🦕', // 공룡
+    '안동': '🎭', // 하회탈
+    '서천': '🐦', // 철새
+    '태안': '🌅', // 해변
+    '장흥': '🌲', // 편백숲
   };
   return map[regionName] ?? '📍';
 }

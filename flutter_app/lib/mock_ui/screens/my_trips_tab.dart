@@ -135,10 +135,13 @@ class _MyTripsTabState extends State<MyTripsTab> {
             for (final trip in past) ...[
               AppCard(
                 // 신청 완료 여행은 지난 여행 화면, 마감 지남 여행은 상세(마감 안내)로.
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => trip.settlementApplied
-                        ? PastTripScreen(tripId: trip.id)
-                        : TripDetailScreen(tripId: trip.id))),
+                // 지난 여행에서 "완료로 표시"를 하면 배지가 달라진다 — 복귀 시 갱신.
+                onTap: () => Navigator.of(context)
+                    .push(MaterialPageRoute(
+                        builder: (_) => trip.settlementApplied
+                            ? PastTripScreen(tripId: trip.id)
+                            : TripDetailScreen(tripId: trip.id)))
+                    .then((_) => _refresh()),
                 child: Row(children: [
                   RegionArt(trip.regionName, size: 48, fontSize: 24, radius: 15),
                   const SizedBox(width: 13),
@@ -228,6 +231,10 @@ String regionEmojiOf(String regionName) {
     '거창': '🌿', '고창': '🏛️', '합천': '🌄', '영광': '🐟',
     '밀양': '🏞️', '영암': '🏎️', '하동': '🍃', '강진': '🍲',
     '남해': '🌴', '해남': '🌾', '고흥': '🚀', '완도': '🏝️',
+    // 신규·예정 지역 임시 이모지 (일러 나오면 교체): 산천어·천문대·산삼·한방·공룡·하회탈·철새·해변·편백숲
+    '화천': '🎣', '영천': '🔭', '함양': '🌱', '산청': '🍵',
+    '고성': '🦕', '안동': '🎭', '서천': '🐦', '태안': '🌅',
+    '장흥': '🌲',
   };
   return map[regionName] ?? '📍';
 }

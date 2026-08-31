@@ -316,7 +316,9 @@ class _MyPageScreenState extends State<MyPageScreen> {
     final city = await _pickOption(title: '시 / 군 / 구', options: cities);
     if (city == null || !mounted) return;
 
-    AppScope.of(context).updateResidence('$province $city');
+    // await 없이 부르면 서버 PATCH가 끝나기 전에 홈이 사용자 정보를 다시 읽어
+    // 옛 거주지가 그대로 보인다(낙관 갱신은 이 화면에만 반영됨).
+    await AppScope.of(context).updateResidence('$province $city');
     if (!mounted) return;
     setState(() {});
     ScaffoldMessenger.of(context).showSnackBar(
