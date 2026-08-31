@@ -271,8 +271,12 @@ class CtaBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // DetailScaffold가 이 바를 Stack+Align으로 화면 맨 아래에 얹기 때문에
+    // 시스템 내비게이션 바(3버튼 모드는 특히 두껍다) 아래로 깔려 버튼이 가려진다.
+    // 제스처 내비 기기에선 고정 여백 26이 우연히 가려 줘서 기종마다 증상이 갈렸다.
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 26, 20, 26),
+      padding: EdgeInsets.fromLTRB(20, 26, 20, 26 + bottomInset),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
