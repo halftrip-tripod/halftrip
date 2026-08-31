@@ -424,6 +424,86 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<List<SavedCourse>> getSavedCourses(int userId) async {
+    final response = await _jsonRequest('GET', '/courses/saved', query: {'userId': userId});
+    final items = response['data'] as List<dynamic>? ?? const [];
+    return items
+        .map((item) => _savedCourseFromServer(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<SavedCourse> saveCourseToServer({
+    required int userId,
+    required SavedCourse course,
+  }) async {
+    final body = {
+      'userId': userId,
+      'regionId': course.regionId,
+      'title': course.title,
+      'summary': course.preferences.join(', '),
+      'sourceType': 'AI',
+      'stops': [
+        for (final (index, stop) in course.stops.indexed)
+          {
+            'referencePlaceId': stop.placeId == 0 ? null : stop.placeId,
+            'placeName': stop.name,
+            'address': stop.address,
+            'visitOrder': index + 1,
+            'dayNumber': stop.day,
+            'latitude': stop.latitude == 0 ? null : stop.latitude,
+            'longitude': stop.longitude == 0 ? null : stop.longitude,
+            'sourceType': stop.sourceType,
+          },
+      ],
+    };
+    // 서버 id가 붙은 코스는 갱신, 새 코스는 생성.
+    final serverId = int.tryParse(course.id);
+    final response = serverId == null
+        ? await _jsonRequest('POST', '/courses/saved', body: body)
+        : await _jsonRequest('PATCH', '/courses/saved/$serverId', body: body);
+    return _savedCourseFromServer(response['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<void> deleteSavedCourseOnServer({
+    required int userId,
+    required String courseId,
+  }) async {
+    final serverId = int.tryParse(courseId);
+    if (serverId == null) return; // 로컬에만 있던 코스
+    await _jsonRequest('DELETE', '/courses/saved/$serverId', query: {'userId': userId});
+  }
+
+  /// 서버 응답(CourseStopItem) → 앱 모델. 필드 이름이 서로 달라 여기서 맞춘다.
+  SavedCourse _savedCourseFromServer(Map<String, dynamic> json) {
+    final stops = (json['stops'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map((stop) => SavedCourseStop(
+              placeId: (stop['referencePlaceId'] as num?)?.toInt() ?? 0,
+              name: stop['placeName'] as String? ?? '',
+              address: stop['address'] as String? ?? '',
+              latitude: (stop['latitude'] as num?)?.toDouble() ?? 0,
+              longitude: (stop['longitude'] as num?)?.toDouble() ?? 0,
+              sourceType: stop['sourceType'] as String? ?? 'PLACE',
+              day: (stop['dayNumber'] as num?)?.toInt() ?? 1,
+            ))
+        .toList();
+    final summary = (json['summary'] as String? ?? '').trim();
+    return SavedCourse(
+      id: '${json['id']}',
+      regionId: (json['regionId'] as num?)?.toInt() ?? 0,
+      regionName: json['regionName'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      preferences: summary.isEmpty
+          ? const <String>[]
+          : summary.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
+      stops: stops,
+      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+    );
+  }
+
+  @override
   Future<void> updateTripSelectedCourse({
     required int tripId,
     required int userId,
