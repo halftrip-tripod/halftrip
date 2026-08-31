@@ -157,11 +157,14 @@ class _MyPageScreenState extends State<MyPageScreen> {
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Text(
-                  '아래 데이터가 모두 삭제되며 복구할 수 없어요.\n\n'
+                  '아래 데이터가 삭제되며 복구할 수 없어요.\n\n'
                   '· 계정 정보 (로그인 연동·거주지·프로필)\n'
                   '· 여행 기록과 인증사진·영수증·숙박확인서\n'
-                  '· 커뮤니티에 쓴 글과 저장한 글\n\n'
-                  '정산을 아직 신청하지 않은 여행이 있다면\n증빙 자료도 함께 사라져요.',
+                  '· 저장한 코스와 관심 지역\n\n'
+                  '커뮤니티 글은 작성자만 «탈퇴한 사용자»로 바뀌고 남아요.\n'
+                  '글까지 지우려면 탈퇴 전에 직접 삭제해 주세요.\n\n'
+                  '정산을 신청한 여행이 있어도 탈퇴할 수 있지만,\n'
+                  '앱에 올린 증빙 자료는 사라져요.',
                   style: TextStyle(
                       fontFamily: 'Pretendard',
                       fontSize: 13,
