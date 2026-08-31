@@ -78,6 +78,17 @@ abstract class TravelRepository {
     required int regionId,
     required int merchantId,
   });
+  /// 코스함 — 서버 저장(계정에 귀속). 로컬에만 두면 재설치·기기 변경에서 사라진다.
+  Future<List<SavedCourse>> getSavedCourses(int userId);
+
+  /// 코스 저장. 새 코스면 서버가 만든 id를 돌려준다.
+  Future<SavedCourse> saveCourseToServer({
+    required int userId,
+    required SavedCourse course,
+  });
+
+  Future<void> deleteSavedCourseOnServer({required int userId, required String courseId});
+
   /// 여행에 확정 코스를 연결하거나(courseId) 해제한다(null).
   /// 서버 저장이라 재설치·기기 변경에도 유지된다.
   Future<void> updateTripSelectedCourse({
