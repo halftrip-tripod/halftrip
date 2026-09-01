@@ -17,6 +17,9 @@
 
 **A(20장)만 그려도 434곳(83%)이 덮인다.** A부터 하고 B는 여유 되면.
 
+표의 **소재**는 사람이 읽으라고 적은 설명이고, 실제로 프롬프트에 붙여 넣을 문구는
+아래 **프롬프트 → `[내용]`에 넣을 것** 표에 있다.
+
 ### A — 우선 (20장)
 
 | # | 파일명 | 카테고리 | 곳 수 | 소재 |
@@ -74,24 +77,58 @@
 
 ## 프롬프트
 
-지역 마그넷과 **같은 스타일**로 간다. 아래 블록 **앞에 위 표의 소재 설명을 붙여서** 한 문장으로.
+지역 마그넷 25종을 만든 것과 **똑같은 프롬프트**를 쓴다. `[내용]`만 갈아 끼운다.
 
 ```
-3D 카툰 마그넷 스타일, 통통하게 부푼 풍선 같은 볼륨감, 부드러운 라운드 실루엣,
-매끈한 표면에 은은한 그라데이션과 위쪽 하이라이트, 오브젝트 하나만 정중앙,
-투명 배경, 바닥 그림자 없음, 글자 없음, 정사각 1:1, 고해상도
+A cute glossy 3D balloon-style fridge magnet illustration of [내용]
+inflated puffy rounded shapes like a mylar balloon, soft plastic sheen
+with gentle highlights, thick white sticker border, natural colors true
+to the real object with slightly candy-toned saturation, centered single
+object, transparent background, clean vector-like edges, mobile app icon
+aesthetic, no text, square 1:1 aspect ratio, composition fitted within
+a square canvas
 ```
 
-예) 박물관
-```
-기둥이 늘어선 전시관 건물 하나, 삼각 지붕과 입구 계단, 3D 카툰 마그넷 스타일,
-통통하게 부푼 풍선 같은 볼륨감, ... (이하 공통)
-```
+### `[내용]`에 넣을 것
+
+| 파일명 | `[내용]` |
+| --- | --- |
+| `museum` | `a Korean museum building with columns and an entrance staircase` |
+| `temple` | `a Korean Buddhist temple hall with a tiled roof, dancheong patterns and a stone lantern` |
+| `experience` | `a pottery wheel with clay and an apron on a wooden workbench` |
+| `mountain` | `two rocky mountain peaks with a small summit marker stone` |
+| `park` | `a small park with a bench, a lamppost and one tree on grass` |
+| `lake` | `a calm lake with reeds and a small wooden deck` |
+| `village` | `a cluster of Korean tiled and thatched roof houses behind a stone wall` |
+| `observatory` | `a round observation deck with a coin-operated telescope` |
+| `themepark` | `a ferris wheel with colorful striped tents` |
+| `seowon` | `a Korean confucian academy gate with a low tiled wall` |
+| `forest` | `a dirt path between tall straight trees with a small log cabin` |
+| `trail` | `a curving wooden boardwalk trail with a signpost` |
+| `hanok` | `a Korean hanok house with a wooden porch and jangdokdae jars` |
+| `healing` | `a wooden platform among cypress trees with a steaming teacup` |
+| `gallery` | `a white gallery wall with framed paintings and an easel` |
+| `beach` | `a beach parasol with waves and a seashell` |
+| `island` | `a small green island in the sea with a lighthouse` |
+| `sports` | `a running track with a goal post and a ball` |
+| `science` | `a silver observatory dome with a telescope and small stars` |
+| `garden` | `an arched flower bed with a small glass greenhouse` |
+| `pavilion` | `a Korean pavilion with four pillars and a hip-and-gable roof` |
+| `memorial` | `an obelisk memorial monument with a flower wreath` |
+| `bridge` | `a cable-stayed bridge deck with cables` |
+| `culture` | `a theater stage with red curtains and seats` |
+| `fortress` | `a stone fortress wall with a gate pavilion` |
+| `farm` | `a terraced field with a silo and a wooden fence` |
+| `valley` | `a mountain stream falling between rocks onto a flat boulder` |
+| `heritage` | `a dolmen and a stone pagoda` |
+| `market` | `a traditional market stall under an awning with fruit crates` |
+| `cave` | `a cave entrance with stalactites` |
+| **`default`** | **`a wooden directional signpost with two or three arrow boards on a grass patch`** |
 
 **주의**
 - **특정 장소를 그리지 않는다.** `고창 고인돌`이 아니라 "고인돌 일반"이다. 한 장이 여러 곳에 붙는다
-- **글자 금지.** 간판·현판에 한글이 들어가면 다른 지역에 못 쓴다
-- 사람은 넣지 않거나 실루엣 정도로만
+- **글자 금지** — 프롬프트의 `no text`가 있지만 간판·현판에 글자가 새어 들어오면 다시 뽑는다
+- 사람은 넣지 않는다
 
 ---
 

@@ -24,15 +24,22 @@
 
 ---
 
-## 공통 프롬프트 (앞에 붙일 블록)
+## 공통 프롬프트 (실제 사용한 것)
+
+`[내용]` 자리에 아래 각 지역의 소재만 갈아 끼운다.
 
 ```
-3D 카툰 마그넷 스타일, 통통하게 부푼 풍선 같은 볼륨감, 부드러운 라운드 실루엣,
-매끈한 표면에 은은한 그라데이션과 위쪽 하이라이트, 오브젝트 하나만 정중앙,
-투명 배경, 바닥 그림자 없음, 글자 없음, 정사각 1:1, 고해상도
+A cute glossy 3D balloon-style fridge magnet illustration of [내용]
+inflated puffy rounded shapes like a mylar balloon, soft plastic sheen
+with gentle highlights, thick white sticker border, natural colors true
+to the real object with slightly candy-toned saturation, centered single
+object, transparent background, clean vector-like edges, mobile app icon
+aesthetic, no text, square 1:1 aspect ratio, composition fitted within
+a square canvas
 ```
 
-아래 각 지역의 **소재 설명을 이 블록 앞에 붙여서** 한 문장으로 만든다.
+`thick white sticker border`가 들어 있어서 결과물에 흰 테두리가 생긴다.
+25종 전부 이 프롬프트로 만들어서 톤이 맞다.
 
 ---
 
@@ -70,7 +77,10 @@
 
 ---
 
-## 프롬프트 — 소재 설명
+## 소재 설명 — 위 프롬프트의 `[내용]` 자리에 들어간 것
+
+아래는 각 지역에 무엇을 그렸는지 적은 것이다. 실제 생성은 위 영문 프롬프트의
+`[내용]`을 이 소재로 바꿔서 했다.
 
 ### 1. 강진 — 고려청자
 ```
