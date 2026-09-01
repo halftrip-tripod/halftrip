@@ -24,7 +24,6 @@ class RegionArt extends StatelessWidget {
 
   /// 여기에 있는 지역만 마그넷을 그린다. 파일이 없는 키를 넣으면 웹에서 404를
   /// 찍고 나서야 폴백이 뜨므로, 자산을 넣은 뒤에 키를 추가한다.
-  /// (해남은 아직 마그넷이 없어 이모지로 남는다.)
   static const _magnetKeys = <String, String>{
     '강진': 'gangjin',
     '거창': 'geochang',
@@ -32,6 +31,7 @@ class RegionArt extends StatelessWidget {
     '고창': 'gochang',
     '고흥': 'goheung',
     '남해': 'namhae',
+    '해남': 'haenam',
     '밀양': 'miryang',
     '산청': 'sancheong',
     '서천': 'seocheon',

@@ -480,8 +480,8 @@ class _MapPane extends StatelessWidget {
 }
 
 /// 지역별 마그넷 도장 — 이미지가 준비된 지역만, 나머지는 별 도장 폴백.
-/// 지역별 마그넷. 없는 지역은 default.png(공용 캐리어)로 떨어진다.
-/// 해남은 아직 자산이 없어 비워 둔다 — 나오면 한 줄만 추가하면 된다.
+/// 지역별 마그넷. 반값여행 25개 지역을 다 덮는다.
+/// 지역이 늘면 자산을 넣고 여기와 RegionArt._magnetKeys에 한 줄씩 추가한다.
 const _magnetAssets = <String, String>{
   '강진': 'assets/magnet/gangjin.png',
   '거창': 'assets/magnet/geochang.png',
@@ -489,6 +489,7 @@ const _magnetAssets = <String, String>{
   '고창': 'assets/magnet/gochang.png',
   '고흥': 'assets/magnet/goheung.png',
   '남해': 'assets/magnet/namhae.png',
+  '해남': 'assets/magnet/haenam.png',
   '밀양': 'assets/magnet/miryang.png',
   '산청': 'assets/magnet/sancheong.png',
   '서천': 'assets/magnet/seocheon.png',
