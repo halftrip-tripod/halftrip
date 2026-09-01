@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/app_scope.dart';
+import '../mock_ui/widgets/region_art.dart';
 import '../models/app_models.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
@@ -282,7 +283,7 @@ class _ApplyingCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _RegionEmojiBox(name: region.name, size: 52, fontSize: 26),
+          RegionArt(region.name, size: 52, fontSize: 26, radius: 15),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -416,7 +417,8 @@ class _PreparingRow extends StatelessWidget {
         ),
         child: Row(
           children: [
-            _RegionEmojiBox(name: region.name, size: 40, fontSize: 18, boxColor: Colors.white, shadow: true),
+            RegionArt(region.name,
+                size: 40, fontSize: 18, radius: 12, boxColor: Colors.white, shadow: true),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -704,37 +706,6 @@ class _PopularCoursesCard extends StatelessWidget {
 }
 
 /// 지역 이모지 박스.
-class _RegionEmojiBox extends StatelessWidget {
-  const _RegionEmojiBox({
-    required this.name,
-    required this.size,
-    required this.fontSize,
-    this.boxColor = AppColors.p50,
-    this.shadow = false,
-  });
-
-  final String name;
-  final double size;
-  final double fontSize;
-  final Color boxColor;
-  final bool shadow;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: boxColor,
-        borderRadius: BorderRadius.circular(size * 0.3),
-        boxShadow: shadow ? AppShadows.soft : null,
-      ),
-      child: Text(_regionEmoji(name), style: TextStyle(fontSize: fontSize)),
-    );
-  }
-}
-
 class _EmptyBlock extends StatelessWidget {
   const _EmptyBlock({required this.message});
 
@@ -777,24 +748,3 @@ String _man(int amount) {
   return '${(amount / 10000).toStringAsFixed(1)}만원';
 }
 
-String _regionEmoji(String regionName) {
-  const map = <String, String>{
-    '평창': '🏔️',
-    '횡성': '🥩',
-    '영월': '🌊',
-    '제천': '⛰️',
-    '거창': '🌿',
-    '고창': '🏛️',
-    '합천': '🌄',
-    '영광': '🐟',
-    '밀양': '🏞️',
-    '영암': '🏎️',
-    '하동': '🍃',
-    '강진': '🍲',
-    '남해': '🌴',
-    '해남': '🌾',
-    '고흥': '🚀',
-    '완도': '🏝️',
-  };
-  return map[regionName] ?? '📍';
-}

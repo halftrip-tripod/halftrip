@@ -8,6 +8,7 @@ import '../../screens/notification_center_screen.dart';
 import '../data/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_colors.dart';
+import '../widgets/region_art.dart';
 import '../widgets/ui.dart';
 import 'community.dart';
 import 'course_flow.dart';
@@ -600,7 +601,7 @@ class _UrgCard extends StatelessWidget {
       radius: 20,
       onTap: () => _openRegion(context, region),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        EmojiBox(_regionEmoji(region.name), size: 52, fontSize: 26, radius: 15),
+        RegionArt(region.name, size: 52, fontSize: 26, radius: 15),
         const SizedBox(width: 14),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -679,17 +680,8 @@ class _SoonRow extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(color: AppColors.surf, borderRadius: BorderRadius.circular(18)),
         child: Row(children: [
-          Container(
-            width: 40,
-            height: 40,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(13),
-              boxShadow: AppShadows.soft,
-            ),
-            child: Text(_regionEmoji(region.name), style: const TextStyle(fontSize: 18)),
-          ),
+          RegionArt(region.name,
+              size: 40, fontSize: 18, radius: 13, boxColor: Colors.white, shadow: true),
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -906,36 +898,6 @@ const _provinceLatLng = <String, (double, double)>{
 
 
 /// 지역별 이모지 — 백엔드에 없는 순수 장식용 값이라 클라이언트에서 고정 매핑.
-String _regionEmoji(String regionName) {
-  const map = <String, String>{
-    '평창': '🏔️',
-    '횡성': '🥩',
-    '영월': '🌊',
-    '제천': '⛰️',
-    '거창': '🌿',
-    '고창': '🏛️',
-    '합천': '🌄',
-    '영광': '🐟',
-    '밀양': '🏞️',
-    '영암': '🏎️',
-    '하동': '🍃',
-    '강진': '🍲',
-    '남해': '🌴',
-    '해남': '🌾',
-    '고흥': '🚀',
-    '완도': '🏝️',
-    '화천': '🎣', // 산천어
-    '영천': '🔭', // 보현산 천문대
-    '함양': '🌱', // 산삼
-    '산청': '🍵', // 동의보감·한방
-    '고성': '🦕', // 공룡
-    '안동': '🎭', // 하회탈
-    '서천': '🐦', // 철새
-    '태안': '🌅', // 해변
-    '장흥': '🌲', // 편백숲
-  };
-  return map[regionName] ?? '📍';
-}
 
 
 /// 홈 전용 상단 바 — 로고·알림(배지)·마이페이지. 스크롤에 함께 올라간다.

@@ -7,6 +7,7 @@ import '../../models/app_models.dart';
 import '../data/models.dart' show Post;
 import '../state/app_state.dart';
 import '../theme/app_colors.dart';
+import '../widgets/region_art.dart';
 import '../widgets/ui.dart';
 import 'community.dart';
 import 'tour_place_detail.dart';
@@ -90,7 +91,7 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
         AppCard(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              EmojiBox(_regionEmoji(r.name), size: 64, fontSize: 34, radius: 20),
+              RegionArt(r.name, size: 64, fontSize: 34, radius: 20),
               const SizedBox(width: 14),
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(r.name,
@@ -755,33 +756,3 @@ String _localCurrencyAppLabel(String? url) {
   };
 }
 
-String _regionEmoji(String regionName) {
-  const map = <String, String>{
-    '평창': '🏔️',
-    '횡성': '🥩',
-    '영월': '🌊',
-    '제천': '⛰️',
-    '거창': '🌿',
-    '고창': '🏛️',
-    '합천': '🌄',
-    '영광': '🐟',
-    '밀양': '🏞️',
-    '영암': '🏎️',
-    '하동': '🍃',
-    '강진': '🍲',
-    '남해': '🌴',
-    '해남': '🌾',
-    '고흥': '🚀',
-    '완도': '🏝️',
-    '화천': '🎣', // 산천어
-    '영천': '🔭', // 보현산 천문대
-    '함양': '🌱', // 산삼
-    '산청': '🍵', // 동의보감·한방
-    '고성': '🦕', // 공룡
-    '안동': '🎭', // 하회탈
-    '서천': '🐦', // 철새
-    '태안': '🌅', // 해변
-    '장흥': '🌲', // 편백숲
-  };
-  return map[regionName] ?? '📍';
-}

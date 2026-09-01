@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/app_scope.dart';
 import '../models/app_models.dart';
+import '../mock_ui/widgets/region_art.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/ui/app_card.dart';
@@ -148,17 +149,8 @@ class _RegionUsageCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
-                width: 46,
-                height: 46,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.p50,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Text(_regionEmoji(trip.regionName),
-                    style: const TextStyle(fontSize: 23)),
-              ),
+              RegionArt(trip.regionName,
+                  size: 46, fontSize: 23, radius: 14),
               const SizedBox(width: 12),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -394,24 +386,3 @@ class _ExternalMallRow extends StatelessWidget {
   }
 }
 
-String _regionEmoji(String regionName) {
-  const map = <String, String>{
-    '평창': '🏔️',
-    '횡성': '🥩',
-    '영월': '🌊',
-    '제천': '⛰️',
-    '거창': '🌿',
-    '고창': '🏛️',
-    '합천': '🌄',
-    '영광': '🐟',
-    '밀양': '🏞️',
-    '영암': '🏎️',
-    '하동': '🍃',
-    '강진': '🍲',
-    '남해': '🌴',
-    '해남': '🌾',
-    '고흥': '🚀',
-    '완도': '🏝️',
-  };
-  return map[regionName] ?? '📍';
-}
