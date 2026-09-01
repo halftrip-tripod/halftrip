@@ -13,6 +13,7 @@ import '../data/mock_data.dart';
 import '../data/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_colors.dart';
+import '../widgets/region_art.dart';
 import '../widgets/trip_calendar_sheet.dart' show kdate;
 import '../widgets/ui.dart';
 import 'my_trips_tab.dart' show regionEmojiOf;
@@ -646,7 +647,7 @@ class _CourseRegionScreenState extends State<CourseRegionScreen> {
                             builder: (_) =>
                                 widget.onPicked(_toMockRegion(r)))),
                     child: Row(children: [
-                      EmojiBox(regionEmojiOf(r.name), size: 46, fontSize: 23),
+                      RegionArt(r.name, size: 46, fontSize: 23),
                       const SizedBox(width: 13),
                       Expanded(
                         child: Column(
@@ -836,7 +837,7 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
           padding: const EdgeInsets.all(16),
           radius: 18,
           child: Row(children: [
-            EmojiBox(r.emoji, size: 46, fontSize: 23),
+            RegionArt(r.name, size: 46, fontSize: 23),
             const SizedBox(width: 13),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1158,7 +1159,7 @@ class _CourseYoutubeScreenState extends State<CourseYoutubeScreen> {
         padding: const EdgeInsets.all(16),
         radius: 18,
         child: Row(children: [
-          EmojiBox(r.emoji, size: 46, fontSize: 23),
+          RegionArt(r.name, size: 46, fontSize: 23),
           const SizedBox(width: 13),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

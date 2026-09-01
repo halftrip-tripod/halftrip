@@ -480,9 +480,33 @@ class _MapPane extends StatelessWidget {
 }
 
 /// 지역별 마그넷 도장 — 이미지가 준비된 지역만, 나머지는 별 도장 폴백.
+/// 지역별 마그넷. 없는 지역은 default.png(공용 캐리어)로 떨어진다.
+/// 해남은 아직 자산이 없어 비워 둔다 — 나오면 한 줄만 추가하면 된다.
 const _magnetAssets = <String, String>{
+  '강진': 'assets/magnet/gangjin.png',
+  '거창': 'assets/magnet/geochang.png',
+  '고성': 'assets/magnet/goseong.png',
   '고창': 'assets/magnet/gochang.png',
+  '고흥': 'assets/magnet/goheung.png',
+  '남해': 'assets/magnet/namhae.png',
+  '밀양': 'assets/magnet/miryang.png',
+  '산청': 'assets/magnet/sancheong.png',
+  '서천': 'assets/magnet/seocheon.png',
+  '안동': 'assets/magnet/andong.png',
+  '영광': 'assets/magnet/yeonggwang.png',
+  '영암': 'assets/magnet/yeongam.png',
+  '영월': 'assets/magnet/yeongwol.png',
+  '영천': 'assets/magnet/yeongcheon.png',
   '완도': 'assets/magnet/wando.png',
+  '장흥': 'assets/magnet/jangheung.png',
+  '제천': 'assets/magnet/jecheon.png',
+  '태안': 'assets/magnet/taean.png',
+  '평창': 'assets/magnet/pyeongchang.png',
+  '하동': 'assets/magnet/hadong.png',
+  '함양': 'assets/magnet/hamyang.png',
+  '합천': 'assets/magnet/hapcheon.png',
+  '화천': 'assets/magnet/hwacheon.png',
+  '횡성': 'assets/magnet/hoengseong.png',
 };
 
 /// 지도 위 지역 핀 — 다녀온 지역(정산 신청 이상 단계)은 파란 점 대신 도장 표시.

@@ -634,7 +634,7 @@ class _RegionPickRow extends StatelessWidget {
                 color: selected ? AppColors.p100 : AppColors.surf,
                 shape: BoxShape.circle,
               ),
-              child: Text(regionEmojiOf(region.name), style: const TextStyle(fontSize: 19)),
+              child: RegionArt(region.name, size: 30, fontSize: 19, radius: 15),
             ),
             const SizedBox(width: 12),
             Expanded(
