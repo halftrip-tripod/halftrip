@@ -8,6 +8,7 @@ import '../../screens/notification_center_screen.dart';
 import '../data/models.dart';
 import '../state/app_state.dart';
 import '../theme/app_colors.dart';
+import '../widgets/region_art.dart';
 import '../widgets/ui.dart';
 import 'community.dart';
 import 'course_flow.dart';
@@ -600,7 +601,7 @@ class _UrgCard extends StatelessWidget {
       radius: 20,
       onTap: () => _openRegion(context, region),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        EmojiBox(_regionEmoji(region.name), size: 52, fontSize: 26, radius: 15),
+        RegionArt(region.name, size: 52, fontSize: 26, radius: 15),
         const SizedBox(width: 14),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
