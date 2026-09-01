@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../screens/my_trips_tab.dart' show regionEmojiOf;
+import '../theme/app_colors.dart';
 import 'ui.dart';
 
 /// 지역 대표 이미지 — 지역 마그넷(assets/magnet/{키}.png)이 있으면 쓰고,
@@ -15,12 +16,19 @@ class RegionArt extends StatelessWidget {
     this.size = 48,
     this.fontSize = 24,
     this.radius = 15,
+    this.boxColor = AppColors.p50,
+    this.shadow = false,
   });
 
   final String regionName;
   final double size;
   final double fontSize;
   final double radius;
+
+  /// 카드 안에서는 이모지 때처럼 하늘색 박스를 두고 그 안에 마그넷을 얹는다.
+  /// 지도 핀처럼 배경이 있으면 안 되는 자리는 Colors.transparent를 넘긴다.
+  final Color boxColor;
+  final bool shadow;
 
   /// 여기에 있는 지역만 마그넷을 그린다. 파일이 없는 키를 넣으면 웹에서 404를
   /// 찍고 나서야 폴백이 뜨므로, 자산을 넣은 뒤에 키를 추가한다.
@@ -59,18 +67,26 @@ class RegionArt extends StatelessWidget {
       regionEmojiOf(regionName),
       size: size,
       fontSize: fontSize,
+      color: boxColor,
       radius: radius,
     );
     if (key == null) return fallback;
-    return SizedBox(
+    return Container(
       width: size,
       height: size,
-      // 마그넷은 누끼 이미지라 배경 없이 그대로 올린다. 가로·세로 비율이
-      // 제각각이라 contain으로 넣어야 잘리지 않는다.
+      decoration: BoxDecoration(
+        color: boxColor,
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: shadow ? AppShadows.soft : null,
+      ),
+      // 마그넷은 누끼 이미지라 박스 안에 그대로 얹는다. 가로·세로 비율이
+      // 제각각이라 contain으로 넣어야 잘리지 않는다. 여백은 박스가 꽉 차
+      // 보이지 않을 만큼만.
+      padding: EdgeInsets.all(size * 0.08),
       child: Image.asset(
         'assets/magnet/$key.png',
         fit: BoxFit.contain,
-        errorBuilder: (_, __, ___) => fallback,
+        errorBuilder: (_, _, _) => fallback,
       ),
     );
   }
