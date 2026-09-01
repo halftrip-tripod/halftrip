@@ -668,7 +668,7 @@ class _ReviewRow extends StatelessWidget {
         ),
         if (post.photos.isNotEmpty) ...[
           const SizedBox(width: 10),
-          EmojiBox(post.photos.first, size: 54, fontSize: 25, color: AppColors.surf, radius: 13),
+          PostPhoto(post.photos.first, width: 54, height: 54, fontSize: 25, radius: 13),
         ],
       ]),
     );

@@ -416,13 +416,7 @@ class PostCard extends StatelessWidget {
           const SizedBox(height: 12),
           Row(children: [
             for (final ph in post.photos) ...[
-              // 'assets/' 경로면 실사진, 아니면 이모지 폴백.
-              ph.startsWith('assets/')
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: Image.asset(ph, width: 74, height: 74, fit: BoxFit.cover),
-                    )
-                  : EmojiBox(ph, size: 74, fontSize: 30, color: AppColors.surf),
+              PostPhoto(ph, width: 74, height: 74),
               const SizedBox(width: 8),
             ],
           ]),
@@ -931,21 +925,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.only(right: 8),
-                      // 'assets/' 경로면 실사진, 아니면 이모지 폴백.
-                      child: ph.startsWith('assets/')
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: Image.asset(ph,
-                                  height: 120, width: double.infinity, fit: BoxFit.cover),
-                            )
-                          : Container(
-                              height: 120,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                  color: AppColors.surf,
-                                  borderRadius: BorderRadius.circular(16)),
-                              child: Text(ph, style: const TextStyle(fontSize: 44)),
-                            ),
+                      child: PostPhoto(ph, height: 120, radius: 16, fontSize: 44),
                     ),
                   ),
               ]),
