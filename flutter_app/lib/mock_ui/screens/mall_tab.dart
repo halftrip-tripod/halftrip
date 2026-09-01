@@ -8,6 +8,7 @@ import '../../utils/internal_note.dart';
 import '../state/app_state.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui.dart';
+import '../widgets/region_art.dart';
 
 /// S3-1 온라인몰 메인 (사용처 연결 허브).
 class MallTab extends StatefulWidget {
@@ -274,7 +275,7 @@ class _RegionUsageCard extends StatelessWidget {
     return AppCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          EmojiBox(_regionEmoji(trip.regionName), size: 46, fontSize: 23),
+          RegionArt(trip.regionName, size: 46, fontSize: 23, radius: 14),
           const SizedBox(width: 12),
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(trip.regionName,

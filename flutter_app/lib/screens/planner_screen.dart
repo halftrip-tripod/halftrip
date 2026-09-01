@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/app_config.dart';
 import '../core/app_scope.dart';
 import '../models/app_models.dart';
+import '../mock_ui/widgets/region_art.dart';
 import '../theme/app_colors.dart';
 import '../widgets/place_map_view.dart';
 import '../widgets/ui/app_card.dart';
@@ -393,17 +394,8 @@ class _PlannerHeaderCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.p50,
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Text(_regionEmoji(trip.regionName),
-                    style: const TextStyle(fontSize: 24)),
-              ),
+              RegionArt(trip.regionName,
+                  size: 48, fontSize: 24, radius: 15),
               const SizedBox(width: 13),
               Expanded(
                 child: Column(
@@ -448,24 +440,3 @@ String? _placePhotoAsset(String placeName) {
   return mapping[placeName];
 }
 
-String _regionEmoji(String regionName) {
-  const map = <String, String>{
-    '평창': '🏔️',
-    '횡성': '🥩',
-    '영월': '🌊',
-    '제천': '⛰️',
-    '거창': '🌿',
-    '고창': '🏛️',
-    '합천': '🌄',
-    '영광': '🐟',
-    '밀양': '🏞️',
-    '영암': '🏎️',
-    '하동': '🍃',
-    '강진': '🍲',
-    '남해': '🌴',
-    '해남': '🌾',
-    '고흥': '🚀',
-    '완도': '🏝️',
-  };
-  return map[regionName] ?? '📍';
-}
