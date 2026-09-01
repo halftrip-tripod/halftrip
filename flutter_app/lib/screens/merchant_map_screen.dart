@@ -120,6 +120,12 @@ class _MerchantMapScreenState extends State<MerchantMapScreen> {
             });
             geo = geo.take(_maxMarkers).toList();
           }
+          // 목록에서 고른 가맹점은 뷰포트 밖이거나 250개 제한에 밀려 마커가
+          // 빠질 수 있다. 그러면 지도가 반응할 대상이 없으니 반드시 넣어 준다.
+          final selected = geoAll.where((m) => m.id == _highlightedId).firstOrNull;
+          if (selected != null && !geo.any((m) => m.id == selected.id)) {
+            geo = [selected, ...geo];
+          }
           final markers = geo
               .map((m) => PlaceMapMarkerData(
                     id: m.id,
@@ -180,10 +186,16 @@ class _MerchantMapScreenState extends State<MerchantMapScreen> {
                 padding: const EdgeInsets.all(8),
                 radius: 20,
                 child: PlaceMapView(
+                  // 고른 가맹점이 바뀌면 지도를 새로 그려 그 핀 중심으로 옮기고
+                  // 정보창을 연다. highlightedMarkerId는 initState에서만 읽혀서
+                  // 리마운트 없이는 두 번째 선택부터 아무 반응이 없다.
+                  key: ValueKey('merchant-map-$_highlightedId'),
                   markers: markers,
                   emptyMessage: '표시할 가맹점이 없어요.',
                   kakaoEnabled: AppConfig.fromEnvironment().canUseKakaoMap,
                   highlightedMarkerId: _highlightedId,
+                  initialCenterLatitude: selected?.latitude,
+                  initialCenterLongitude: selected?.longitude,
                   onMarkerTap: (id) => setState(() => _highlightedId = id),
                   onViewportChanged: (viewport) =>
                       setState(() => _viewport = viewport),
