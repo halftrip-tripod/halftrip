@@ -630,6 +630,59 @@ class EmojiBox extends StatelessWidget {
   }
 }
 
+/// 커뮤니티 글 사진 한 장.
+///
+/// 세 가지 형태를 다 받는다 — 초기 시드가 이모지였고, 번들 이미지가 그다음,
+/// 지금은 서버(Supabase)에 올린 URL이 들어온다. 셋을 호출부마다 분기하면
+/// 화면별로 어긋나서 여기 한 곳에 모았다.
+class PostPhoto extends StatelessWidget {
+  const PostPhoto(this.source,
+      {super.key,
+      this.width,
+      this.height = 74,
+      this.radius = 18,
+      this.fontSize = 30,
+      this.color = AppColors.surf});
+  final String source;
+
+  /// null이면 부모 폭을 채운다(Expanded 안에서 쓰는 경우).
+  final double? width;
+  final double height;
+  final double radius;
+  final double fontSize;
+  final Color color;
+
+  bool get _isNetwork => source.startsWith('http://') || source.startsWith('https://');
+
+  Widget _placeholder(String text, double size) => Container(
+        width: width ?? height,
+        height: height,
+        alignment: Alignment.center,
+        decoration:
+            BoxDecoration(color: color, borderRadius: BorderRadius.circular(radius)),
+        child: Text(text, style: TextStyle(fontSize: size)),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isNetwork && !source.startsWith('assets/')) {
+      return _placeholder(source, fontSize);
+    }
+    final Widget image = _isNetwork
+        ? Image.network(source,
+            width: width ?? double.infinity,
+            height: height,
+            fit: BoxFit.cover,
+            // 네트워크가 느리거나 끊겨도 글 자체는 읽히게 둔다.
+            loadingBuilder: (context, child, progress) =>
+                progress == null ? child : _placeholder('', fontSize),
+            errorBuilder: (context, error, stack) => _placeholder('📷', fontSize))
+        : Image.asset(source,
+            width: width ?? double.infinity, height: height, fit: BoxFit.cover);
+    return ClipRRect(borderRadius: BorderRadius.circular(radius), child: image);
+  }
+}
+
 /// D-day 칩 (ok/warn).
 class DdayChip extends StatelessWidget {
   const DdayChip(this.label, {super.key, this.warn = false});
