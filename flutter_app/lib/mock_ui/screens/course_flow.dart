@@ -1682,9 +1682,14 @@ class CourseViewScreen extends StatefulWidget {
     this.onEdited,
     this.onDelete,
     this.onOpenPlan,
+    this.onSaveToLibrary,
     this.startDate,
   });
   final Course course;
+
+  /// 남의 코스를 열었을 때(커뮤니티 글 첨부) — 하단에 "내 코스함에 저장"을 띄우고
+  /// 수정·삭제는 감춘다. 내 코스가 아니라 고칠 수 있으면 안 된다.
+  final VoidCallback? onSaveToLibrary;
 
   /// 여행에서 열었으면 그 여행 시작일 — DAY별 실제 날짜 라벨에 쓴다.
   final DateTime? startDate;
@@ -1734,11 +1739,12 @@ class _CourseViewScreenState extends State<CourseViewScreen> {
       // 수정은 우측 상단 연필로 통일. 여행 코스면 ⋯(등록취소/삭제), 코스함이면 삭제 아이콘.
       // 계획표는 하단 풀버튼(저장 버튼 자리) — 뷰의 대표 액션.
       actions: [
-        IconButton(
-          icon: const Icon(Icons.edit_rounded, size: 21),
-          tooltip: '코스 수정',
-          onPressed: _openEdit,
-        ),
+        if (widget.onSaveToLibrary == null)
+          IconButton(
+            icon: const Icon(Icons.edit_rounded, size: 21),
+            tooltip: '코스 수정',
+            onPressed: _openEdit,
+          ),
         if (widget.onMore != null)
           IconButton(
             icon: const Icon(Icons.more_horiz_rounded, size: 22),
@@ -1752,12 +1758,17 @@ class _CourseViewScreenState extends State<CourseViewScreen> {
             onPressed: widget.onDelete,
           ),
       ],
-      cta: widget.onOpenPlan == null
-          ? null
-          : CtaBar(children: [
-              PrimaryButton('상세 계획표 보기',
-                  icon: Icons.event_note_rounded, onTap: widget.onOpenPlan!),
-            ]),
+      cta: widget.onSaveToLibrary != null
+          ? CtaBar(children: [
+              PrimaryButton('내 코스함에 저장',
+                  icon: Icons.bookmark_add_outlined, onTap: widget.onSaveToLibrary!),
+            ])
+          : widget.onOpenPlan == null
+              ? null
+              : CtaBar(children: [
+                  PrimaryButton('상세 계획표 보기',
+                      icon: Icons.event_note_rounded, onTap: widget.onOpenPlan!),
+                ]),
       children: [
         if (c.refundOk)
           const FitBanner(
