@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/app_config.dart';
 import '../core/app_scope.dart';
 import '../models/app_models.dart';
+import '../mock_ui/widgets/region_art.dart';
 import '../services/course_ai_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/place_map_view.dart';
@@ -235,17 +236,8 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
             padding: const EdgeInsets.all(16),
             radius: 18,
             child: Row(children: [
-              Container(
-                width: 46,
-                height: 46,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.p50,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Text(_regionEmojiOf(trip.regionName),
-                    style: const TextStyle(fontSize: 23)),
-              ),
+              RegionArt(trip.regionName,
+                  size: 46, fontSize: 23, radius: 14),
               const SizedBox(width: 13),
               Expanded(
                 child: Column(
@@ -1071,24 +1063,3 @@ class _FitBanner extends StatelessWidget {
   }
 }
 
-String _regionEmojiOf(String regionName) {
-  const map = <String, String>{
-    '평창': '🏔️',
-    '횡성': '🥩',
-    '영월': '🌊',
-    '제천': '⛰️',
-    '거창': '🌿',
-    '고창': '🏛️',
-    '합천': '🌄',
-    '영광': '🐟',
-    '밀양': '🏞️',
-    '영암': '🏎️',
-    '하동': '🍃',
-    '강진': '🍲',
-    '남해': '🌴',
-    '해남': '🌾',
-    '고흥': '🚀',
-    '완도': '🏝️',
-  };
-  return map[regionName] ?? '📍';
-}

@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../data/models.dart';
-import '../../core/app_config.dart';
 import '../../core/app_scope.dart';
 import '../../models/app_models.dart' show SavedCourse, SavedCourseStop;
-import '../../widgets/place_map_view.dart';
 import '../../utils/profile_presets.dart';
 import '../state/app_state.dart';
+import 'course_flow.dart' show CourseViewScreen;
 import 'my_trips_tab.dart' show durationLabelOf;
 import '../theme/app_colors.dart';
 import '../widgets/ui.dart';
@@ -477,16 +476,19 @@ class _VerifiedBadge extends StatelessWidget {
 }
 
 class _AttachedCourse extends StatelessWidget {
-  const _AttachedCourse({required this.name, required this.meta});
+  const _AttachedCourse({required this.name, required this.meta, this.onTap});
   final String name;
   final String meta;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(color: AppColors.surf, borderRadius: BorderRadius.circular(15)),
-      child: Row(children: [
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(color: AppColors.surf, borderRadius: BorderRadius.circular(15)),
+        child: Row(children: [
         Container(
           width: 38,
           height: 38,
@@ -504,8 +506,9 @@ class _AttachedCourse extends StatelessWidget {
                 style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.ink5)),
           ]),
         ),
-        const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.ink4),
-      ]),
+          const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.ink4),
+        ]),
+      ),
     );
   }
 }
@@ -571,6 +574,45 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
   final _comment = TextEditingController();
   _Cmt? _replyTo; // 답글 대상 (인스타식 — 루트 댓글)
   late List<_Cmt> _comments = _seedComments();
+
+  /// 첨부 코스 카드 탭 — 코스 상세로 보낸다. 지도·DAY별 일정·저장이 다 거기 있다.
+  void _openAttachedCourse(BuildContext context, Post p) {
+    if (p.courseStops.isEmpty) {
+      showMock(context, '이 글엔 코스 상세 정보가 없어요.');
+      return;
+    }
+    final days = p.courseStops.map((s) => s.day).toSet().length;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => CourseViewScreen(
+        course: Course(
+          emoji: '🗺️',
+          region: p.region,
+          province: '',
+          title: p.courseName ?? '${p.region} 코스',
+          source: CourseSource.manual,
+          durationLabel: days > 1 ? '${days - 1}박 $days일' : '당일',
+          placeCount: p.courseStops.length,
+          refundOk: false,
+          savedAgo: p.timeAgo,
+          stops: [
+            for (final s in p.courseStops)
+              CourseStop(
+                day: s.day,
+                time: s.time,
+                emoji: '📍',
+                name: s.name,
+                tag: s.category.isEmpty ? '관광지' : s.category,
+                latitude: s.latitude,
+                longitude: s.longitude,
+                address: s.address,
+                placeId: s.placeId > 0 ? s.placeId : null,
+              ),
+          ],
+        ),
+        onSaveToLibrary: () => _saveAttachedCourse(context, p),
+      ),
+    ));
+  }
 
   /// 첨부 코스를 실코스함(controller.savedCourses)으로 저장.
   /// 정차지 스냅샷이 없는 옛 글은 복원할 코스가 없어 저장을 막는다.
@@ -920,52 +962,29 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
                 style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w500, color: AppColors.ink7, height: 1.6)),
             if (p.photos.isNotEmpty) ...[
               const SizedBox(height: 14),
-              Row(children: [
-                for (final ph in p.photos)
+              // 목록과 같은 1:1. 예전엔 높이만 120으로 고정해서 폭이 넓을수록
+              // 가로로 늘어난 비율로 보였다.
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                for (final (i, ph) in p.photos.indexed)
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.only(right: 8),
-                      child: PostPhoto(ph, height: 120, radius: 16, fontSize: 44),
+                      child: GestureDetector(
+                        onTap: () => openPhotoViewer(context, p.photos, i),
+                        child: PostPhoto(ph, aspectRatio: 1, radius: 16, fontSize: 44),
+                      ),
                     ),
                   ),
               ]),
             ],
+            // 글 안에 지도를 다시 그리지 않는다 — 코스 카드를 누르면 코스 상세로 가고,
+            // 지도·DAY별 일정·저장은 거기서 한 번에 본다(목록 카드와 같은 동선).
             if (p.courseName != null) ...[
               const SizedBox(height: 16),
-              AppCard(
-                padding: const EdgeInsets.all(14),
-                child: Column(children: [
-                  _AttachedCourse(name: p.courseName!, meta: p.courseMeta ?? ''),
-                  const SizedBox(height: 10),
-                  if (p.courseStops.isNotEmpty)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: PlaceMapView(
-                        markers: [
-                          for (final (i, stop) in p.courseStops.indexed)
-                            PlaceMapMarkerData(
-                              id: stop.placeId > 0 ? stop.placeId : i + 1,
-                              name: stop.name,
-                              address: stop.address,
-                              latitude: stop.latitude,
-                              longitude: stop.longitude,
-                              selected: false,
-                            ),
-                        ],
-                        connectSequentially: true,
-                        emptyMessage: '코스 동선 정보가 없어요.',
-                        kakaoEnabled: AppConfig.fromEnvironment().canUseKakaoMap,
-                        height: 230,
-                      ),
-                    )
-                  else
-                    // 정차지 스냅샷이 없는 옛 글 — 연출용 지도로 대체.
-                    const CourseMapCard(),
-                  const SizedBox(height: 10),
-                  OutlineButton('내 코스함에 저장',
-                      icon: Icons.bookmark_add_outlined,
-                      onTap: () => _saveAttachedCourse(context, p)),
-                ]),
+              _AttachedCourse(
+                name: p.courseName!,
+                meta: p.courseMeta ?? '',
+                onTap: () => _openAttachedCourse(context, p),
               ),
             ],
             const SizedBox(height: 16),

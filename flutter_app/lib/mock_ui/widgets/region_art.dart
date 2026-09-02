@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../screens/my_trips_tab.dart' show regionEmojiOf;
+import '../theme/app_colors.dart';
 import 'ui.dart';
 
-// Add a key here only after the matching PNG is added under
-// assets/illust/region. This prevents Flutter Web from requesting missing
-// assets and logging a 404 before the emoji fallback is rendered.
-const Set<String> _availableRegionArtKeys = <String>{};
-
-/// 지역 대표 이미지 — AI 일러스트(assets/illust/region/{키}.png)가 있으면 사용,
-/// 없으면 기존 이모지 폴백. 일러스트는 docs/illustration-guide.md 규약으로 제작.
+/// 지역 대표 이미지 — 지역 마그넷(assets/magnet/{키}.png)이 있으면 쓰고,
+/// 없으면 이모지 폴백.
+///
+/// 마그넷은 홈 지도의 "다녀온 지역" 도장과 같은 자산이다. 지도·지역 목록·여행
+/// 카드가 같은 그림을 쓰게 해서 지역 상징을 한 벌로 통일한다.
 class RegionArt extends StatelessWidget {
   const RegionArt(
     this.regionName, {
@@ -17,6 +16,8 @@ class RegionArt extends StatelessWidget {
     this.size = 48,
     this.fontSize = 24,
     this.radius = 15,
+    this.boxColor = AppColors.p50,
+    this.shadow = false,
   });
 
   final String regionName;
@@ -24,43 +25,68 @@ class RegionArt extends StatelessWidget {
   final double fontSize;
   final double radius;
 
-  static const _assetKeys = <String, String>{
-    '완도': 'wando',
+  /// 카드 안에서는 이모지 때처럼 하늘색 박스를 두고 그 안에 마그넷을 얹는다.
+  /// 지도 핀처럼 배경이 있으면 안 되는 자리는 Colors.transparent를 넘긴다.
+  final Color boxColor;
+  final bool shadow;
+
+  /// 여기에 있는 지역만 마그넷을 그린다. 파일이 없는 키를 넣으면 웹에서 404를
+  /// 찍고 나서야 폴백이 뜨므로, 자산을 넣은 뒤에 키를 추가한다.
+  static const _magnetKeys = <String, String>{
     '강진': 'gangjin',
-    '평창': 'pyeongchang',
-    '해남': 'haenam',
-    '영광': 'yeonggwang',
-    '횡성': 'hoengseong',
-    '영월': 'yeongwol',
-    '제천': 'jecheon',
     '거창': 'geochang',
+    '고성': 'goseong',
     '고창': 'gochang',
-    '영암': 'yeongam',
-    '합천': 'hapcheon',
-    '밀양': 'miryang',
-    '하동': 'hadong',
-    '남해': 'namhae',
     '고흥': 'goheung',
+    '남해': 'namhae',
+    '해남': 'haenam',
+    '밀양': 'miryang',
+    '산청': 'sancheong',
+    '서천': 'seocheon',
+    '안동': 'andong',
+    '영광': 'yeonggwang',
+    '영암': 'yeongam',
+    '영월': 'yeongwol',
+    '영천': 'yeongcheon',
+    '완도': 'wando',
+    '장흥': 'jangheung',
+    '제천': 'jecheon',
+    '태안': 'taean',
+    '평창': 'pyeongchang',
+    '하동': 'hadong',
+    '함양': 'hamyang',
+    '합천': 'hapcheon',
+    '화천': 'hwacheon',
+    '횡성': 'hoengseong',
   };
 
   @override
   Widget build(BuildContext context) {
-    final key = _assetKeys[regionName];
+    final key = _magnetKeys[regionName];
     final fallback = EmojiBox(
       regionEmojiOf(regionName),
       size: size,
       fontSize: fontSize,
+      color: boxColor,
       radius: radius,
     );
-    if (key == null || !_availableRegionArtKeys.contains(key)) return fallback;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(radius),
+    if (key == null) return fallback;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: boxColor,
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: shadow ? AppShadows.soft : null,
+      ),
+      // 마그넷은 누끼 이미지라 박스 안에 그대로 얹는다. 가로·세로 비율이
+      // 제각각이라 contain으로 넣어야 잘리지 않는다. 여백은 박스가 꽉 차
+      // 보이지 않을 만큼만.
+      padding: EdgeInsets.all(size * 0.08),
       child: Image.asset(
-        'assets/illust/region/$key.png',
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => fallback,
+        'assets/magnet/$key.png',
+        fit: BoxFit.contain,
+        errorBuilder: (_, _, _) => fallback,
       ),
     );
   }

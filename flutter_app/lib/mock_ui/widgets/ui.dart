@@ -640,6 +640,7 @@ class PostPhoto extends StatelessWidget {
       {super.key,
       this.width,
       this.height = 74,
+      this.aspectRatio,
       this.radius = 18,
       this.fontSize = 30,
       this.color = AppColors.surf});
@@ -648,38 +649,153 @@ class PostPhoto extends StatelessWidget {
   /// null이면 부모 폭을 채운다(Expanded 안에서 쓰는 경우).
   final double? width;
   final double height;
+
+  /// 지정하면 폭에 맞춰 이 비율로 그린다(목록·상세 모두 1:1로 맞출 때).
+  /// width·height보다 우선한다.
+  final double? aspectRatio;
   final double radius;
   final double fontSize;
   final Color color;
 
   bool get _isNetwork => source.startsWith('http://') || source.startsWith('https://');
 
-  Widget _placeholder(String text, double size) => Container(
-        width: width ?? height,
-        height: height,
+  Widget _placeholder(String text) => Container(
+        width: aspectRatio != null ? double.infinity : (width ?? height),
+        height: aspectRatio != null ? double.infinity : height,
         alignment: Alignment.center,
         decoration:
             BoxDecoration(color: color, borderRadius: BorderRadius.circular(radius)),
-        child: Text(text, style: TextStyle(fontSize: size)),
+        child: Text(text, style: TextStyle(fontSize: fontSize)),
       );
+
+  Widget _fit(Widget child) =>
+      aspectRatio == null ? child : AspectRatio(aspectRatio: aspectRatio!, child: child);
 
   @override
   Widget build(BuildContext context) {
     if (!_isNetwork && !source.startsWith('assets/')) {
-      return _placeholder(source, fontSize);
+      return _fit(_placeholder(source));
     }
+    final double w = aspectRatio != null ? double.infinity : (width ?? double.infinity);
+    final double h = aspectRatio != null ? double.infinity : height;
     final Widget image = _isNetwork
         ? Image.network(source,
-            width: width ?? double.infinity,
-            height: height,
+            width: w,
+            height: h,
             fit: BoxFit.cover,
             // 네트워크가 느리거나 끊겨도 글 자체는 읽히게 둔다.
             loadingBuilder: (context, child, progress) =>
-                progress == null ? child : _placeholder('', fontSize),
-            errorBuilder: (context, error, stack) => _placeholder('📷', fontSize))
-        : Image.asset(source,
-            width: width ?? double.infinity, height: height, fit: BoxFit.cover);
-    return ClipRRect(borderRadius: BorderRadius.circular(radius), child: image);
+                progress == null ? child : _placeholder(''),
+            errorBuilder: (context, error, stack) => _placeholder('📷'))
+        : Image.asset(source, width: w, height: h, fit: BoxFit.cover);
+    return _fit(ClipRRect(borderRadius: BorderRadius.circular(radius), child: image));
+  }
+}
+
+/// 사진 전체화면 뷰어 — 커뮤니티 글 상세에서 사진을 탭하면 열린다.
+///
+/// 여러 장이면 좌우로 넘기고, 핀치로 확대할 수 있다. 배경 아무 데나 탭하면 닫힌다.
+void openPhotoViewer(BuildContext context, List<String> photos, int initialIndex) {
+  final shown = [
+    for (final p in photos)
+      if (p.startsWith('http://') || p.startsWith('https://') || p.startsWith('assets/')) p,
+  ];
+  if (shown.isEmpty) return;
+  Navigator.of(context).push(PageRouteBuilder<void>(
+    opaque: false,
+    barrierColor: Colors.black87,
+    pageBuilder: (_, __, ___) =>
+        _PhotoViewer(photos: shown, initialIndex: initialIndex.clamp(0, shown.length - 1)),
+  ));
+}
+
+class _PhotoViewer extends StatefulWidget {
+  const _PhotoViewer({required this.photos, required this.initialIndex});
+  final List<String> photos;
+  final int initialIndex;
+
+  @override
+  State<_PhotoViewer> createState() => _PhotoViewerState();
+}
+
+class _PhotoViewerState extends State<_PhotoViewer> {
+  late final PageController _controller = PageController(initialPage: widget.initialIndex);
+  late int _index = widget.initialIndex;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Widget _image(String source) => source.startsWith('assets/')
+      ? Image.asset(source, fit: BoxFit.contain)
+      : Image.network(source,
+          fit: BoxFit.contain,
+          loadingBuilder: (context, child, progress) => progress == null
+              ? child
+              : const Center(
+                  child: SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white70),
+                  ),
+                ),
+          errorBuilder: (context, error, stack) => const Center(
+                child: Text('📷', style: TextStyle(fontSize: 44)),
+              ));
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Stack(children: [
+        // 사진 바깥을 탭하면 닫는다. 확대 제스처와 겹치지 않게 뒤에 깔아 둔다.
+        Positioned.fill(
+          child: GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            behavior: HitTestBehavior.opaque,
+            child: const SizedBox.expand(),
+          ),
+        ),
+        PageView.builder(
+          controller: _controller,
+          itemCount: widget.photos.length,
+          onPageChanged: (i) => setState(() => _index = i),
+          itemBuilder: (_, i) => InteractiveViewer(
+            minScale: 1,
+            maxScale: 4,
+            child: Center(child: _image(widget.photos[i])),
+          ),
+        ),
+        Positioned(
+          top: MediaQuery.of(context).padding.top + 8,
+          right: 8,
+          child: IconButton(
+            icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
+        if (widget.photos.length > 1)
+          Positioned(
+            bottom: MediaQuery.of(context).padding.bottom + 20,
+            left: 0,
+            right: 0,
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              for (var i = 0; i < widget.photos.length; i++)
+                Container(
+                  width: 7,
+                  height: 7,
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: i == _index ? Colors.white : Colors.white38,
+                  ),
+                ),
+            ]),
+          ),
+      ]),
+    );
   }
 }
 

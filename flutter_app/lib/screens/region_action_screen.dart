@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/app_scope.dart';
 import '../data/region_guides.dart';
 import '../models/app_models.dart';
+import '../mock_ui/widgets/region_art.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui/app_card.dart';
 import '../widgets/ui/pill.dart';
@@ -87,17 +88,7 @@ class _RegionActionScreenState extends State<RegionActionScreen> {
               children: [
                 Row(
                   children: [
-                    Container(
-                      width: 64,
-                      height: 64,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: AppColors.p50,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(_regionEmoji(region.name),
-                          style: const TextStyle(fontSize: 34)),
-                    ),
+                    RegionArt(region.name, size: 64, fontSize: 34, radius: 20),
                     const SizedBox(width: 14),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -756,24 +747,3 @@ String _localCurrencyDescription(String regionName) => switch (regionName) {
       _ => '지역화폐 거래내역을 정산 증빙으로 활용할 수 있어요.',
     };
 
-String _regionEmoji(String regionName) {
-  const map = <String, String>{
-    '평창': '🏔️',
-    '횡성': '🥩',
-    '영월': '🌊',
-    '제천': '⛰️',
-    '거창': '🌿',
-    '고창': '🏛️',
-    '합천': '🌄',
-    '영광': '🐟',
-    '밀양': '🏞️',
-    '영암': '🏎️',
-    '하동': '🍃',
-    '강진': '🍲',
-    '남해': '🌴',
-    '해남': '🌾',
-    '고흥': '🚀',
-    '완도': '🏝️',
-  };
-  return map[regionName] ?? '📍';
-}
