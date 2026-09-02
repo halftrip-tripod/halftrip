@@ -25,7 +25,14 @@ class _MyPageScreenState extends State<MyPageScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _settings = AppScope.of(context).currentUser!.notificationSettings;
+    // 로그아웃 직후에는 currentUser가 null인 채로 이 화면의 팝 전환이 끝나기를
+    // 기다리는 프레임이 있다(로그아웃이 팝 뒤 320ms에 실행되는데 전환이 그보다
+    // 길 수 있다). 여기서 !로 터뜨리면 그 프레임의 빌드 예외가 로그에 남고
+    // 전환이 지저분해진다 — null이면 그리지 않는 게 맞다.
+    final user = AppScope.of(context).currentUser;
+    if (user != null) {
+      _settings = user.notificationSettings;
+    }
   }
 
   Future<void> _save(NotificationSettings next) async {
@@ -36,7 +43,11 @@ class _MyPageScreenState extends State<MyPageScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = AppScope.of(context).currentUser!;
+    final user = AppScope.of(context).currentUser;
+    // 로그아웃 팝 전환 중 마지막 프레임 — 그리지 말고 조용히 사라진다.
+    if (user == null) {
+      return const SizedBox.shrink();
+    }
 
     return Scaffold(
       backgroundColor: AppColors.bg,
