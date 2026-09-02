@@ -98,10 +98,17 @@ class LoginScreen extends StatelessWidget {
     final controller = AppScope.of(context);
     try {
       await controller.login(provider);
-    } catch (_) {
+    } catch (e) {
       if (!context.mounted) return;
+      // 원인 요약을 같이 보여준다 — 문구 하나로 뭉개면 현장에서 진단이 불가능하다.
+      final cause = e.toString().split('\n').first.trim();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${provider.label} 로그인에 실패했어요. 다시 시도해 주세요.')),
+        SnackBar(
+          content: Text(
+            '${provider.label} 로그인에 실패했어요. '
+            '(${cause.length <= 110 ? cause : '${cause.substring(0, 110)}…'})',
+          ),
+        ),
       );
     }
   }
