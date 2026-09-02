@@ -47,6 +47,7 @@ flutter:
     - assets/localmoney/
     - assets/spot/
     - assets/illust/region/
+    - assets/illust/place/
     - assets/region_hero/
     - assets/mall_icons/
     - assets/magnet/
