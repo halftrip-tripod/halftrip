@@ -73,11 +73,23 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!context.mounted) return;
       // 로그인 후 거주지 미설정이면 루트 게이트가 ResidenceScreen을 띄운다.
       await controller.loginWithSocial(provider, accessToken);
-    } catch (_) {
+    } catch (e) {
+      // 원인을 삼키지 않는다 — 전에는 어떤 실패든 같은 문구여서, 키 문제인지
+      // 서버 문제인지 현장(Play 설치본)에서 알 길이 없었다.
+      // 화면에는 안전한 코드만 보여주고(서버 응답·URL 같은 내부 문자열 노출 금지),
+      // 원문은 logcat으로 보낸다 — Play 설치본에서도 adb로 회수할 수 있다.
+      // ignore: avoid_print
+      print('social-login-failure provider=${provider.name} error=$e');
       if (context.mounted) {
-        showMock(context, '로그인에 실패했어요. 잠시 후 다시 시도해주세요.');
+        showMock(context, '로그인에 실패했어요. (코드: ${_failureCode(e)})');
       }
     }
+  }
+
+  /// 스낵바용 실패 코드 — 예외 타입/코드명만. 자유 텍스트는 싣지 않는다.
+  static String _failureCode(Object e) {
+    if (e is PlatformException) return e.code;
+    return e.runtimeType.toString();
   }
 
   /// 카카오 SDK 로그인 → 액세스 토큰. 카카오톡 설치 시 앱 전환, 아니면 계정 로그인(웹뷰).
@@ -132,9 +144,13 @@ class _LoginScreenState extends State<LoginScreen> {
       if (account == null) return null; // 사용자 취소
       final token = (await account.authentication).accessToken;
       return (token == null || token.isEmpty) ? null : token;
-    } on PlatformException {
+    } on PlatformException catch (e) {
+      // 이 문구가 예전엔 'SHA-1 등록 대기'로 고정이라, 네트워크·GMS 오류까지
+      // 전부 키 문제처럼 읽혔다. 화면엔 코드만(내부 문자열 노출 금지), 원문은 logcat.
+      // ignore: avoid_print
+      print('social-login-failure provider=google error=$e');
       if (context.mounted) {
-        showMock(context, '구글 로그인 준비 중이에요. (콘솔 SHA-1 등록 대기)');
+        showMock(context, '구글 로그인에 실패했어요. (코드: ${e.code})');
       }
       return null;
     }

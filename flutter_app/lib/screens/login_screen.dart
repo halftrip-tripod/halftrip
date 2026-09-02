@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException;
 
 import '../core/app_scope.dart';
 import '../models/app_models.dart';
@@ -98,10 +99,17 @@ class LoginScreen extends StatelessWidget {
     final controller = AppScope.of(context);
     try {
       await controller.login(provider);
-    } catch (_) {
+    } catch (e) {
+      // 화면에는 안전한 코드만, 원문은 logcat으로 — 서버 응답 같은 내부 문자열을
+      // 사용자에게 노출하지 않으면서도 현장(Play 설치본) 진단이 가능해진다.
+      // ignore: avoid_print
+      print('social-login-failure provider=${provider.name} error=$e');
       if (!context.mounted) return;
+      final code = e is PlatformException ? e.code : e.runtimeType.toString();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${provider.label} 로그인에 실패했어요. 다시 시도해 주세요.')),
+        SnackBar(
+          content: Text('${provider.label} 로그인에 실패했어요. (코드: $code)'),
+        ),
       );
     }
   }
