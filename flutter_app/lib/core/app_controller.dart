@@ -52,6 +52,10 @@ class AppController extends ChangeNotifier {
   StreamSubscription<RemoteMessage>? _foregroundMessageSubscription;
   bool _pushInitialized = false;
 
+  /// 세션 세대 — 로그아웃마다 올라간다. 응답을 기다리는 사이 세션이 끝난 갱신은
+  /// 이 값이 달라진 걸 보고 결과를 버린다.
+  int _sessionEpoch = 0;
+
   TravelRepository get repository => _repository;
   String get modeName => _repository.modeName;
   bool get isLoggedIn => currentUser != null;
@@ -285,6 +289,8 @@ class AppController extends ChangeNotifier {
   }
 
   void logout() {
+    // 먼저 세대를 올린다 — 이 뒤로 도착하는 이전 세션의 갱신 응답은 전부 무효.
+    _sessionEpoch++;
     mock.AppState.I.detachCommunityServer();
     _repository.clearSession();
     // 기기에 남긴 세션도 함께 파기 (완료를 기다릴 필요는 없음).
@@ -338,9 +344,13 @@ class AppController extends ChangeNotifier {
     if (user == null) {
       return;
     }
+    final epoch = _sessionEpoch;
     await _runBusy(() async {
-      trips = await _repository.getTrips(user.id);
+      final fetched = await _repository.getTrips(user.id);
+      if (epoch != _sessionEpoch) return; // 기다리는 사이 로그아웃 — 버린다
+      trips = fetched;
     }, resetError: false);
+    if (epoch != _sessionEpoch) return;
     await refreshSavedCourses();
     _adoptServerCourseSelections();
     await _pruneStaleCourseSelections();
@@ -385,9 +395,16 @@ class AppController extends ChangeNotifier {
       throw StateError('User is not logged in');
     }
 
+    final epoch = _sessionEpoch;
     late final AppUser refreshed;
     await _runBusy(() async {
       refreshed = await _repository.getUser(user.id);
+      // 응답을 기다리는 사이 로그아웃됐으면 결과를 버린다. 여기서 currentUser를
+      // 다시 채우면 루트가 로그인 화면에서 홈으로 되돌아가고, 이어지는 요청은
+      // 지워진 토큰으로 나가 "화면을 불러오지 못했어요"(401)에 갇힌다.
+      if (epoch != _sessionEpoch) {
+        throw StateError('Session ended while refreshing user');
+      }
       currentUser = refreshed;
     }, resetError: false);
     return refreshed;
