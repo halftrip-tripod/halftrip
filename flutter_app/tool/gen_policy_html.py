@@ -38,12 +38,15 @@ def extract(name):
     ]
 
 
-def effective_date():
-    dates = re.findall(r"effectiveDate: '([\d.]+)'", SRC)
-    return dates[0] if dates else ''
+def effective_date(factory):
+    """PolicyScreen.<factory>() 블록의 시행일. 약관·방침이 서로 다르다 —
+    첫 번째 값만 집으면 방침에 약관 날짜(더 과거)가 찍힌다."""
+    m = re.search(
+        rf"PolicyScreen\.{factory}\(\)[^;]*?effectiveDate: '([\d.]+)'", SRC, re.DOTALL)
+    return m.group(1) if m else ''
 
 
-def page(title, sections, extra_footer=''):
+def page(title, date, sections, extra_footer=''):
     body = '\n'.join(
         f'<h2>{html.escape(h)}</h2><p>{html.escape(b).replace(chr(10), "<br>")}</p>'
         for h, b in sections)
@@ -52,7 +55,7 @@ def page(title, sections, extra_footer=''):
 <title>{title} — 하프트립</title>{STYLE}</head><body><div class="wrap">
 <div class="brand">하프트립</div>
 <h1>{title}</h1>
-<div class="date">시행일: {effective_date()}</div>
+<div class="date">시행일: {date}</div>
 {body}
 <div class="footer">트리포드(Tripod) 팀 · 문의 rbgml4059@naver.com{extra_footer}</div>
 </div></body></html>'''
@@ -63,7 +66,7 @@ DELETION_SECTIONS = [
      '마이페이지 → 회원 탈퇴에서 즉시 계정과 데이터를 삭제할 수 있습니다.'),
     ('웹에서 삭제 요청하기 (앱을 지운 경우)',
      '아래 정보를 적어 rbgml4059@naver.com 으로 보내주세요. 요청일로부터 10일 이내 처리 결과를 회신합니다.\n'
-     '· 가입에 사용한 소셜 계정 종류(카카오/네이버)와 이메일\n'
+     '· 가입에 사용한 소셜 계정 종류(카카오/구글)와 이메일\n'
      '· "하프트립 계정 삭제 요청" 문구'),
     ('삭제되는 데이터',
      '계정 정보(로그인 식별자·이메일·거주지·닉네임·프로필), 여행 기록, 인증사진·영수증·숙박확인서, '
@@ -77,11 +80,11 @@ DELETION_SECTIONS = [
 
 terms = extract('_termsSections')
 privacy = extract('_privacySections')
-(OUT / 'terms.html').write_text(page('이용약관', terms))
+(OUT / 'terms.html').write_text(page('이용약관', effective_date('terms'), terms))
 (OUT / 'privacy.html').write_text(page(
-    '개인정보처리방침', privacy,
+    '개인정보처리방침', effective_date('privacy'), privacy,
     ' · <a href="account-deletion.html">계정 삭제 안내</a>'))
 (OUT / 'account-deletion.html').write_text(page(
-    '계정 및 데이터 삭제 안내', DELETION_SECTIONS,
+    '계정 및 데이터 삭제 안내', effective_date('privacy'), DELETION_SECTIONS,
     ' · <a href="privacy.html">개인정보처리방침</a>'))
 print(f'생성 완료: terms({len(terms)}조) · privacy({len(privacy)}항) · account-deletion')
