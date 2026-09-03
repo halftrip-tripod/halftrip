@@ -299,6 +299,9 @@ class AppController extends ChangeNotifier {
     currentUser = null;
     trips = const [];
     needsResidenceSetup = false;
+    // 진행 중이던 갱신(_runBusy)이 있어도 그건 이전 세션 것. 로그인 화면에
+    // '로그인하고 있어요' 오버레이가 남지 않게 여기서 바로 내린다.
+    isBusy = false;
     notifyListeners();
   }
 
@@ -786,6 +789,7 @@ class AppController extends ChangeNotifier {
     Future<void> Function() task, {
     bool resetError = true,
   }) async {
+    final epoch = _sessionEpoch;
     isBusy = true;
     if (resetError) {
       errorMessage = null;
@@ -794,11 +798,17 @@ class AppController extends ChangeNotifier {
     try {
       await task();
     } catch (error) {
-      errorMessage = error.toString();
+      if (epoch == _sessionEpoch) {
+        errorMessage = error.toString();
+      }
       rethrow;
     } finally {
-      isBusy = false;
-      notifyListeners();
+      // 도중에 로그아웃됐으면(세대 바뀜) logout()이 이미 내렸고, 그 뒤 새로 시작한
+      // 로그인의 busy 상태를 이전 세션의 마무리가 지우면 안 된다.
+      if (epoch == _sessionEpoch) {
+        isBusy = false;
+        notifyListeners();
+      }
     }
   }
 
