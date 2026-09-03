@@ -201,16 +201,31 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     final controller = AppScope.of(context);
     switch (action) {
       case 'unlink':
+        final ok = await showConfirmDialog(
+          context,
+          title: '여행 코스 등록을 취소할까요?',
+          message: '이 여행에서만 빠지고, 코스는 코스함에 그대로 남아요.',
+          confirmLabel: '등록 취소',
+        );
+        if (!ok || !mounted) return null;
         await controller.unselectCourseForTrip(detail.trip.id);
         if (mounted) {
           setState(() {});
-          showMock(context, '여행 코스 등록을 취소했어요. 코스는 코스함에 있어요.');
+          showToast(context, '여행 코스 등록을 취소했어요. 코스는 코스함에 있어요.');
         }
       case 'delete':
+        final ok = await showConfirmDialog(
+          context,
+          title: '코스를 삭제할까요?',
+          message: '여행 등록도 함께 취소되고 코스함에서 사라져요. 되돌릴 수 없어요.',
+          confirmLabel: '삭제',
+          danger: true,
+        );
+        if (!ok || !mounted) return null;
         await controller.deleteSavedCourse(course.id);
         if (mounted) {
           setState(() {});
-          showMock(context, '코스를 코스함에서 삭제했어요.');
+          showToast(context, '코스를 코스함에서 삭제했어요.');
         }
     }
     return action;
@@ -440,7 +455,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       ),
       _DCard(
         title: '여행 중 · 후 할 일',
-        sub: '출발하면 순서대로 열려요. 눌러서 준비 방법을 미리 확인해두세요.',
+        sub: '여행일이 다가오면 순서대로 열려요. 눌러서 준비 방법을 미리 확인해두세요.',
         children: [
           for (var i = 0; i < _taskGuides.length; i++)
             _UpRow(
@@ -780,7 +795,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       '여행 중',
       [
         '인정 결제수단: 지역화폐 · 신청 대표자 명의 카드 · 현금영수증.',
-        '최소 소비 조건은 지역 공고 기준이에요.',
+        '최소 소비 조건은 {amount}이에요.',
         '영수증 사진을 올리면 상호·금액·결제수단을 자동으로 인식해 누적 소비로 관리해줘요.',
         '간이영수증·계좌이체는 인정되지 않을 수 있어요.',
       ],
@@ -801,7 +816,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       '여행 후',
       [
         '여행이 끝나면 인증샷 + 영수증 + 숙박확인서를 종류별로 정리해 zip으로 묶어드려요.',
-        '정산 신청은 여행 종료 다음날부터 7일 이내, 지자체 정산 페이지에서 해요.',
+        '정산 신청은 {deadline}, 지자체 정산 페이지에서 해요.',
         '제출 후 심사를 거쳐 보통 1~2개월 뒤 지역화폐로 환급돼요.',
       ],
     ),
@@ -809,10 +824,31 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
   void _showTaskGuide(int index, TripDetail detail) {
     final (icon, title, timing, rawBullets) = _taskGuides[index];
-    // 인증 요구 개소는 지역마다 달라 서버 값으로 치환 (게이지와 같은 폴백 2).
-    final authRequired = detail.trip.authRequiredCount ?? 2;
+    // 안내문 골격은 고정이고, 지역마다 다른 값만 서버(여행) 데이터로 치환한다:
+    //   {n}        인증 요구 개소 (게이지와 같은 폴백 2)
+    //   {amount}   최소 소비 조건 금액 (지역 공고값, 없으면 '지역 공고 기준')
+    //   {deadline} 정산 신청 기한 (여행 종료 다음날 기준 D일, 서버 기한 없으면 '지역 공고 기준')
+    final trip = detail.trip;
+    final authRequired = trip.authRequiredCount ?? 2;
+    final amount = trip.refundConditionAmount > 0
+        ? '${_man(trip.refundConditionAmount)} 이상 (지역 공고 기준)'
+        : '지역 공고 기준';
+    final due = trip.settlementDeadline;
+    final String deadline;
+    if (due == null) {
+      deadline = '여행 종료 후 지역 공고 기한 안에';
+    } else {
+      final days = due.difference(trip.endDate).inDays;
+      deadline = days > 0
+          ? '여행 종료 다음날부터 $days일 이내(${due.month}/${due.day}까지)'
+          : '${due.month}/${due.day}까지';
+    }
     final bullets = [
-      for (final b in rawBullets) b.replaceAll('{n}', '$authRequired'),
+      for (final b in rawBullets)
+        b
+            .replaceAll('{n}', '$authRequired')
+            .replaceAll('{amount}', amount)
+            .replaceAll('{deadline}', deadline),
     ];
     showAppSheet(
       context,

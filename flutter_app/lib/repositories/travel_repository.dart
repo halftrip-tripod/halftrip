@@ -215,6 +215,13 @@ abstract class TravelRepository {
 
   // ── 커뮤니티 (/api/community — 2026-07-28 구현) ──
   Future<List<CommunityPostData>> getCommunityFeed({int? userId});
+
+  /// 글 사진 업로드(POST /community/photos) — 공개 URL을 돌려준다. 글 등록 전에 먼저 올린다.
+  Future<String> uploadCommunityPhoto({
+    required int userId,
+    required Uint8List bytes,
+    required String fileName,
+  });
   Future<CommunityPostData> createCommunityPost({
     required int userId,
     required String type,
