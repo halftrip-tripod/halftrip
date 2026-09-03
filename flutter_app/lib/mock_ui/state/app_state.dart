@@ -73,6 +73,52 @@ class AppState extends ChangeNotifier {
   int get spentAmount =>
       120000 + receipts.skip(3).fold(0, (s, r) => s + r.amount);
 
+  /// 서버 지역 목록으로 지역 마스터를 맞춘다 — 커뮤니티 지역 필터·글쓰기 지역 선택 등
+  /// AppState.regions를 읽는 화면이 목업 8곳이 아니라 반값여행 진행 지역 전체를 보게 한다.
+  /// 이미 있는 지역 객체는 그대로 두고(즐겨찾기 상태 유지) 순서만 서버(displayOrder)대로.
+  void syncRegions(List<api.RegionSummary> server) {
+    if (server.isEmpty) return;
+    final sorted = [...server]..sort((a, b) => a.displayOrder.compareTo(b.displayOrder));
+    final byName = {for (final r in regions) r.name: r};
+    final next = <Region>[];
+    for (final s in sorted) {
+      final existing = byName[s.name];
+      if (existing != null) {
+        next.add(existing);
+        continue;
+      }
+      final status = switch (s.statusCode.toUpperCase()) {
+        'APPLYING' => RegionStatus.open,
+        'PREPARING' => RegionStatus.soon,
+        _ => RegionStatus.closed,
+      };
+      final deadline = s.applyDeadline;
+      final dday = deadline == null ? 0 : deadline.difference(DateTime.now()).inDays;
+      final open = s.openDate;
+      next.add(Region(
+        name: s.name,
+        province: s.province,
+        emoji: '🗺️',
+        status: status,
+        condition: s.refundConditionAmount > 0
+            ? '최소 소비 ${(s.refundConditionAmount / 10000).round()}만원 · 관광지 2곳 인증'
+            : '관광지 2곳 인증',
+        dday: dday < 0 ? 0 : dday,
+        ddayWarn: dday >= 0 && dday <= 3,
+        openLabel: status == RegionStatus.soon && open != null
+            ? '${open.month}월 ${open.day}일 오픈 예정'
+            : null,
+      ));
+    }
+    // 서버에 없는 목업 지역은 뒤에 남긴다(테스트 데이터 화면이 깨지지 않게).
+    final serverNames = {for (final s in sorted) s.name};
+    next.addAll(regions.where((r) => !serverNames.contains(r.name)));
+    regions
+      ..clear()
+      ..addAll(next);
+    notifyListeners();
+  }
+
   /// 이름으로 목업 지역 찾기 — 목업 목록(7곳)에 없는 지역이면 이름 그대로 만들어
   /// 돌려준다. (예전엔 regions[1]=강진 폴백이라 횡성 여행의 AI 코스가 강진으로 생성됐음)
   Region regionByName(String name) => regions.firstWhere(

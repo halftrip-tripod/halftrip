@@ -1177,7 +1177,7 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
   late int _visibility = (widget.editPost?.private ?? false) ? 1 : 0;
   late bool _verify = widget.editPost?.verified ?? true;
   late String _region =
-      widget.editPost?.region ?? widget.regionName ?? '강진';
+      widget.editPost?.region ?? widget.regionName ?? AppState.I.regions.first.name;
   late final _text = TextEditingController(text: widget.editPost?.text ?? '');
 
   // 내 코스함에서 고른 첨부 코스 (실데이터). 수정 모드는 기존 스냅샷 유지.
