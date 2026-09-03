@@ -13,7 +13,15 @@ import '../theme/app_colors.dart';
 /// 파일이 실제로 들어온 키만 넣는다.
 /// 없는 키를 넣으면 웹에서 404를 찍고 나서야 폴백이 뜨므로,
 /// `assets/illust/place/`에 png를 넣은 뒤 여기에 키를 추가한다.
-const Set<String> kAvailablePlaceIllusts = <String>{};
+/// 2026-09-03 준서 일러 31종(폴백 포함) 반영 — 규칙의 30개 유형이 전부 그림을 갖는다.
+const Set<String> kAvailablePlaceIllusts = <String>{
+  'trail', 'sports', 'cave', 'healing', 'science', 'hanok', 'gallery',
+  'museum', 'memorial', 'culture', 'experience', 'observatory', 'themepark',
+  'forest', 'garden', 'farm', 'temple', 'seowon', 'fortress', 'heritage',
+  'pavilion', 'village', 'market', 'beach', 'island', 'bridge', 'valley',
+  'lake', 'park', 'mountain',
+  'default',
+};
 
 /// (키, 이름 어디에 있어도 인정하는 말, 이름 끝에 올 때만 인정하는 말)
 ///
