@@ -598,10 +598,13 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         detail.trip.totalSpentAmount >= detail.trip.refundConditionAmount;
 
     final expired = settlementExpired(detail.trip);
+    final course = AppScope.of(context).selectedCourseForTrip(detail.trip.id);
 
     return [
       _TripHeader(detail: detail, stage: TripStageView.settle),
       const _StageBar(current: 2),
+      // 다녀온 코스 — 여행 전·중과 같은 통일 코스 상세(지도+DAY+번호)로 연다.
+      if (course != null) _courseCard(detail, course),
       // 마감 지난 여행 — 목록 카드("정산 마감 지남")와 같은 말을 하도록 상세에도 알린다.
       if (expired)
         Container(
@@ -726,9 +729,11 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
   // ───────────────────── 정산 신청 완료 (환급은 외부에서 진행)
   List<Widget> _review(TripDetail detail) {
+    final course = AppScope.of(context).selectedCourseForTrip(detail.trip.id);
     return [
       _TripHeader(detail: detail, stage: TripStageView.review),
       const _StageBar(current: 3),
+      if (course != null) _courseCard(detail, course),
       _DCard(
         title: '환급금, 어디서 쓸까?',
         sub: '환급받은 지역화폐 사용처를 미리 둘러보세요.',
@@ -773,6 +778,22 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         ],
       ),
     ];
+  }
+
+  /// 다녀온/확정 코스 카드 — 정산·후기 단계용. 탭하면 통일 코스 상세(_openCourseView).
+  Widget _courseCard(TripDetail detail, SavedCourse course) {
+    return _DCard(
+      title: '다녀온 코스',
+      children: [
+        SurfRow(
+          icon: Icons.route_outlined,
+          title: course.title,
+          subtitle: '${course.regionName} · ${course.stops.length}곳',
+          tinted: true,
+          onTap: () => _openCourseView(detail, course),
+        ),
+      ],
+    );
   }
 
   // ───────────────────── 여행 전 할 일 가이드
