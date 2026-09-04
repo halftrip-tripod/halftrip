@@ -25,7 +25,11 @@ class HomeTab extends StatefulWidget {
 
 class _HomeTabState extends State<HomeTab> {
   int _pane = 0; // 0 전국지도 / 1 접수중 / 2 오픈예정
-  Future<_HomeData>? _future;
+  // 마지막으로 성공한 화면 데이터. 재조회 중에도 이걸 계속 그린다 —
+  // 탭을 오갈 때마다 스피너로 화면을 비우면 서버가 느릴 때 홈이 매번 몇 초씩 사라진다.
+  _HomeData? _data;
+  Object? _error;
+  bool _loading = false;
   bool _initialized = false;
 
   @override
@@ -43,8 +47,9 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   void _onTabShown() {
-    if (!mounted || AppState.I.shownTab != 0 || _future == null) return;
-    _refresh();
+    if (!mounted || AppState.I.shownTab != 0 || !_initialized) return;
+    // 이미 그려진 화면은 그대로 두고 뒤에서만 갱신한다.
+    _load();
   }
 
   @override
@@ -56,56 +61,68 @@ class _HomeTabState extends State<HomeTab> {
     // 빌드 도중 markNeedsBuild 예외를 방지한다.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      setState(() { _future = _load(); });
+      _load();
     });
   }
 
-  Future<_HomeData> _load() async {
-    final controller = AppScope.of(context);
-    final user = await controller.refreshCurrentUser();
-    final regions = await controller.repository.getRegions(
-      residence: user.residence,
-    );
-    final eligible = regions
-        .where((r) => user.residence.trim().isEmpty || r.matchedByResidence)
-        .toList()
-      ..sort((a, b) => a.displayOrder.compareTo(b.displayOrder));
-    await controller.refreshTrips();
-    final visitedRegionIds = controller.trips
-        .where((t) =>
-            stageOf(t) == TripStageView.settle || stageOf(t) == TripStageView.review)
-        .map((t) => t.regionId)
-        .toSet();
-    return _HomeData(
-      residence: user.residence,
-      regions: eligible,
-      visitedRegionIds: visitedRegionIds,
-    );
-  }
-
-  Future<void> _refresh() async {
-    setState(() { _future = _load(); });
-    await _future;
+  Future<void> _load() async {
+    if (_loading) return; // 탭 연타·복귀 신호가 겹쳐도 한 번만
+    _loading = true;
+    if (_data == null) setState(() => _error = null);
+    try {
+      final controller = AppScope.of(context);
+      final user = await controller.refreshCurrentUser();
+      // 지역 목록과 여행 목록은 서로 독립 — 순서대로 기다리지 않고 동시에 받는다.
+      final results = await Future.wait<Object?>([
+        controller.repository.getRegions(residence: user.residence),
+        controller.refreshTrips(),
+      ]);
+      final regions = results[0] as List<RegionSummary>;
+      // 지역 마스터(커뮤니티 필터·글쓰기 지역 선택)를 서버 목록으로 맞춘다.
+      AppState.I.syncRegions(regions);
+      final eligible = regions
+          .where((r) => user.residence.trim().isEmpty || r.matchedByResidence)
+          .toList()
+        ..sort((a, b) => a.displayOrder.compareTo(b.displayOrder));
+      final visitedRegionIds = controller.trips
+          .where((t) =>
+              stageOf(t) == TripStageView.settle || stageOf(t) == TripStageView.review)
+          .map((t) => t.regionId)
+          .toSet();
+      if (!mounted) return;
+      setState(() {
+        _data = _HomeData(
+          residence: user.residence,
+          regions: eligible,
+          visitedRegionIds: visitedRegionIds,
+        );
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      // 이미 보여 주던 화면이 있으면 조용히 유지한다(로그아웃 직후 끊긴 응답 포함).
+      if (_data == null) setState(() => _error = e);
+    } finally {
+      _loading = false;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<_HomeData>(
-      future: _future,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text('화면을 불러오지 못했어요.\n${snapshot.error}', textAlign: TextAlign.center),
-            ),
-          );
-        }
+    final data = _data;
+    if (data == null) {
+      if (_error != null) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text('화면을 불러오지 못했어요.\n$_error', textAlign: TextAlign.center),
+          ),
+        );
+      }
+      return const Center(child: CircularProgressIndicator());
+    }
 
-        final data = snapshot.data!;
+    return Builder(builder: (context) {
         final applying =
             data.regions.where((r) => r.statusCode.toUpperCase() == 'APPLYING').toList();
         final preparing =
@@ -114,7 +131,7 @@ class _HomeTabState extends State<HomeTab> {
             data.residence.trim().isEmpty ? '미설정' : data.residence.split(' ').first;
 
         return RefreshIndicator(
-          onRefresh: _refresh,
+          onRefresh: _load,
           child: ListView(
             padding: const EdgeInsets.fromLTRB(22, 8, 22, 28),
             children: [
@@ -206,8 +223,7 @@ class _HomeTabState extends State<HomeTab> {
             ],
           ),
         );
-      },
-    );
+    });
   }
 
   /// 공개 글 좋아요순 상위 2개 — 코스 첨부/코스 태그 글 우선.

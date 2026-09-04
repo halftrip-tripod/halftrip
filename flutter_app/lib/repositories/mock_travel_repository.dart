@@ -1662,6 +1662,16 @@ class MockTravelRepository implements TravelRepository {
   Future<List<CommunityPostData>> getCommunityFeed({int? userId}) async => const [];
 
   @override
+  Future<String> uploadCommunityPhoto({
+    required int userId,
+    required Uint8List bytes,
+    required String fileName,
+  }) async {
+    // 목업엔 저장소가 없다 — 이모지 플레이스홀더(Post.photos가 이모지도 받는다).
+    return '🖼️';
+  }
+
+  @override
   Future<CommunityPostData> createCommunityPost({
     required int userId,
     required String type,

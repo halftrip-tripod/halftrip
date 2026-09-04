@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../core/app_scope.dart';
 import '../mock_ui/screens/community.dart' show CommunityWriteScreen;
+import '../mock_ui/screens/course_flow.dart' show CourseViewScreen, courseFromSaved;
 import '../mock_ui/widgets/region_art.dart';
 import '../mock_ui/state/app_state.dart' as mock;
 import '../mock_ui/theme/app_colors.dart';
 import '../mock_ui/widgets/ui.dart';
 import '../models/app_models.dart';
-import 'planner_screen.dart';
+import 'youtube_travel_plan_screen.dart';
 
 /// 지난 여행 상세 — 목업 past_trip 1:1, 데이터는 TripDetail(실 repository).
 /// 후기는 커뮤니티 백엔드(핸드오프 J) 전까지 미작성 상태만 존재한다.
@@ -88,10 +89,19 @@ class _PastTripScreenState extends State<PastTripScreen> {
                 subtitle: course == null
                     ? '저장된 코스가 없어요'
                     : '${course.title} · ${course.stops.length}곳',
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => PlannerScreen(
-                        tripId: trip.id,
-                        title: course?.title ?? '다녀온 코스'))),
+                // 코스 상세는 코스함·여행 상세와 같은 통일 화면(지도+DAY+번호 리스트).
+                // 옛 플래너 화면은 여행 장소만 읽어서 시드 여행이 빈 화면으로 떴다.
+                onTap: course == null
+                    ? () => showMock(context, '이 여행에 연결된 코스가 없어요.')
+                    : () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => CourseViewScreen(
+                              course: courseFromSaved(course),
+                              startDate: trip.startDate,
+                              onOpenPlan: () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                      builder: (_) => YoutubeTravelPlanScreen(
+                                          course: course, tripDetail: detail))),
+                            ))),
               ),
             ),
             // 내 후기 — 커뮤 로컬 글(서버 J 전까지 기기 저장)과 연동.
