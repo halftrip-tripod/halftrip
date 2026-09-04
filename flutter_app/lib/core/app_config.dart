@@ -22,7 +22,10 @@ class AppConfig {
         'FASTAPI_BASE_URL',
         defaultValue: 'https://halftrip-fastapi.onrender.com',
       ),
-      useMockLogin: bool.fromEnvironment('USE_MOCK_LOGIN', defaultValue: true),
+      // 기본 꺼짐 — dart-define 을 빠뜨린 빌드가 QA용 목 로그인(/api/auth/mock-login)으로
+      // 나가지 않게 한다. 서버도 APP_AUTH_MOCK_LOGIN_ENABLED 기본값이 꺼짐이다.
+      // 목 로그인이 필요하면 --dart-define=USE_MOCK_LOGIN=true 로 명시한다.
+      useMockLogin: bool.fromEnvironment('USE_MOCK_LOGIN'),
       useMockApi: bool.fromEnvironment('USE_MOCK_API', defaultValue: false),
       mapProvider: String.fromEnvironment('MAP_PROVIDER', defaultValue: 'mock'),
       kakaoMapAppKey: String.fromEnvironment(
