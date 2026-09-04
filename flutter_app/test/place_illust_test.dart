@@ -37,6 +37,16 @@ void main() {
       expect(placeIllustKeyOf('강진만생태공원'), 'lake');
     });
 
+    test('Dart로 옮기며 빠졌던 유형어를 잡는다', () {
+      // 운영 데이터에서 폴백으로 떨어지던 10곳 — 문학관 5곳이 가장 컸다.
+      expect(placeIllustKeyOf('남해유배문학관'), 'museum');
+      expect(placeIllustKeyOf('영광군 도심 속 열린 수장고'), 'museum');
+      expect(placeIllustKeyOf('법성포 단오제 전수교육관'), 'experience');
+      expect(placeIllustKeyOf('영천전투메모리얼파크'), 'memorial');
+      expect(placeIllustKeyOf('대봉산휴양밸리'), 'forest');
+      expect(placeIllustKeyOf('삼랑진역 급수탑'), 'heritage');
+    });
+
     test('유형어가 없으면 null', () {
       expect(placeIllustKeyOf('돌할매'), isNull);
       expect(placeIllustKeyOf('합천운석충돌구'), isNull);
