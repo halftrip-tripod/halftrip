@@ -74,6 +74,7 @@ flutter run -d chrome \
 ```
 
 - `--dart-define` 을 하나도 안 주면 **Render 운영 서버**를 본다 (`app_config.dart` 기본값). 로컬 검증인 줄 알고 운영 데이터를 건드리지 않도록 주의.
+- `USE_MOCK_LOGIN` 기본값은 **꺼짐**이다. 목 로그인(sample / 1234)이 필요하면 `--dart-define=USE_MOCK_LOGIN=true` 를 명시할 것. 서버도 `APP_AUTH_MOCK_LOGIN_ENABLED=true` 여야 한다.
 
 ---
 
