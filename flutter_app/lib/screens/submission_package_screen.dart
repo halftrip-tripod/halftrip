@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../core/app_scope.dart';
 import '../utils/browser_file_download.dart';
@@ -260,7 +261,7 @@ class SubmissionPackageScreen extends StatelessWidget {
           final entry = _zipEntryName(file, index);
           archive.addFile(ArchiveFile(entry, bytes.length, bytes));
         }
-        final zipBytes = ZipEncoder().encode(archive)!;
+        final zipBytes = ZipEncoder().encode(archive);
         if (kIsWeb) {
           await downloadFileBytes(zipBytes, zipName,
               mimeType: 'application/zip');
@@ -271,7 +272,18 @@ class SubmissionPackageScreen extends StatelessWidget {
         await out.writeAsBytes(zipBytes);
         return out.path;
       });
-      messenger.showSnackBar(SnackBar(content: Text('증빙 zip을 만들었어요: $path')));
+      if (kIsWeb) {
+        messenger.showSnackBar(SnackBar(content: Text('증빙 zip을 만들었어요: $path')));
+        return;
+      }
+      // 앱 내부 폴더는 사용자가 못 꺼낸다 — 만든 즉시 공유 시트를 띄워
+      // 내 파일·드라이브·카톡 등으로 저장/전송하게 한다.
+      messenger.showSnackBar(const SnackBar(content: Text('증빙 zip을 만들었어요. 저장할 곳을 골라 주세요.')));
+      await SharePlus.instance.share(ShareParams(
+        files: [XFile(path, mimeType: 'application/zip', name: zipName)],
+        subject: zipName,
+        text: '${detail.trip.regionName} 반값여행 증빙 패키지',
+      ));
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('zip 생성에 실패했어요: $e')));
     }
