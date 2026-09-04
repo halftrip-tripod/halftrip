@@ -78,6 +78,8 @@ class _HomeTabState extends State<HomeTab> {
         controller.refreshTrips(),
       ]);
       final regions = results[0] as List<RegionSummary>;
+      // 지역 마스터(커뮤니티 필터·글쓰기 지역 선택)를 서버 목록으로 맞춘다.
+      AppState.I.syncRegions(regions);
       final eligible = regions
           .where((r) => user.residence.trim().isEmpty || r.matchedByResidence)
           .toList()

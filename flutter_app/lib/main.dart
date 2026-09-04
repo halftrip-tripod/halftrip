@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' as kakao;
 
@@ -22,6 +23,12 @@ import 'theme/app_colors.dart';
 /// USE_MOCK_API 플래그로 mock ↔ 실서버 전환.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (!kIsWeb) {
+    // 세로 전용 — 화면이 폰 목업 프레임 기준이라 가로로 돌리면 레이아웃이 깨진다.
+    // (manifest의 screenOrientation과 이중 잠금)
+    await SystemChrome.setPreferredOrientations(
+        [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
+  }
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
     try {
       await Firebase.initializeApp();

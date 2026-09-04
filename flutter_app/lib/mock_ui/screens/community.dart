@@ -1,11 +1,14 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../data/models.dart';
 import '../../core/app_scope.dart';
 import '../../models/app_models.dart' show SavedCourse, SavedCourseStop;
 import '../../utils/profile_presets.dart';
 import '../state/app_state.dart';
-import 'course_flow.dart' show CourseViewScreen;
+import 'course_flow.dart' show CourseSavedScreen, CourseViewScreen;
 import 'my_trips_tab.dart' show durationLabelOf;
 import '../theme/app_colors.dart';
 import '../widgets/ui.dart';
@@ -622,6 +625,7 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
       return;
     }
     final controller = AppScope.of(context);
+    // id가 글 단위로 고정이라 두 번 저장해도 같은 코스를 덮어쓴다(중복 없음).
     await controller.saveCourse(SavedCourse(
       id: 'community-post-${p.serverId ?? p.hashCode}',
       regionId: 0,
@@ -632,7 +636,10 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
       createdAt: DateTime.now(),
     ));
     if (!context.mounted) return;
-    showMock(context, '코스를 내 코스함에 저장했어요. 내 여행 > 저장 코스에서 확인!');
+    // 저장했으면 바로 내 코스함으로 — 코스 상세(남의 코스)는 더 볼 이유가 없다.
+    Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const CourseSavedScreen()));
+    showToast(context, '코스를 내 코스함에 저장했어요.');
   }
 
   List<_Cmt> _seedComments() {
@@ -751,7 +758,14 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
     if (action == 'report') {
       await _reportPost();
     } else if (action == 'delete') {
-      await _deleteMyPost();
+      final ok = await showConfirmDialog(
+        context,
+        title: '글을 삭제할까요?',
+        message: '댓글과 좋아요도 함께 사라지고 되돌릴 수 없어요.',
+        confirmLabel: '삭제',
+        danger: true,
+      );
+      if (ok && mounted) await _deleteMyPost();
     } else if (action == 'edit') {
       await Navigator.of(context).push(MaterialPageRoute(
           builder: (_) => CommunityWriteScreen(editPost: widget.post)));
@@ -1095,6 +1109,48 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
 }
 
 /// 글쓰기.
+/// 글쓰기에서 고른 사진 한 장 — 업로드 전 원본 바이트와 파일명.
+class _PickedPhoto {
+  const _PickedPhoto(this.bytes, this.name);
+  final Uint8List bytes;
+  final String name;
+}
+
+/// 고른 사진 썸네일(64) + 우상단 ✕. 등록 중엔 ✕를 감춘다.
+class _PhotoThumb extends StatelessWidget {
+  const _PhotoThumb({required this.bytes, this.onRemove});
+  final Uint8List bytes;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 64,
+      height: 64,
+      child: Stack(clipBehavior: Clip.none, children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Image.memory(bytes, width: 64, height: 64, fit: BoxFit.cover, gaplessPlayback: true),
+        ),
+        if (onRemove != null)
+          Positioned(
+            top: -6,
+            right: -6,
+            child: GestureDetector(
+              onTap: onRemove,
+              child: Container(
+                width: 22,
+                height: 22,
+                decoration: const BoxDecoration(color: AppColors.ink9, shape: BoxShape.circle),
+                child: const Icon(Icons.close_rounded, size: 14, color: Colors.white),
+              ),
+            ),
+          ),
+      ]),
+    );
+  }
+}
+
 class CommunityWriteScreen extends StatefulWidget {
   const CommunityWriteScreen(
       {super.key, this.regionName, this.tripId, this.editPost});
@@ -1121,7 +1177,7 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
   late int _visibility = (widget.editPost?.private ?? false) ? 1 : 0;
   late bool _verify = widget.editPost?.verified ?? true;
   late String _region =
-      widget.editPost?.region ?? widget.regionName ?? '강진';
+      widget.editPost?.region ?? widget.regionName ?? AppState.I.regions.first.name;
   late final _text = TextEditingController(text: widget.editPost?.text ?? '');
 
   // 내 코스함에서 고른 첨부 코스 (실데이터). 수정 모드는 기존 스냅샷 유지.
@@ -1132,38 +1188,102 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
 
   bool get _isEdit => widget.editPost != null;
 
-  void _submit() {
+  /// 새 글에 붙일 사진 — 기기에서 고른 원본 바이트. 등록 시 서버(Supabase)에 올리고 URL로 바꾼다.
+  /// 수정 모드는 기존 사진(URL)을 그대로 두고 추가만 막는다(서버 PATCH가 photos를 안 받음).
+  final List<_PickedPhoto> _photos = [];
+  static const _maxPhotos = 5;
+
+  /// 등록 진행 중 — 사진 업로드가 수 초 걸릴 수 있어 버튼을 잠그고 스피너를 보인다.
+  bool _submitting = false;
+
+  Future<void> _pickPhotos() async {
+    if (_photos.length >= _maxPhotos) {
+      showMock(context, '사진은 $_maxPhotos장까지 붙일 수 있어요.');
+      return;
+    }
+    try {
+      final picked = await ImagePicker().pickMultiImage(
+        imageQuality: 85,
+        maxWidth: 1600,
+        limit: _maxPhotos - _photos.length,
+      );
+      if (picked.isEmpty) return;
+      final loaded = <_PickedPhoto>[];
+      for (final x in picked.take(_maxPhotos - _photos.length)) {
+        loaded.add(_PickedPhoto(await x.readAsBytes(), x.name));
+      }
+      if (!mounted) return;
+      setState(() => _photos.addAll(loaded));
+    } catch (e) {
+      if (!mounted) return;
+      showMock(context, '사진을 불러오지 못했어요. 다시 시도해 주세요.');
+    }
+  }
+
+  /// 고른 사진을 서버에 올려 공개 URL 목록으로. 서버 모드가 아니면(목업) 빈 목록.
+  Future<List<String>> _uploadPhotos() async {
+    final s = AppState.I;
+    final repo = s.communityRepository;
+    final userId = s.communityUserId;
+    if (!s.serverMode || repo == null || userId == null || _photos.isEmpty) {
+      return const [];
+    }
+    final urls = <String>[];
+    for (final p in _photos) {
+      urls.add(await repo.uploadCommunityPhoto(
+          userId: userId, bytes: p.bytes, fileName: p.name));
+    }
+    return urls;
+  }
+
+  Future<void> _submit() async {
+    if (_submitting) return;
     final s = AppState.I;
     final text = _text.text.trim();
     if (text.isEmpty) {
       showMock(context, '내용을 입력해주세요.');
       return;
     }
-    if (_isEdit) {
-      _submitEdit(text);
-      return;
+    setState(() => _submitting = true);
+    try {
+      if (_isEdit) {
+        await _submitEdit(text);
+        return;
+      }
+      List<String> photoUrls;
+      try {
+        photoUrls = await _uploadPhotos();
+      } catch (e) {
+        if (!mounted) return;
+        showMock(context, '사진 업로드에 실패했어요. 잠시 후 다시 시도해 주세요.');
+        return;
+      }
+      if (!mounted) return;
+      s.addPost(Post(
+        avatarEmoji: s.avatarEmoji,
+        avatarBg: s.avatarBg,
+        nick: s.nickname,
+        region: _region,
+        timeAgo: '방금',
+        tag: PostTag.values[_tag],
+        text: text,
+        photos: photoUrls,
+        verified: _verify,
+        courseName: _courseName,
+        courseMeta: _courseMeta,
+        courseStops: _courseStops,
+        likes: 0,
+        comments: 0,
+        saves: 0,
+        mine: true,
+        private: _visibility == 1,
+        title: '$_region ${tagLabel(PostTag.values[_tag])}',
+      ));
+      Navigator.of(context).pop();
+      showToast(context, _visibility == 0 ? '글을 등록했어요. 피드 맨 위에서 확인해보세요!' : '나만보기로 저장했어요.');
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
-    s.addPost(Post(
-      avatarEmoji: s.avatarEmoji,
-      avatarBg: s.avatarBg,
-      nick: s.nickname,
-      region: _region,
-      timeAgo: '방금',
-      tag: PostTag.values[_tag],
-      text: text,
-      verified: _verify,
-      courseName: _courseName,
-      courseMeta: _courseMeta,
-      courseStops: _courseStops,
-      likes: 0,
-      comments: 0,
-      saves: 0,
-      mine: true,
-      private: _visibility == 1,
-      title: '$_region ${tagLabel(PostTag.values[_tag])}',
-    ));
-    Navigator.of(context).pop();
-    showMock(context, _visibility == 0 ? '글을 등록했어요. 피드 맨 위에서 확인해보세요!' : '나만보기로 저장했어요.');
   }
 
   Future<void> _submitEdit(String text) async {
@@ -1326,7 +1446,13 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
       title: _isEdit ? '글 수정' : '글쓰기',
       closeIcon: true,
       cta: CtaBar(children: [
-        PrimaryButton(_isEdit ? '수정하기' : '등록하기', onTap: _submit)
+        PrimaryButton(
+          _submitting
+              ? (_isEdit ? '수정 중…' : (_photos.isEmpty ? '등록 중…' : '사진 올리는 중…'))
+              : (_isEdit ? '수정하기' : '등록하기'),
+          loading: _submitting,
+          onTap: _submit,
+        )
       ]),
       children: [
         const _WLabel('글 종류'),
@@ -1377,28 +1503,35 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            Row(children: [
-              const EmojiBox('🌉', size: 64, fontSize: 27, color: AppColors.surf),
-              const SizedBox(width: 8),
-              const EmojiBox('🏯', size: 64, fontSize: 27, color: AppColors.surf),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: () => showMock(context, '사진 첨부는 목업에서 생략했어요.'),
-                child: Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: AppColors.surf,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.line, width: 1.5),
-                  ),
-                  child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Icon(Icons.photo_camera_outlined, size: 20, color: AppColors.ink4),
-                    SizedBox(height: 2),
-                    Text('사진', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.ink4)),
-                  ]),
+            // 사진: 수정 모드는 기존 URL 썸네일만, 새 글은 고른 사진 + 추가 타일.
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              if (_isEdit)
+                for (final url in widget.editPost!.photos)
+                  PostPhoto(url, width: 64, height: 64, radius: 14, fontSize: 27),
+              for (var i = 0; i < _photos.length; i++)
+                _PhotoThumb(
+                  bytes: _photos[i].bytes,
+                  onRemove: _submitting ? null : () => setState(() => _photos.removeAt(i)),
                 ),
-              ),
+              if (!_isEdit && _photos.length < _maxPhotos)
+                GestureDetector(
+                  onTap: _submitting ? null : _pickPhotos,
+                  child: Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: AppColors.surf,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.line, width: 1.5),
+                    ),
+                    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      const Icon(Icons.photo_camera_outlined, size: 20, color: AppColors.ink4),
+                      const SizedBox(height: 2),
+                      Text(_photos.isEmpty ? '사진' : '${_photos.length}/$_maxPhotos',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.ink4)),
+                    ]),
+                  ),
+                ),
             ]),
           ]),
         ),

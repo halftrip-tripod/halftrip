@@ -948,6 +948,28 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<String> uploadCommunityPhoto({
+    required int userId,
+    required Uint8List bytes,
+    required String fileName,
+  }) async {
+    final request = http.MultipartRequest(
+      'POST',
+      _uri('/community/photos', {'userId': '$userId'}),
+    );
+    request.headers.addAll(_headers(json: false));
+    // content-type은 따로 안 실린다(octet-stream) — 서버가 파일명 확장자로 이미지 종류를 정한다.
+    request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: fileName));
+    final streamed = await request.send();
+    final responseText = await streamed.stream.bytesToString();
+    if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
+      throw Exception('사진 업로드 실패: $responseText');
+    }
+    final decoded = jsonDecode(responseText) as Map<String, dynamic>;
+    return (decoded['data'] as Map<String, dynamic>)['url'] as String;
+  }
+
+  @override
   Future<CommunityPostData> createCommunityPost({
     required int userId,
     required String type,
