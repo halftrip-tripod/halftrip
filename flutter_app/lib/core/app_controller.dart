@@ -878,9 +878,13 @@ class AppController extends ChangeNotifier {
     // 로그인은 성공했는데 "실패" 토스트가 뜨고 세션 복원까지 끊긴다. 푸시는 비치명.
     try {
       final token = await FirebaseMessaging.instance.getToken();
+      // 릴리즈에서도 logcat에 남긴다(debugPrint는 무음) — 푸시 진단용. 토큰은 앞 12자만.
+      // ignore: avoid_print
+      print('fcm-token userId=${currentUser?.id} token=${token == null ? 'null' : '${token.substring(0, 12)}…'}');
       await _registerFcmTokenIfPossible(token);
     } catch (error) {
-      debugPrint('[FCM] 토큰 동기화 실패(무시): $error');
+      // ignore: avoid_print
+      print('fcm-token-failure error=$error');
     }
   }
 
@@ -895,8 +899,12 @@ class AppController extends ChangeNotifier {
         fcmToken: token,
         platform: 'android',
       );
-    } catch (_) {
-      // Ignore push token registration failures to avoid blocking app usage.
+      // ignore: avoid_print
+      print('fcm-token-registered userId=${user.id}');
+    } catch (error) {
+      // 등록 실패는 앱 사용을 막지 않지만, 푸시 진단을 위해 logcat엔 남긴다.
+      // ignore: avoid_print
+      print('fcm-token-register-failure userId=${user.id} error=$error');
     }
   }
 
