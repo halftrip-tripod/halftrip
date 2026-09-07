@@ -54,6 +54,96 @@ class AppState extends ChangeNotifier {
   Color avatarBg = const Color(0xFFE0F2FE);
 
   // 알림 설정
+  // ── 사용자 차단 (Google UGC 정책: 신고 + 차단) ──
+  // 서버 userId → 닉네임(목록 표시용). 기기(SharedPreferences)에 저장하고, 피드·댓글·인기글에서
+  // 차단한 사용자의 글을 통째로 숨긴다. 서버 동기화는 후속 — 기기 바꾸면 목록이 비는 건 감수.
+  final Map<int, String> blockedUsers = {};
+  static const _blockedUsersKey = 'community_blocked_users_v1';
+  bool _blockedRestored = false;
+
+  bool isBlocked(int? userId) => userId != null && blockedUsers.containsKey(userId);
+
+  /// 차단한 사용자의 글을 뺀 목록 — 피드·지역 피드·저장한 글·인기글이 전부 이걸 쓴다.
+  List<Post> get visiblePosts =>
+      posts.where((p) => !isBlocked(p.authorId)).toList();
+
+  Future<void> restoreBlockedUsers() async {
+    if (_blockedRestored) return;
+    _blockedRestored = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_blockedUsersKey);
+      if (raw == null) return;
+      final j = jsonDecode(raw) as Map<String, dynamic>;
+      blockedUsers
+        ..clear()
+        ..addAll({for (final e in j.entries) int.parse(e.key): '${e.value}'});
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> _persistBlockedUsers() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_blockedUsersKey,
+          jsonEncode({for (final e in blockedUsers.entries) '${e.key}': e.value}));
+    } catch (_) {}
+  }
+
+  /// 차단 — 화면엔 즉시 반영(낙관), 서버 모드면 계정에도 저장한다.
+  /// 서버 저장이 실패해도 기기 목록은 유지해 이 기기에서는 계속 안 보이게 한다.
+  Future<void> blockUser(int userId, String nick) async {
+    blockedUsers[userId] = nick;
+    notifyListeners();
+    await _persistBlockedUsers();
+    final repo = _repository;
+    final me = _serverUserId;
+    if (repo != null && me != null) {
+      try {
+        await repo.blockUser(userId: me, blockedUserId: userId);
+      } catch (_) {}
+    }
+  }
+
+  Future<void> unblockUser(int userId) async {
+    blockedUsers.remove(userId);
+    notifyListeners();
+    await _persistBlockedUsers();
+    final repo = _repository;
+    final me = _serverUserId;
+    if (repo != null && me != null) {
+      try {
+        await repo.unblockUser(userId: me, blockedUserId: userId);
+      } catch (_) {}
+    }
+  }
+
+  /// 서버(계정)의 차단 목록으로 기기 목록을 맞춘다 — 로그인·복원 직후.
+  /// 서버가 원본이라 기기에만 남은 항목은 서버로 올려 둔다(오프라인에서 차단한 경우).
+  Future<void> syncBlockedUsersFromServer() async {
+    final repo = _repository;
+    final me = _serverUserId;
+    if (repo == null || me == null) return;
+    try {
+      final remote = await repo.getBlockedUsers(me);
+      for (final e in blockedUsers.entries) {
+        if (!remote.containsKey(e.key)) {
+          try {
+            await repo.blockUser(userId: me, blockedUserId: e.key);
+            remote[e.key] = e.value;
+          } catch (_) {}
+        }
+      }
+      blockedUsers
+        ..clear()
+        ..addAll(remote);
+      notifyListeners();
+      await _persistBlockedUsers();
+    } catch (_) {
+      // 서버 미배포·네트워크 실패 — 기기 목록 그대로.
+    }
+  }
+
   bool alertRegionOpen = true;
   bool alertSettlementDday = true;
 
@@ -194,6 +284,8 @@ class AppState extends ChangeNotifier {
   Future<void> attachCommunityServer(TravelRepository repository, int userId) async {
     _repository = repository;
     _serverUserId = userId;
+    await restoreBlockedUsers();
+    await syncBlockedUsersFromServer();
     await refreshCommunityFromServer();
   }
 
@@ -230,6 +322,7 @@ class AppState extends ChangeNotifier {
       avatarEmoji: avatar.emoji,
       avatarBg: avatar.color,
       nick: data.authorNickname,
+      authorId: data.authorId,
       region: data.regionName ?? '전국',
       timeAgo: relativeTime(data.createdAt),
       tag: switch (data.type) {

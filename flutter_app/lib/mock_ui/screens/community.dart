@@ -79,14 +79,14 @@ class _CommunityTabState extends State<CommunityTab> {
   }
 
   List<String> get _regionLabels {
-    final names = <String>{for (final p in AppState.I.posts.where((p) => !p.private)) p.region};
+    final names = <String>{for (final p in AppState.I.visiblePosts.where((p) => !p.private)) p.region};
     // 지역 마스터 순서 유지
     return ['전체', ...AppState.I.regions.map((r) => r.name).where(names.contains)];
   }
 
   List<Post> get _list {
     final regions = _regionLabels;
-    final all = AppState.I.posts
+    final all = AppState.I.visiblePosts
         .where((p) => !p.private)
         .where((p) => _region == 0 || p.region == regions[_region])
         .toList();
@@ -293,7 +293,7 @@ class CommunityFeedScreen extends StatefulWidget {
 class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
   @override
   Widget build(BuildContext context) {
-    var posts = AppState.I.posts
+    var posts = AppState.I.visiblePosts
         .where((p) => !p.private)
         .where((p) => widget.region == null || p.region == widget.region)
         .toList();
@@ -745,11 +745,18 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
                 leading: const Icon(Icons.delete_outline_rounded, color: AppColors.coralDeep),
                 title: const Text('글 삭제'),
                 onTap: () => Navigator.pop(c, 'delete')),
-          ] else
+          ] else ...[
             ListTile(
                 leading: const Icon(Icons.flag_outlined, color: AppColors.coralDeep),
                 title: const Text('신고하기'),
                 onTap: () => Navigator.pop(c, 'report')),
+            ListTile(
+                leading: const Icon(Icons.block_outlined, color: AppColors.ink7),
+                title: Text('${p.nick} 차단'),
+                subtitle: const Text('이 사용자의 글과 댓글이 더 이상 보이지 않아요',
+                    style: TextStyle(fontSize: 12, color: AppColors.ink4)),
+                onTap: () => Navigator.pop(c, 'block')),
+          ],
           const SizedBox(height: 6),
         ]),
       ),
@@ -757,6 +764,8 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
     if (!mounted || action == null) return;
     if (action == 'report') {
       await _reportPost();
+    } else if (action == 'block') {
+      await _blockAuthor(p.authorId, p.nick);
     } else if (action == 'delete') {
       final ok = await showConfirmDialog(
         context,
@@ -810,6 +819,98 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
     }
   }
 
+  /// 사용자 차단 — 확인 후 기기 차단 목록에 넣고 이 글에서 빠져나간다(피드에서 사라짐).
+  Future<void> _blockAuthor(int? authorId, String nick) async {
+    if (authorId == null) {
+      showMock(context, '이 글은 작성자 정보가 없어 차단할 수 없어요.');
+      return;
+    }
+    final ok = await showConfirmDialog(
+      context,
+      title: '$nick 님을 차단할까요?',
+      message: '이 사용자의 글과 댓글이 더 이상 보이지 않아요.\n마이페이지 > 차단한 사용자에서 언제든 해제할 수 있어요.',
+      confirmLabel: '차단',
+      danger: true,
+    );
+    if (!ok || !mounted) return;
+    await AppState.I.blockUser(authorId, nick);
+    if (!mounted) return;
+    if (widget.post.authorId == authorId) {
+      Navigator.of(context).pop();
+    } else {
+      setState(() {});
+    }
+    showToast(context, '$nick 님을 차단했어요.');
+  }
+
+  /// 남의 댓글 길게 누르면 — 신고 / 사용자 차단.
+  Future<void> _openCommentMenu(_Cmt c) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (sheet) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+              leading: const Icon(Icons.flag_outlined, color: AppColors.coralDeep),
+              title: const Text('댓글 신고하기'),
+              onTap: () => Navigator.pop(sheet, 'report')),
+          ListTile(
+              leading: const Icon(Icons.block_outlined, color: AppColors.ink7),
+              title: Text('${c.nick} 차단'),
+              onTap: () => Navigator.pop(sheet, 'block')),
+          const SizedBox(height: 6),
+        ]),
+      ),
+    );
+    if (!mounted || action == null) return;
+    if (action == 'report') {
+      await _reportComment(c);
+    } else if (action == 'block') {
+      await _blockAuthor(c.authorId, c.nick);
+    }
+  }
+
+  Future<void> _reportComment(_Cmt c) async {
+    final reason = await _pickReportReason();
+    if (!mounted || reason == null) return;
+    final s = AppState.I;
+    if (s.serverMode && c.id != null) {
+      try {
+        await s.communityRepository!.reportCommunity(
+            userId: s.communityUserId!,
+            targetType: 'COMMENT',
+            targetId: c.id!,
+            reason: reason);
+      } catch (_) {}
+    }
+    if (mounted) showToast(context, '신고가 접수됐어요. 검토 후 조치할게요.');
+  }
+
+  Future<String?> _pickReportReason() {
+    return showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (c) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Padding(
+            padding: EdgeInsets.only(bottom: 6),
+            child: Text('신고 사유',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.ink9)),
+          ),
+          for (final r in ['홍보·도배성 글이에요', '욕설·혐오 표현이 있어요', '개인정보가 노출됐어요', '허위 정보예요', '기타'])
+            ListTile(dense: true, title: Text(r), onTap: () => Navigator.pop(c, r)),
+          const SizedBox(height: 6),
+        ]),
+      ),
+    );
+  }
+
   Future<void> _deleteMyPost() async {
     final s = AppState.I;
     if (s.serverMode && widget.post.serverId != null) {
@@ -857,7 +958,8 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
     final isReply = c.parentId != null;
     final myComment = c.nick == AppState.I.nickname;
     return GestureDetector(
-      onLongPress: myComment ? () => _deleteComment(c) : null,
+      // 내 댓글은 삭제, 남의 댓글은 신고·차단 시트.
+      onLongPress: () => myComment ? _deleteComment(c) : _openCommentMenu(c),
       child: Padding(
       padding: EdgeInsets.only(top: 12, left: isReply ? 34 : 0),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1038,7 +1140,8 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
             Text('댓글 ${_comments.length}',
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.ink9)),
             const SizedBox(height: 6),
-            for (final c in _comments) _commentRow(c),
+            for (final c in _comments)
+              if (!AppState.I.isBlocked(c.authorId)) _commentRow(c),
               ]),
             ),
           ]),
@@ -1635,7 +1738,7 @@ class _SavedPostsScreenState extends State<SavedPostsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final saved = AppState.I.posts
+    final saved = AppState.I.visiblePosts
         .where((p) => p.savedByMe)
         .where((p) => _filter == 0 || tagLabel(p.tag) == _filters[_filter])
         .toList();

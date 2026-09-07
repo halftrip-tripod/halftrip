@@ -219,6 +219,7 @@ class CommunityPostData {
     required this.likedByMe,
     required this.savedByMe,
     required this.mine,
+    this.authorId,
     required this.authorNickname,
     required this.authorAvatarPreset,
     required this.createdAt,
@@ -242,6 +243,8 @@ class CommunityPostData {
   final bool likedByMe;
   final bool savedByMe;
   final bool mine;
+  /// 작성자 서버 userId — 차단 목록 대조용. 옛 응답엔 없을 수 있어 null 허용.
+  final int? authorId;
   final String authorNickname;
   final String authorAvatarPreset;
   final DateTime createdAt;
@@ -270,6 +273,7 @@ class CommunityPostData {
         likedByMe: json['likedByMe'] as bool? ?? false,
         savedByMe: json['savedByMe'] as bool? ?? false,
         mine: json['mine'] as bool? ?? false,
+        authorId: (json['authorId'] as num?)?.toInt(),
         authorNickname: json['authorNickname'] as String? ?? '여행자',
         authorAvatarPreset: json['authorAvatarPreset'] as String? ?? '0:0',
         createdAt:

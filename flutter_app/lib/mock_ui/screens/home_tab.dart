@@ -228,7 +228,7 @@ class _HomeTabState extends State<HomeTab> {
 
   /// 공개 글 좋아요순 상위 2개 — 코스 첨부/코스 태그 글 우선.
   List<Post> _popularPosts() {
-    final public = AppState.I.posts.where((p) => !p.private).toList();
+    final public = AppState.I.visiblePosts.where((p) => !p.private).toList();
     int weight(Post p) => (p.courseName != null || p.tag == PostTag.course) ? 1 : 0;
     public.sort((a, b) {
       final byCourse = weight(b).compareTo(weight(a));

@@ -152,7 +152,11 @@ class Post {
     this.title,
     this.serverId,
     this.edited = false,
+    this.authorId,
   });
+
+  /// 작성자 서버 userId — 사용자 차단 대조용(서버 글만 값이 있음).
+  int? authorId;
 
   /// 실서버 게시글 id — 서버 연동 모드에서만 채워짐 (mock 시드는 null).
   int? serverId;
