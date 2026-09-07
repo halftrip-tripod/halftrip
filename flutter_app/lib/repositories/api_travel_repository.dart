@@ -1095,6 +1095,27 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<Map<int, String>> getBlockedUsers(int userId) async {
+    final response = await _jsonRequest('GET', '/community/blocks', query: {'userId': userId});
+    final items = response['data'] as List<dynamic>? ?? const [];
+    return {
+      for (final item in items.whereType<Map<String, dynamic>>())
+        (item['userId'] as num).toInt(): item['nickname'] as String? ?? '',
+    };
+  }
+
+  @override
+  Future<void> blockUser({required int userId, required int blockedUserId}) async {
+    await _jsonRequest('POST', '/community/blocks',
+        body: {'userId': userId, 'blockedUserId': blockedUserId});
+  }
+
+  @override
+  Future<void> unblockUser({required int userId, required int blockedUserId}) async {
+    await _jsonRequest('DELETE', '/community/blocks/$blockedUserId', query: {'userId': userId});
+  }
+
+  @override
   Future<void> reportCommunity({
     required int userId,
     required String targetType,

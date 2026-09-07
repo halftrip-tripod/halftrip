@@ -258,6 +258,12 @@ abstract class TravelRepository {
       {int? parentId, int? mentionUserId});
   Future<void> toggleCommunityCommentLike(int commentId, int userId);
   Future<void> deleteCommunityComment(int commentId, int userId);
+
+  // ── 사용자 차단 (계정 단위, /api/community/blocks) ──
+  /// 차단 목록: blockedUserId → 닉네임.
+  Future<Map<int, String>> getBlockedUsers(int userId);
+  Future<void> blockUser({required int userId, required int blockedUserId});
+  Future<void> unblockUser({required int userId, required int blockedUserId});
   Future<void> reportCommunity({
     required int userId,
     required String targetType,

@@ -90,16 +90,58 @@ class AppState extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// 차단 — 화면엔 즉시 반영(낙관), 서버 모드면 계정에도 저장한다.
+  /// 서버 저장이 실패해도 기기 목록은 유지해 이 기기에서는 계속 안 보이게 한다.
   Future<void> blockUser(int userId, String nick) async {
     blockedUsers[userId] = nick;
     notifyListeners();
     await _persistBlockedUsers();
+    final repo = _repository;
+    final me = _serverUserId;
+    if (repo != null && me != null) {
+      try {
+        await repo.blockUser(userId: me, blockedUserId: userId);
+      } catch (_) {}
+    }
   }
 
   Future<void> unblockUser(int userId) async {
     blockedUsers.remove(userId);
     notifyListeners();
     await _persistBlockedUsers();
+    final repo = _repository;
+    final me = _serverUserId;
+    if (repo != null && me != null) {
+      try {
+        await repo.unblockUser(userId: me, blockedUserId: userId);
+      } catch (_) {}
+    }
+  }
+
+  /// 서버(계정)의 차단 목록으로 기기 목록을 맞춘다 — 로그인·복원 직후.
+  /// 서버가 원본이라 기기에만 남은 항목은 서버로 올려 둔다(오프라인에서 차단한 경우).
+  Future<void> syncBlockedUsersFromServer() async {
+    final repo = _repository;
+    final me = _serverUserId;
+    if (repo == null || me == null) return;
+    try {
+      final remote = await repo.getBlockedUsers(me);
+      for (final e in blockedUsers.entries) {
+        if (!remote.containsKey(e.key)) {
+          try {
+            await repo.blockUser(userId: me, blockedUserId: e.key);
+            remote[e.key] = e.value;
+          } catch (_) {}
+        }
+      }
+      blockedUsers
+        ..clear()
+        ..addAll(remote);
+      notifyListeners();
+      await _persistBlockedUsers();
+    } catch (_) {
+      // 서버 미배포·네트워크 실패 — 기기 목록 그대로.
+    }
   }
 
   bool alertRegionOpen = true;
@@ -242,6 +284,8 @@ class AppState extends ChangeNotifier {
   Future<void> attachCommunityServer(TravelRepository repository, int userId) async {
     _repository = repository;
     _serverUserId = userId;
+    await restoreBlockedUsers();
+    await syncBlockedUsersFromServer();
     await refreshCommunityFromServer();
   }
 

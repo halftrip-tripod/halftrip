@@ -1737,6 +1737,21 @@ class MockTravelRepository implements TravelRepository {
   @override
   Future<void> deleteCommunityComment(int commentId, int userId) async {}
 
+  final Map<int, String> _mockBlocked = {};
+
+  @override
+  Future<Map<int, String>> getBlockedUsers(int userId) async => Map.of(_mockBlocked);
+
+  @override
+  Future<void> blockUser({required int userId, required int blockedUserId}) async {
+    _mockBlocked[blockedUserId] = '사용자 $blockedUserId';
+  }
+
+  @override
+  Future<void> unblockUser({required int userId, required int blockedUserId}) async {
+    _mockBlocked.remove(blockedUserId);
+  }
+
   @override
   Future<void> reportCommunity({
     required int userId,
