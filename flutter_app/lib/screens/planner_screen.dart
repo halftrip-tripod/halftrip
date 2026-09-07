@@ -133,8 +133,29 @@ class _PlannerScreenState extends State<PlannerScreen> {
           }
 
           final tripDetail = snapshot.data!;
-          final places = [...tripDetail.selectedPlaces]
+          var places = [...tripDetail.selectedPlaces]
             ..sort((a, b) => a.visitOrder.compareTo(b.visitOrder));
+          // 여행 장소가 비어 있어도 연결된 코스가 있으면 그 스톱을 보여준다.
+          // (코스만 연결되고 장소 복사가 빠진 여행 — 시드·옛 버전 저장분 — 이 빈 화면으로 뜨지 않게)
+          if (places.isEmpty) {
+            final course = AppScope.of(context).selectedCourseForTrip(widget.tripId);
+            if (course != null) {
+              places = [
+                for (final (i, s) in course.stops.indexed)
+                  TripPlaceItem(
+                    id: 0,
+                    placeType: PlaceCategory.halfPrice,
+                    referencePlaceId: s.placeId,
+                    placeName: s.name,
+                    address: s.address,
+                    visitOrder: i + 1,
+                    latitude: s.latitude == 0 ? null : s.latitude,
+                    longitude: s.longitude == 0 ? null : s.longitude,
+                    checked: false,
+                  ),
+              ];
+            }
+          }
 
           final markers = places
               .where((item) => item.latitude != null && item.longitude != null)

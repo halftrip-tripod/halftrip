@@ -31,6 +31,8 @@ class _MainShellState extends State<MainShell> {
     AppState.I.tabRequest.addListener(_onTabRequest);
     // 커뮤니티 내 글·반응 로컬 복원 (서버 J 전까지 기기 유지).
     AppState.I.restoreCommunity();
+    // 차단 목록은 서버 모드와 무관하게 기기에서 복원한다.
+    AppState.I.restoreBlockedUsers();
   }
 
   @override

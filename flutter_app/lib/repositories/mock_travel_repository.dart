@@ -1662,6 +1662,16 @@ class MockTravelRepository implements TravelRepository {
   Future<List<CommunityPostData>> getCommunityFeed({int? userId}) async => const [];
 
   @override
+  Future<String> uploadCommunityPhoto({
+    required int userId,
+    required Uint8List bytes,
+    required String fileName,
+  }) async {
+    // 목업엔 저장소가 없다 — 이모지 플레이스홀더(Post.photos가 이모지도 받는다).
+    return '🖼️';
+  }
+
+  @override
   Future<CommunityPostData> createCommunityPost({
     required int userId,
     required String type,
@@ -1726,6 +1736,21 @@ class MockTravelRepository implements TravelRepository {
 
   @override
   Future<void> deleteCommunityComment(int commentId, int userId) async {}
+
+  final Map<int, String> _mockBlocked = {};
+
+  @override
+  Future<Map<int, String>> getBlockedUsers(int userId) async => Map.of(_mockBlocked);
+
+  @override
+  Future<void> blockUser({required int userId, required int blockedUserId}) async {
+    _mockBlocked[blockedUserId] = '사용자 $blockedUserId';
+  }
+
+  @override
+  Future<void> unblockUser({required int userId, required int blockedUserId}) async {
+    _mockBlocked.remove(blockedUserId);
+  }
 
   @override
   Future<void> reportCommunity({

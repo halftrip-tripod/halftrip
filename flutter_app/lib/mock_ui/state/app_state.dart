@@ -54,6 +54,96 @@ class AppState extends ChangeNotifier {
   Color avatarBg = const Color(0xFFE0F2FE);
 
   // 알림 설정
+  // ── 사용자 차단 (Google UGC 정책: 신고 + 차단) ──
+  // 서버 userId → 닉네임(목록 표시용). 기기(SharedPreferences)에 저장하고, 피드·댓글·인기글에서
+  // 차단한 사용자의 글을 통째로 숨긴다. 서버 동기화는 후속 — 기기 바꾸면 목록이 비는 건 감수.
+  final Map<int, String> blockedUsers = {};
+  static const _blockedUsersKey = 'community_blocked_users_v1';
+  bool _blockedRestored = false;
+
+  bool isBlocked(int? userId) => userId != null && blockedUsers.containsKey(userId);
+
+  /// 차단한 사용자의 글을 뺀 목록 — 피드·지역 피드·저장한 글·인기글이 전부 이걸 쓴다.
+  List<Post> get visiblePosts =>
+      posts.where((p) => !isBlocked(p.authorId)).toList();
+
+  Future<void> restoreBlockedUsers() async {
+    if (_blockedRestored) return;
+    _blockedRestored = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_blockedUsersKey);
+      if (raw == null) return;
+      final j = jsonDecode(raw) as Map<String, dynamic>;
+      blockedUsers
+        ..clear()
+        ..addAll({for (final e in j.entries) int.parse(e.key): '${e.value}'});
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> _persistBlockedUsers() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_blockedUsersKey,
+          jsonEncode({for (final e in blockedUsers.entries) '${e.key}': e.value}));
+    } catch (_) {}
+  }
+
+  /// 차단 — 화면엔 즉시 반영(낙관), 서버 모드면 계정에도 저장한다.
+  /// 서버 저장이 실패해도 기기 목록은 유지해 이 기기에서는 계속 안 보이게 한다.
+  Future<void> blockUser(int userId, String nick) async {
+    blockedUsers[userId] = nick;
+    notifyListeners();
+    await _persistBlockedUsers();
+    final repo = _repository;
+    final me = _serverUserId;
+    if (repo != null && me != null) {
+      try {
+        await repo.blockUser(userId: me, blockedUserId: userId);
+      } catch (_) {}
+    }
+  }
+
+  Future<void> unblockUser(int userId) async {
+    blockedUsers.remove(userId);
+    notifyListeners();
+    await _persistBlockedUsers();
+    final repo = _repository;
+    final me = _serverUserId;
+    if (repo != null && me != null) {
+      try {
+        await repo.unblockUser(userId: me, blockedUserId: userId);
+      } catch (_) {}
+    }
+  }
+
+  /// 서버(계정)의 차단 목록으로 기기 목록을 맞춘다 — 로그인·복원 직후.
+  /// 서버가 원본이라 기기에만 남은 항목은 서버로 올려 둔다(오프라인에서 차단한 경우).
+  Future<void> syncBlockedUsersFromServer() async {
+    final repo = _repository;
+    final me = _serverUserId;
+    if (repo == null || me == null) return;
+    try {
+      final remote = await repo.getBlockedUsers(me);
+      for (final e in blockedUsers.entries) {
+        if (!remote.containsKey(e.key)) {
+          try {
+            await repo.blockUser(userId: me, blockedUserId: e.key);
+            remote[e.key] = e.value;
+          } catch (_) {}
+        }
+      }
+      blockedUsers
+        ..clear()
+        ..addAll(remote);
+      notifyListeners();
+      await _persistBlockedUsers();
+    } catch (_) {
+      // 서버 미배포·네트워크 실패 — 기기 목록 그대로.
+    }
+  }
+
   bool alertRegionOpen = true;
   bool alertSettlementDday = true;
 
@@ -72,6 +162,52 @@ class AppState extends ChangeNotifier {
 
   int get spentAmount =>
       120000 + receipts.skip(3).fold(0, (s, r) => s + r.amount);
+
+  /// 서버 지역 목록으로 지역 마스터를 맞춘다 — 커뮤니티 지역 필터·글쓰기 지역 선택 등
+  /// AppState.regions를 읽는 화면이 목업 8곳이 아니라 반값여행 진행 지역 전체를 보게 한다.
+  /// 이미 있는 지역 객체는 그대로 두고(즐겨찾기 상태 유지) 순서만 서버(displayOrder)대로.
+  void syncRegions(List<api.RegionSummary> server) {
+    if (server.isEmpty) return;
+    final sorted = [...server]..sort((a, b) => a.displayOrder.compareTo(b.displayOrder));
+    final byName = {for (final r in regions) r.name: r};
+    final next = <Region>[];
+    for (final s in sorted) {
+      final existing = byName[s.name];
+      if (existing != null) {
+        next.add(existing);
+        continue;
+      }
+      final status = switch (s.statusCode.toUpperCase()) {
+        'APPLYING' => RegionStatus.open,
+        'PREPARING' => RegionStatus.soon,
+        _ => RegionStatus.closed,
+      };
+      final deadline = s.applyDeadline;
+      final dday = deadline == null ? 0 : deadline.difference(DateTime.now()).inDays;
+      final open = s.openDate;
+      next.add(Region(
+        name: s.name,
+        province: s.province,
+        emoji: '🗺️',
+        status: status,
+        condition: s.refundConditionAmount > 0
+            ? '최소 소비 ${(s.refundConditionAmount / 10000).round()}만원 · 관광지 2곳 인증'
+            : '관광지 2곳 인증',
+        dday: dday < 0 ? 0 : dday,
+        ddayWarn: dday >= 0 && dday <= 3,
+        openLabel: status == RegionStatus.soon && open != null
+            ? '${open.month}월 ${open.day}일 오픈 예정'
+            : null,
+      ));
+    }
+    // 서버에 없는 목업 지역은 뒤에 남긴다(테스트 데이터 화면이 깨지지 않게).
+    final serverNames = {for (final s in sorted) s.name};
+    next.addAll(regions.where((r) => !serverNames.contains(r.name)));
+    regions
+      ..clear()
+      ..addAll(next);
+    notifyListeners();
+  }
 
   /// 이름으로 목업 지역 찾기 — 목업 목록(7곳)에 없는 지역이면 이름 그대로 만들어
   /// 돌려준다. (예전엔 regions[1]=강진 폴백이라 횡성 여행의 AI 코스가 강진으로 생성됐음)
@@ -148,6 +284,8 @@ class AppState extends ChangeNotifier {
   Future<void> attachCommunityServer(TravelRepository repository, int userId) async {
     _repository = repository;
     _serverUserId = userId;
+    await restoreBlockedUsers();
+    await syncBlockedUsersFromServer();
     await refreshCommunityFromServer();
   }
 
@@ -184,6 +322,7 @@ class AppState extends ChangeNotifier {
       avatarEmoji: avatar.emoji,
       avatarBg: avatar.color,
       nick: data.authorNickname,
+      authorId: data.authorId,
       region: data.regionName ?? '전국',
       timeAgo: relativeTime(data.createdAt),
       tag: switch (data.type) {

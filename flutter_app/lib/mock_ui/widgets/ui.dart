@@ -310,18 +310,23 @@ class CtaBar extends StatelessWidget {
 }
 
 /// 메인 CTA 버튼.
+///
+/// [loading]이면 탭을 막고 스피너를 보여 준다 — 저장·등록처럼 서버를 기다리는 동작에서
+/// 연타로 같은 요청이 여러 번 나가는 걸 막는다. 라벨은 호출부가 '저장 중…'처럼 바꿔 준다.
 class PrimaryButton extends StatelessWidget {
-  const PrimaryButton(this.label, {super.key, this.onTap, this.icon, this.disabled = false});
+  const PrimaryButton(this.label,
+      {super.key, this.onTap, this.icon, this.disabled = false, this.loading = false});
   final String label;
   final VoidCallback? onTap;
   final IconData? icon;
   final bool disabled;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
       child: GestureDetector(
-        onTap: disabled ? null : onTap,
+        onTap: disabled || loading ? null : onTap,
         child: Container(
           height: 54,
           decoration: BoxDecoration(
@@ -332,7 +337,14 @@ class PrimaryButton extends StatelessWidget {
                 : const [BoxShadow(color: Color(0x470EA5E9), blurRadius: 18, offset: Offset(0, 8))],
           ),
           child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            if (icon != null) ...[
+            if (loading) ...[
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
+              ),
+              const SizedBox(width: 9),
+            ] else if (icon != null) ...[
               Icon(icon, size: 19, color: disabled ? AppColors.ink4 : Colors.white),
               const SizedBox(width: 7),
             ],
@@ -1011,6 +1023,136 @@ void showMock(BuildContext context, String message) {
   ScaffoldMessenger.of(context)
     ..clearSnackBars()
     ..showSnackBar(SnackBar(content: Text(message)));
+}
+
+/// 완료 안내 토스트 — 삭제·저장처럼 끝난 동작을 한 줄로 알린다. showMock과 같은 스낵바지만
+/// 이름으로 의도를 드러낸다(목업 안내가 아니라 실제 결과).
+void showToast(BuildContext context, String message) => showMock(context, message);
+
+/// 디자인 시스템 다이얼로그 껍데기 — 라운드 22 흰 카드, 제목 + 본문 + 버튼 한 줄.
+Widget _appDialogFrame({
+  required String title,
+  required Widget body,
+  required List<Widget> buttons,
+}) {
+  return Dialog(
+    backgroundColor: Colors.white,
+    insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text(title,
+            style: const TextStyle(
+                fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -0.4)),
+        const SizedBox(height: 10),
+        body,
+        const SizedBox(height: 18),
+        Row(children: [
+          for (var i = 0; i < buttons.length; i++) ...[
+            if (i > 0) const SizedBox(width: 10),
+            buttons[i],
+          ],
+        ]),
+      ]),
+    ),
+  );
+}
+
+/// 확인 다이얼로그 — "정말 삭제할까요?" 류. true면 진행.
+/// [danger]면 확인 버튼을 빨간 계열로 그려 되돌릴 수 없는 동작임을 알린다.
+Future<bool> showConfirmDialog(
+  BuildContext context, {
+  required String title,
+  String? message,
+  String confirmLabel = '확인',
+  String cancelLabel = '취소',
+  bool danger = false,
+}) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (c) => _appDialogFrame(
+      title: title,
+      body: message == null
+          ? const SizedBox.shrink()
+          : Text(message,
+              style: const TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink5, height: 1.5)),
+      buttons: [
+        SecondaryButton(cancelLabel, onTap: () => Navigator.pop(c, false)),
+        if (danger)
+          _DangerButton(confirmLabel, onTap: () => Navigator.pop(c, true))
+        else
+          PrimaryButton(confirmLabel, onTap: () => Navigator.pop(c, true)),
+      ],
+    ),
+  );
+  return result ?? false;
+}
+
+/// 한 줄 입력 다이얼로그 — 코스 이름 바꾸기 등. 비우거나 취소하면 null.
+Future<String?> showTextInputDialog(
+  BuildContext context, {
+  required String title,
+  String initialValue = '',
+  String hint = '',
+  String confirmLabel = '저장',
+}) async {
+  final ctl = TextEditingController(text: initialValue);
+  final result = await showDialog<String>(
+    context: context,
+    builder: (c) => _appDialogFrame(
+      title: title,
+      body: TextField(
+        controller: ctl,
+        autofocus: true,
+        textInputAction: TextInputAction.done,
+        onSubmitted: (v) => Navigator.pop(c, v.trim()),
+        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink9),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(fontSize: 14, color: AppColors.ink4),
+          filled: true,
+          fillColor: AppColors.surf,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+        ),
+      ),
+      buttons: [
+        SecondaryButton('취소', onTap: () => Navigator.pop(c)),
+        PrimaryButton(confirmLabel, onTap: () => Navigator.pop(c, ctl.text.trim())),
+      ],
+    ),
+  );
+  ctl.dispose();
+  if (result == null || result.isEmpty) return null;
+  return result;
+}
+
+/// 위험 동작 확인 버튼 — PrimaryButton과 같은 크기, 색만 코랄.
+class _DangerButton extends StatelessWidget {
+  const _DangerButton(this.label, {required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          height: 54,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.coralDeep,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Text(label,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
+        ),
+      ),
+    );
+  }
 }
 
 /// 공통 바텀시트 래퍼 (라운드 28 · 그랩바).

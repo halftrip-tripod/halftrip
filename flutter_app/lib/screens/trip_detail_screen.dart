@@ -167,7 +167,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       const SizedBox(height: 14),
       _SectionCard(
         title: '여행 중 · 후 할 일',
-        subtitle: '출발하면 순서대로 열려요. 눌러서 준비 방법을 미리 확인해두세요.',
+        subtitle: '여행일이 다가오면 순서대로 열려요. 눌러서 준비 방법을 미리 확인해두세요.',
         child: Column(children: [
           for (var i = 0; i < _taskGuides.length; i++)
             _UpcomingRow(

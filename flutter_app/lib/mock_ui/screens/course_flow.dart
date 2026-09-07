@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/app_config.dart';
+import '../../core/app_controller.dart';
 import '../../core/app_scope.dart';
 import '../../models/app_models.dart';
 import '../../screens/youtube_course_start_screen.dart';
@@ -744,6 +745,37 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
     List<CourseStop> stops = const [];
     String? errorMessage;
     try {
+      stops = await _buildStops(controller, preferences);
+    } catch (error) {
+      errorMessage = '$error';
+    }
+
+    if (!mounted) return;
+    Navigator.of(context).pop(); // 다이얼로그 닫기
+
+    if (errorMessage != null || stops.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('코스를 생성하지 못했습니다: ${errorMessage ?? "추천할 장소가 없습니다."}')),
+      );
+      return;
+    }
+
+    Navigator.of(context).pushReplacement(MaterialPageRoute(
+        builder: (_) => CourseSimScreen(
+            region: widget.region,
+            nights: _nights,
+            forTrip: widget.forTrip,
+            stops: stops,
+            // 결과 화면의 '다시 생성'이 같은 조건으로 한 번 더 돌린다.
+            onRegenerate: () => _buildStops(controller, preferences))));
+  }
+
+  /// 후보 수집 → LLM 코스 생성 → 보정까지. 실패하면 던진다(호출부가 안내).
+  /// 이 화면이 닫힌 뒤(결과 화면의 다시 생성)에도 불리므로 context를 쓰지 않는다.
+  Future<List<CourseStop>> _buildStops(
+      AppController controller, List<String> preferences) async {
+    List<CourseStop> stops = const [];
+    {
       // mock_ui의 Region엔 백엔드 id가 없어 이름으로 실제 지역을 찾는다.
       final regions = await controller.repository.getRegions();
       final matched = regions.where((r) => r.name == widget.region.name);
@@ -802,26 +834,8 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
       }
       // 환급 인정 관광지 2곳 보장.
       stops = _ensureAiRefund(stops, cands);
-    } catch (error) {
-      errorMessage = '$error';
     }
-
-    if (!mounted) return;
-    Navigator.of(context).pop(); // 다이얼로그 닫기
-
-    if (errorMessage != null || stops.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('코스를 생성하지 못했습니다: ${errorMessage ?? "추천할 장소가 없습니다."}')),
-      );
-      return;
-    }
-
-    Navigator.of(context).pushReplacement(MaterialPageRoute(
-        builder: (_) => CourseSimScreen(
-            region: widget.region,
-            nights: _nights,
-            forTrip: widget.forTrip,
-            stops: stops)));
+    return stops;
   }
 
   @override
@@ -1353,12 +1367,17 @@ class CourseSimScreen extends StatefulWidget {
     this.nights = 1,
     this.forTrip,
     this.stops = const [],
+    this.onRegenerate,
   });
   final Region region;
   final int nights;
   final Trip? forTrip;
   /// AI가 실제 후보(TourAPI 지정관광지) 중에서 뽑은 장소 목록. 좌표를 포함한다.
   final List<CourseStop> stops;
+
+  /// '다시 생성' — 같은 지역·일수·취향으로 한 번 더 생성해 새 장소 목록을 돌려준다.
+  /// 없으면(직접 진입 등) 버튼은 안내만 한다.
+  final Future<List<CourseStop>> Function()? onRegenerate;
 
   @override
   State<CourseSimScreen> createState() => _CourseSimScreenState();
@@ -1371,10 +1390,52 @@ class _CourseSimScreenState extends State<CourseSimScreen> {
   /// 상세 일정에서 탭한 장소 — 지도를 그 핀으로 이동시키고 정보창을 연다.
   int? _focusStopId;
 
+  /// 다시 생성으로 바뀔 수 있어 위젯 값이 아니라 상태로 든다.
+  late List<CourseStop> _stops = widget.stops;
+
+  /// 저장 진행 중 — 버튼을 잠그고 스피너를 보여 연타로 같은 코스가 여러 개 생기지 않게 한다.
+  bool _saving = false;
+
+  /// 이 화면에서 저장하는 코스 id는 하나로 고정 — 혹시 두 번 저장돼도 같은 id라 덮어쓴다.
+  final String _saveId = 'gen-${DateTime.now().millisecondsSinceEpoch}';
+
   Region get region => widget.region;
   int get nights => widget.nights;
   Trip? get forTrip => widget.forTrip;
-  List<CourseStop> get stops => widget.stops;
+  List<CourseStop> get stops => _stops;
+
+  Future<void> _regenerate() async {
+    final regen = widget.onRegenerate;
+    if (regen == null) {
+      showMock(context, '이 화면에서는 다시 생성할 수 없어요. 코스 만들기에서 다시 시도해 주세요.');
+      return;
+    }
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _GeneratingDialog(
+          title: 'AI가 코스를 다시 만들고 있어요', steps: ['취향·환급 조건 분석', '장소 선정', '동선 최적화']),
+    );
+    List<CourseStop>? next;
+    String? error;
+    try {
+      next = await regen();
+    } catch (e) {
+      error = '$e';
+    }
+    if (!mounted) return;
+    Navigator.of(context).pop(); // 다이얼로그 닫기
+    if (error != null || next == null || next.isEmpty) {
+      showMock(context, '코스를 다시 만들지 못했어요: ${error ?? "추천할 장소가 없습니다."}');
+      return;
+    }
+    setState(() {
+      _stops = next!;
+      _mapDay = 1;
+      _focusStopId = null;
+    });
+    showToast(context, '취향을 반영해 코스를 다시 만들었어요.');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1392,9 +1453,27 @@ class _CourseSimScreenState extends State<CourseSimScreen> {
           GhostButton(
             label: '다시 생성',
             icon: Icons.refresh_rounded,
-            onTap: () => showMock(context, '취향을 반영해 코스를 다시 생성했어요. (목업)'),
+            onTap: _saving ? null : _regenerate,
           ),
-          PrimaryButton('내 코스함에 저장', icon: Icons.bookmark_rounded, onTap: () async {
+          PrimaryButton(_saving ? '저장 중…' : '내 코스함에 저장',
+              icon: Icons.bookmark_rounded, loading: _saving, onTap: () async {
+            if (_saving) return;
+            setState(() => _saving = true);
+            try {
+              await _save();
+            } finally {
+              if (mounted) setState(() => _saving = false);
+            }
+          }),
+        ],
+      ),
+      children: [
+        _buildSimBody(context, days, mapStops),
+      ],
+    );
+  }
+
+  Future<void> _save() async {
             final courseStops = stops.isEmpty ? gangjinStops() : stops;
             final c = Course(
               emoji: region.emoji, region: region.name, province: region.province,
@@ -1426,7 +1505,7 @@ class _CourseSimScreenState extends State<CourseSimScreen> {
               }
             } catch (_) {}
             await controller.saveCourse(SavedCourse(
-              id: 'gen-${DateTime.now().millisecondsSinceEpoch}',
+              id: _saveId,
               regionId: regionId,
               regionName: region.name,
               title: c.title,
@@ -1434,16 +1513,15 @@ class _CourseSimScreenState extends State<CourseSimScreen> {
               stops: savedStopsFromCourse(courseStops),
               createdAt: DateTime.now(),
             ));
-            if (!context.mounted) return;
+            if (!mounted) return;
             Navigator.of(context).pushReplacement(
                 MaterialPageRoute(builder: (_) => const CourseSavedScreen()));
-            showMock(context, '코스를 코스함에 저장했어요.');
-          }),
-        ],
-      ),
-      children: [
-        // 지도 + 일차 토글 + 일정을 한 덩어리로 — 스캐폴드 기본 간격(16)이 사이에 안 끼게.
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            showToast(context, '코스를 코스함에 저장했어요.');
+  }
+
+  /// 지도 + 일차 토글 + 일정을 한 덩어리로 — 스캐폴드 기본 간격(16)이 사이에 안 끼게.
+  Widget _buildSimBody(BuildContext context, List<int> days, List<CourseStop> mapStops) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           _buildStopsMap(context, mapStops, focusId: _focusStopId),
           if (days.length >= 2) ...[
             const SizedBox(height: 8),
@@ -1480,9 +1558,7 @@ class _CourseSimScreenState extends State<CourseSimScreen> {
               });
             },
           ),
-        ]),
-      ],
-    );
+        ]);
   }
 }
 
@@ -1690,7 +1766,8 @@ class CourseViewScreen extends StatefulWidget {
 
   /// 남의 코스를 열었을 때(커뮤니티 글 첨부) — 하단에 "내 코스함에 저장"을 띄우고
   /// 수정·삭제는 감춘다. 내 코스가 아니라 고칠 수 있으면 안 된다.
-  final VoidCallback? onSaveToLibrary;
+  /// 저장이 끝날 때까지 버튼을 잠그므로 Future를 돌려줘야 한다.
+  final Future<void> Function()? onSaveToLibrary;
 
   /// 여행에서 열었으면 그 여행 시작일 — DAY별 실제 날짜 라벨에 쓴다.
   final DateTime? startDate;
@@ -1718,6 +1795,32 @@ class _CourseViewScreenState extends State<CourseViewScreen> {
 
   /// 상세 일정에서 탭한 장소 — 지도를 그 핀으로 이동시키고 정보창을 연다.
   int? _focusStopId;
+
+  /// '내 코스함에 저장' 진행 중 — 연타 방지 + 스피너.
+  bool _saving = false;
+
+  Future<void> _saveToLibrary() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      await widget.onSaveToLibrary!();
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  /// 삭제는 되돌릴 수 없으니 한 번 묻는다 — 호출부는 확인된 뒤에만 불린다.
+  Future<void> _confirmDelete() async {
+    final ok = await showConfirmDialog(
+      context,
+      title: '코스를 삭제할까요?',
+      message: '코스함에서 사라지고 되돌릴 수 없어요.',
+      confirmLabel: '삭제',
+      danger: true,
+    );
+    if (!ok || !mounted) return;
+    widget.onDelete?.call();
+  }
 
   /// 편집은 어느 진입이든 통일된 CourseEditScreen 하나로.
   void _openEdit() {
@@ -1756,13 +1859,15 @@ class _CourseViewScreenState extends State<CourseViewScreen> {
           IconButton(
             icon: const Icon(Icons.delete_outline_rounded, size: 21),
             tooltip: '코스 삭제',
-            onPressed: widget.onDelete,
+            onPressed: _confirmDelete,
           ),
       ],
       cta: widget.onSaveToLibrary != null
           ? CtaBar(children: [
-              PrimaryButton('내 코스함에 저장',
-                  icon: Icons.bookmark_add_outlined, onTap: widget.onSaveToLibrary!),
+              PrimaryButton(_saving ? '저장 중…' : '내 코스함에 저장',
+                  icon: Icons.bookmark_add_outlined,
+                  loading: _saving,
+                  onTap: _saveToLibrary),
             ])
           : widget.onOpenPlan == null
               ? null
@@ -2022,12 +2127,13 @@ class _CourseSavedScreenState extends State<CourseSavedScreen> {
                         stops: savedStopsFromCourse(c.stops),
                         createdAt: saved.createdAt,
                       )),
-                      // 코스함 진입 — 우측 상단 삭제로 바로 코스함에서 제거.
+                      // 코스함 진입 — 우측 상단 삭제(확인 팝업은 뷰가 띄움) → 코스함에서 제거.
                       onDelete: () async {
                         await controller.deleteSavedCourse(saved.id);
                         if (viewContext.mounted) {
                           Navigator.of(viewContext).pop();
                         }
+                        if (context.mounted) showToast(context, '코스를 삭제했어요.');
                       },
                       // 상세 계획표 — 코스 스톱을 날짜·시간표로 (직접·AI·유튜브 공통).
                       onOpenPlan: () => Navigator.of(viewContext).push(
@@ -2343,34 +2449,17 @@ class _CourseEditScreenState extends State<CourseEditScreen> {
   }
 
   Future<void> _renameCourse() async {
-    final ctl = TextEditingController(text: widget.course.title);
-    final name = await showDialog<String>(
-      context: context,
-      builder: (c) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        title: const Text('코스 이름', style: TextStyle(fontWeight: FontWeight.w900)),
-        content: TextField(
-          controller: ctl,
-          autofocus: true,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink9),
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: AppColors.surf,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text('취소')),
-          FilledButton(
-              onPressed: () => Navigator.pop(c, ctl.text.trim()), child: const Text('저장')),
-        ],
-      ),
+    // 디자인 시스템 다이얼로그 — 취소·저장이 한 줄(SecondaryButton + PrimaryButton).
+    final name = await showTextInputDialog(
+      context,
+      title: '코스 이름',
+      initialValue: widget.course.title,
+      hint: '예: 완도 1박2일 힐링 코스',
     );
-    if (name == null || name.isEmpty) return;
+    if (name == null || !mounted) return;
     setState(() => widget.course.title = name);
     AppState.I.update();
+    showToast(context, '코스 이름을 바꿨어요.');
   }
 
   /// DAY 안에서 장소 순서를 드래그로 바꾼다. 순서만 이동(시간 개념 없음) → 지도도 그 순서로 갱신.

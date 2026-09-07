@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 알림 아이콘 틴트 = AppColors.p500 (메인 하늘색). Dart 테마와 같이 바꿔야 한다. -->
+    <color name="notification_accent">#0EA5E9</color>
+</resources>

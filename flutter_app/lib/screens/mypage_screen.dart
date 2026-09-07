@@ -7,6 +7,7 @@ import '../models/app_models.dart';
 import '../theme/app_colors.dart';
 import '../utils/profile_presets.dart';
 import '../widgets/ui/app_card.dart';
+import 'blocked_users_screen.dart';
 import 'info_screens.dart';
 import 'profile_edit_screen.dart';
 
@@ -106,6 +107,10 @@ class _MyPageScreenState extends State<MyPageScreen> {
                   icon: Icons.help_outline_rounded,
                   label: '자주 묻는 질문',
                   onTap: () => _push(const FaqScreen())),
+              _MenuRow(
+                  icon: Icons.block_outlined,
+                  label: '차단한 사용자',
+                  onTap: () => _push(const BlockedUsersScreen())),
               _MenuRow(
                   icon: Icons.description_outlined,
                   label: '이용약관',

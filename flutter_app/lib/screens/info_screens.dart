@@ -300,7 +300,7 @@ class PolicyScreen extends StatelessWidget {
 
   factory PolicyScreen.privacy() => const PolicyScreen(
         title: '개인정보 처리방침',
-        effectiveDate: '2026.08.25',
+        effectiveDate: '2026.09.02',
         sections: _privacySections,
       );
 

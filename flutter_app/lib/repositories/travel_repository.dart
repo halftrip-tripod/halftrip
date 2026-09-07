@@ -215,6 +215,13 @@ abstract class TravelRepository {
 
   // ── 커뮤니티 (/api/community — 2026-07-28 구현) ──
   Future<List<CommunityPostData>> getCommunityFeed({int? userId});
+
+  /// 글 사진 업로드(POST /community/photos) — 공개 URL을 돌려준다. 글 등록 전에 먼저 올린다.
+  Future<String> uploadCommunityPhoto({
+    required int userId,
+    required Uint8List bytes,
+    required String fileName,
+  });
   Future<CommunityPostData> createCommunityPost({
     required int userId,
     required String type,
@@ -251,6 +258,12 @@ abstract class TravelRepository {
       {int? parentId, int? mentionUserId});
   Future<void> toggleCommunityCommentLike(int commentId, int userId);
   Future<void> deleteCommunityComment(int commentId, int userId);
+
+  // ── 사용자 차단 (계정 단위, /api/community/blocks) ──
+  /// 차단 목록: blockedUserId → 닉네임.
+  Future<Map<int, String>> getBlockedUsers(int userId);
+  Future<void> blockUser({required int userId, required int blockedUserId});
+  Future<void> unblockUser({required int userId, required int blockedUserId});
   Future<void> reportCommunity({
     required int userId,
     required String targetType,
