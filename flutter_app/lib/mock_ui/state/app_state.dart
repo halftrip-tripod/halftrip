@@ -54,6 +54,54 @@ class AppState extends ChangeNotifier {
   Color avatarBg = const Color(0xFFE0F2FE);
 
   // 알림 설정
+  // ── 사용자 차단 (Google UGC 정책: 신고 + 차단) ──
+  // 서버 userId → 닉네임(목록 표시용). 기기(SharedPreferences)에 저장하고, 피드·댓글·인기글에서
+  // 차단한 사용자의 글을 통째로 숨긴다. 서버 동기화는 후속 — 기기 바꾸면 목록이 비는 건 감수.
+  final Map<int, String> blockedUsers = {};
+  static const _blockedUsersKey = 'community_blocked_users_v1';
+  bool _blockedRestored = false;
+
+  bool isBlocked(int? userId) => userId != null && blockedUsers.containsKey(userId);
+
+  /// 차단한 사용자의 글을 뺀 목록 — 피드·지역 피드·저장한 글·인기글이 전부 이걸 쓴다.
+  List<Post> get visiblePosts =>
+      posts.where((p) => !isBlocked(p.authorId)).toList();
+
+  Future<void> restoreBlockedUsers() async {
+    if (_blockedRestored) return;
+    _blockedRestored = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_blockedUsersKey);
+      if (raw == null) return;
+      final j = jsonDecode(raw) as Map<String, dynamic>;
+      blockedUsers
+        ..clear()
+        ..addAll({for (final e in j.entries) int.parse(e.key): '${e.value}'});
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> _persistBlockedUsers() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_blockedUsersKey,
+          jsonEncode({for (final e in blockedUsers.entries) '${e.key}': e.value}));
+    } catch (_) {}
+  }
+
+  Future<void> blockUser(int userId, String nick) async {
+    blockedUsers[userId] = nick;
+    notifyListeners();
+    await _persistBlockedUsers();
+  }
+
+  Future<void> unblockUser(int userId) async {
+    blockedUsers.remove(userId);
+    notifyListeners();
+    await _persistBlockedUsers();
+  }
+
   bool alertRegionOpen = true;
   bool alertSettlementDday = true;
 
@@ -230,6 +278,7 @@ class AppState extends ChangeNotifier {
       avatarEmoji: avatar.emoji,
       avatarBg: avatar.color,
       nick: data.authorNickname,
+      authorId: data.authorId,
       region: data.regionName ?? '전국',
       timeAgo: relativeTime(data.createdAt),
       tag: switch (data.type) {
