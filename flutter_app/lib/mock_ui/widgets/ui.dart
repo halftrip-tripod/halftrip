@@ -1014,8 +1014,14 @@ class _CourseMapPainter extends CustomPainter {
 String? refundProofRequirement(String? conditionText) {
   final text = (conditionText ?? '').trim();
   if (text.isEmpty) return null;
-  var head = text.split('·').first.split('+').first.trim();
-  head = head.replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim(); // 괄호 부연은 뺀다
+  // 괄호 부연부터 뺀다 — 괄호 안의 '·'·'+'가 구절 구분자로 오인되지 않게.
+  var head = text.replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim();
+  // 구절 구분자는 양옆에 공백이 있는 ' · ' / ' + '. 서천 "유료·무료 관광지 각 1곳"처럼
+  // 낱말 사이의 '·'는 나열이라 자르면 "유료"만 남는다. 공백 없는 구분자는 폴백.
+  final clause = head.split(RegExp(r'\s+[·+]\s+')).first.trim();
+  head = clause.contains(RegExp(r'[·+]')) && clause == head
+      ? head.split('·').first.split('+').first.trim()
+      : clause;
   return head.isEmpty ? null : head;
 }
 
