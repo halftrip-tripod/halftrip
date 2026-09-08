@@ -33,14 +33,19 @@ class SubmissionPackageScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final won = NumberFormat('#,###');
-    final authCount = detail.uploadedFiles
-        .where((f) => f.fileCategory == FileCategory.authPhoto)
-        .length;
+    // 여행 상세와 같은 기준 — 서버가 승인한 장수. 올리기만 한 사진을 세면
+    // 상세는 0/1인데 여기선 1/1로 보여 "완료"라고 착각하게 된다.
+    final authCount = detail.trip.authCertifiedCount ??
+        detail.uploadedFiles
+            .where((f) => f.fileCategory == FileCategory.authPhoto)
+            .length;
     final requiredAuth = detail.trip.authRequiredCount ?? 2;
     final receiptCount = detail.receipts.length;
+    // 여행 상세와 같은 기준 — 앱에서 서명까지 저장한 확인서도 작성 완료.
     final hasLodging = detail.uploadedFiles
             .any((f) => f.fileCategory == FileCategory.lodgingConfirmation) ||
-        detail.lodgingInfo?.uploadedFileId != null;
+        detail.lodgingInfo?.uploadedFileId != null ||
+        _lodgingSigned;
     final spent = detail.trip.totalSpentAmount;
     final goal = detail.trip.refundConditionAmount;
     final spentOk = goal <= 0 || spent >= goal;
@@ -235,13 +240,20 @@ class SubmissionPackageScreen extends StatelessWidget {
 
   /// 원본 증빙을 종류별 폴더로 묶은 zip — 정산 누리집이 낱장 업로드 방식이라,
   /// PC에서 풀어 그대로 항목별로 올릴 수 있게 한다. 서명 파일은 제출물이 아니라 제외.
+  /// 앱에서 작성·서명해 저장한 숙박확인서가 있는지 (서버가 PDF로 렌더한다).
+  bool get _lodgingSigned =>
+      detail.lodgingInfo?.signatureSvgPath.trim().isNotEmpty ?? false;
+
   Future<void> _downloadZip(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
     final controller = AppScope.of(context);
     final files = detail.uploadedFiles
         .where((f) => f.fileCategory != FileCategory.signature)
         .toList();
-    if (files.isEmpty) {
+    // 앱에서 작성한 확인서는 업로드 파일이 아니라 서버 렌더 PDF다 — 이것도 묶는다.
+    final renderLodging = _lodgingSigned &&
+        !files.any((f) => f.fileCategory == FileCategory.lodgingConfirmation);
+    if (files.isEmpty && !renderLodging) {
       messenger
           .showSnackBar(const SnackBar(content: Text('묶을 증빙 파일이 아직 없어요.')));
       return;
@@ -260,6 +272,11 @@ class SubmissionPackageScreen extends StatelessWidget {
           counters[file.fileCategory] = index;
           final entry = _zipEntryName(file, index);
           archive.addFile(ArchiveFile(entry, bytes.length, bytes));
+        }
+        if (renderLodging) {
+          final pdf = await controller.repository.fetchLodgingFormPdfBytes(tripId);
+          archive.addFile(
+              ArchiveFile('숙박확인서/숙박확인서_작성본_1.pdf', pdf.length, pdf));
         }
         final zipBytes = ZipEncoder().encode(archive);
         if (kIsWeb) {
