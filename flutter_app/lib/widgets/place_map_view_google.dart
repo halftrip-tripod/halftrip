@@ -188,6 +188,34 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
     return BitmapDescriptor.bytes(bytes!.buffer.asUint8List(), width: 30, height: 38);
   }
 
+  /// 코스 스톱이 여러 개면 전부 보이게 카메라를 맞춘다. 고정 줌 12에 평균
+  /// 중심만 잡으면 1번 마커만 보이고 나머지는 화면 밖으로 나갔다.
+  void _fitAllMarkers() {
+    final points = <LatLng>[
+      for (final r in widget.routeMarkers) LatLng(r.latitude, r.longitude),
+      if (widget.routeMarkers.isEmpty)
+        for (final m in widget.markers) LatLng(m.latitude, m.longitude),
+    ];
+    if (points.length < 2) return;
+    var south = points.first.latitude, north = points.first.latitude;
+    var west = points.first.longitude, east = points.first.longitude;
+    for (final p in points) {
+      if (p.latitude < south) south = p.latitude;
+      if (p.latitude > north) north = p.latitude;
+      if (p.longitude < west) west = p.longitude;
+      if (p.longitude > east) east = p.longitude;
+    }
+    final bounds = LatLngBounds(
+      southwest: LatLng(south, west),
+      northeast: LatLng(north, east),
+    );
+    // 지도 크기가 잡히기 전에 부르면 무시되는 기기가 있어 한 프레임 뒤에 맞춘다.
+    Future<void>.delayed(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      _controller?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 56));
+    });
+  }
+
   LatLng get _center {
     if (widget.initialCenterLatitude != null &&
         widget.initialCenterLongitude != null) {
@@ -354,6 +382,7 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
                     _controller = controller;
                     // 초기 가시 영역도 한 번 알린다 (뷰포트 기반 마커 필터용).
                     _notifyViewport();
+                    _fitAllMarkers();
                   },
                   onCameraIdle: _notifyViewport,
                 ),
