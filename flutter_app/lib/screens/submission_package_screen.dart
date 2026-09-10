@@ -60,7 +60,8 @@ class SubmissionPackageScreen extends StatelessWidget {
       if (!hasLodging) '숙박확인서',
     ];
     final ready = missing.isEmpty;
-    final hasAnyFile = detail.uploadedFiles.isNotEmpty;
+    // 앱에서 서명·저장한 숙박확인서만 있어도 zip(렌더 PDF 포함)은 만들 수 있다.
+    final hasAnyFile = detail.uploadedFiles.isNotEmpty || _lodgingSigned;
 
     return Scaffold(
       backgroundColor: AppColors.bg,
