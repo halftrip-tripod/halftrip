@@ -1044,6 +1044,7 @@ class MerchantMapSearchResult {
     required this.centerLongitude,
     required this.merchantCount,
     required this.markers,
+    this.visibleMerchants = const [],
   });
 
   final RegionSummary region;
@@ -1051,6 +1052,8 @@ class MerchantMapSearchResult {
   final double centerLongitude;
   final int merchantCount;
   final List<MerchantMarkerItem> markers;
+  /// 지도 범위 안 목록용 상세(중심 가까운 순 최대 200). 서버가 없으면 빈 목록.
+  final List<MerchantItem> visibleMerchants;
 
   factory MerchantMapSearchResult.fromJson(Map<String, dynamic> json) {
     return MerchantMapSearchResult(
@@ -1060,6 +1063,9 @@ class MerchantMapSearchResult {
       merchantCount: json['merchantCount'] as int? ?? 0,
       markers: ((json['merchants'] as List<dynamic>?) ?? const [])
           .map((item) => MerchantMarkerItem.fromJson(item as Map<String, dynamic>))
+          .toList(),
+      visibleMerchants: ((json['visibleMerchants'] as List<dynamic>?) ?? const [])
+          .map((item) => MerchantItem.fromJson(item as Map<String, dynamic>))
           .toList(),
     );
   }
