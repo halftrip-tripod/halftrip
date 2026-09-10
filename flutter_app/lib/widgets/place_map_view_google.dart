@@ -102,7 +102,8 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
   Future<bool> _prepare() async {
     final loaded = await ensureGoogleMapsJs(widget.apiKey);
     _pin = await _drawPin(_skyPin);
-    _pinHighlight = await _drawPin(const Color(0xFF0369A1));
+    // 선택한 가맹점 핀은 같은 계열 진한 파랑이면 구분이 안 된다 — 코랄로 확실히 바꾼다.
+    _pinHighlight = await _drawPin(_coralPin);
     await _buildNumberedPins();
     return loaded;
   }
@@ -296,6 +297,8 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
               // 네이티브 InfoWindow 대신 커스텀 상세 카드만 사용 (닫기 시 잔여 말풍선 방지)
               infoWindow: InfoWindow.noText,
               icon: _markerIcon(idx, m),
+              // 선택 핀이 겹친 핀 뒤에 가려지지 않게 맨 위로.
+              zIndex: m.id == widget.highlightedMarkerId ? 2 : 0,
               // 번호 핀(원형)은 중앙, 물방울(단독 장소)은 하단 팁 기준.
               anchor: widget.numberedMarkers
                   ? const Offset(0.5, 0.5)
