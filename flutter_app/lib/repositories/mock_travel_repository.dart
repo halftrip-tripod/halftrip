@@ -1797,6 +1797,13 @@ class MockTravelRepository implements TravelRepository {
         _notifications.map((n) => n.copyWith(read: true)).toList();
   }
 
+  @override
+  Future<void> markNotificationRead(int userId, int notificationId) async {
+    _notifications = _notifications
+        .map((n) => n.id == notificationId ? n.copyWith(read: true) : n)
+        .toList();
+  }
+
   static List<AppNotification> _seedNotifications() {
     final now = DateTime.now();
     return [
