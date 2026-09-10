@@ -1232,7 +1232,8 @@ class DetailScaffold extends StatelessWidget {
     this.cta,
     this.actions,
     this.closeIcon = false,
-    this.padding = const EdgeInsets.fromLTRB(14, 4, 14, 120),
+    // CTA 바(약 104) 위로 마지막 항목이 붙지 않게 여유를 둔다.
+    this.padding = const EdgeInsets.fromLTRB(14, 4, 14, 140),
   });
 
   final String title;

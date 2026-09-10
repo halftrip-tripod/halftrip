@@ -62,9 +62,21 @@ List<SavedCourseStop> savedStopsFromCourse(List<CourseStop> stops) => [
 /// 영속 SavedCourse → 표시용 Course.
 Course courseFromSaved(
   SavedCourse saved, {
-  CourseSource source = CourseSource.manual,
+  CourseSource? source,
   String savedAgo = '',
 }) {
+  // SavedCourse에는 출처가 저장되지 않아 코스함에서 AI 코스도 '직접'으로 보였다.
+  // 유튜브는 제목·태그, AI는 생성 시 제목("환급 보장 코스")으로 되짚는다.
+  final isYoutube = saved.preferences.any((p) => p.contains('유튜브')) ||
+      saved.title.contains('유튜브');
+  final isAi = saved.preferences.contains('AI 추천') ||
+      saved.title.contains('환급 보장 코스');
+  final resolvedSource = source ??
+      (isYoutube
+          ? CourseSource.youtube
+          : isAi
+              ? CourseSource.ai
+              : CourseSource.manual);
   var emoji = '🗺️';
   for (final r in AppState.I.regions) {
     if (r.name == saved.regionName) {
@@ -78,7 +90,7 @@ Course courseFromSaved(
     region: saved.regionName,
     province: '',
     title: saved.title,
-    source: source,
+    source: resolvedSource,
     durationLabel: dayCount >= 2 ? '${dayCount - 1}박 $dayCount일' : '당일치기',
     placeCount: saved.stops.length,
     refundOk: false,
@@ -1445,6 +1457,8 @@ class _CourseSimScreenState extends State<CourseSimScreen> {
         stops.where((s) => days.length < 2 || s.day == _mapDay).toList();
     return DetailScaffold(
       title: '${region.name} 코스',
+      // 안내문 + 버튼 2개짜리 CTA는 기본 하단 여백보다 높아 마지막 카드를 덮었다.
+      padding: const EdgeInsets.fromLTRB(14, 4, 14, 180),
       cta: CtaBar(
         note: forTrip != null
             ? '저장하면 이 여행의 확정 코스로 연결돼요'

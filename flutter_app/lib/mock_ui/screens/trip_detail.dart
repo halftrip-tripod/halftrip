@@ -257,7 +257,13 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       ),
     );
     final course = proxy.course;
-    if (course == null || !mounted) return;
+    if (!mounted) return;
+    if (course == null) {
+      // 직접 만들기 화면은 스스로 저장·연결하고 돌아오므로, 여기서 새로고침만 하면 된다.
+      // 예전엔 그대로 return해 "여행 코스" 칸이 재진입 전까지 안 바뀌었다.
+      await _reload();
+      return;
+    }
 
     final controller = AppScope.of(context);
     final saved = SavedCourse(
