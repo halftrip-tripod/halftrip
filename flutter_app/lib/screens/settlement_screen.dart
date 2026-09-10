@@ -174,9 +174,11 @@ class _SettlementScreenState extends State<SettlementScreen>
               .where((f) => f.fileCategory == FileCategory.authPhoto)
               .length;
           final requiredAuth = detail.trip.authRequiredCount ?? 2;
+          // 여행 상세·증빙 패키지와 같은 기준 — 앱에서 서명·저장한 확인서도 완료.
           final hasLodging = detail.uploadedFiles
                   .any((f) => f.fileCategory == FileCategory.lodgingConfirmation) ||
-              detail.lodgingInfo?.uploadedFileId != null;
+              detail.lodgingInfo?.uploadedFileId != null ||
+              (detail.lodgingInfo?.signatureSvgPath.trim().isNotEmpty ?? false);
           final missing = _missingEvidence(detail, authCount, hasLodging);
 
           return ListView(
@@ -250,9 +252,11 @@ class _SettlementScreenState extends State<SettlementScreen>
           final authCount = detail.uploadedFiles
               .where((f) => f.fileCategory == FileCategory.authPhoto)
               .length;
+          // 여행 상세·증빙 패키지와 같은 기준 — 앱에서 서명·저장한 확인서도 완료.
           final hasLodging = detail.uploadedFiles
                   .any((f) => f.fileCategory == FileCategory.lodgingConfirmation) ||
-              detail.lodgingInfo?.uploadedFileId != null;
+              detail.lodgingInfo?.uploadedFileId != null ||
+              (detail.lodgingInfo?.signatureSvgPath.trim().isNotEmpty ?? false);
           final missing = _missingEvidence(detail, authCount, hasLodging);
           return SafeArea(
             minimum: const EdgeInsets.fromLTRB(20, 12, 20, 26),
