@@ -298,7 +298,7 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
               infoWindow: InfoWindow.noText,
               icon: _markerIcon(idx, m),
               // 선택 핀이 겹친 핀 뒤에 가려지지 않게 맨 위로.
-              zIndex: m.id == widget.highlightedMarkerId ? 2 : 0,
+              zIndexInt: m.id == widget.highlightedMarkerId ? 2 : 0,
               // 번호 핀(원형)은 중앙, 물방울(단독 장소)은 하단 팁 기준.
               anchor: widget.numberedMarkers
                   ? const Offset(0.5, 0.5)
