@@ -5,8 +5,7 @@
     <application
         android:label="하프트립"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="true">
+        android:icon="@mipmap/ic_launcher">
         <!-- FCM 시스템 알림 아이콘: 상태바는 흰 실루엣(투명배경 핀), 알림 패널은 하늘색 틴트.
              런처 아이콘(흰 배경 정사각형)을 그대로 쓰면 실루엣이 네모로 떠서 전용 단색 아이콘을 둔다. -->
         <meta-data
