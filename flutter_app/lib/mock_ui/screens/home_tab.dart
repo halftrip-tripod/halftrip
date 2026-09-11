@@ -700,15 +700,23 @@ class _SoonRow extends StatelessWidget {
               size: 40, fontSize: 18, radius: 13, boxColor: Colors.white, shadow: true),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('${region.name} · ${region.province}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink9)),
-              const SizedBox(height: 2),
-              const Text('오픈 예정 · 조건은 상세에서 미리 확인',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.ink5)),
-            ]),
+            // 접수중 행과 같은 꼴 — 지역명 굵게 + 시도만 작게. "조건은 상세에서 확인" 같은
+            // 설명은 탭이 이미 '오픈예정'이라 중복이고, 두 줄로 늘어져 목록만 길어졌다.
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(region.name,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.ink9)),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(region.province,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink5)),
+                ),
+              ],
+            ),
           ),
           GestureDetector(
             onTap: () async {
