@@ -402,6 +402,7 @@ enum NotificationType {
 
 class AppNotification {
   const AppNotification({
+    this.id,
     required this.type,
     required this.title,
     required this.body,
@@ -411,6 +412,8 @@ class AppNotification {
     this.refId,
   });
 
+  /// 서버 알림 id — 개별 읽음 처리용. 목(mock) 알림엔 없을 수 있다.
+  final int? id;
   final NotificationType type;
   final String title;
   final String body;
@@ -423,6 +426,7 @@ class AppNotification {
   final int? refId;
 
   AppNotification copyWith({bool? read}) => AppNotification(
+        id: id,
         type: type,
         title: title,
         body: body,
@@ -445,6 +449,7 @@ class AppNotification {
 
   factory AppNotification.fromJson(Map<String, dynamic> json) {
     return AppNotification(
+      id: (json['id'] as num?)?.toInt(),
       type: typeFromWire(json['type'] as String?),
       title: json['title'] as String? ?? '',
       body: json['body'] as String? ?? '',
@@ -1044,6 +1049,7 @@ class MerchantMapSearchResult {
     required this.centerLongitude,
     required this.merchantCount,
     required this.markers,
+    this.visibleMerchants = const [],
   });
 
   final RegionSummary region;
@@ -1051,6 +1057,8 @@ class MerchantMapSearchResult {
   final double centerLongitude;
   final int merchantCount;
   final List<MerchantMarkerItem> markers;
+  /// 지도 범위 안 목록용 상세(중심 가까운 순 최대 200). 서버가 없으면 빈 목록.
+  final List<MerchantItem> visibleMerchants;
 
   factory MerchantMapSearchResult.fromJson(Map<String, dynamic> json) {
     return MerchantMapSearchResult(
@@ -1060,6 +1068,9 @@ class MerchantMapSearchResult {
       merchantCount: json['merchantCount'] as int? ?? 0,
       markers: ((json['merchants'] as List<dynamic>?) ?? const [])
           .map((item) => MerchantMarkerItem.fromJson(item as Map<String, dynamic>))
+          .toList(),
+      visibleMerchants: ((json['visibleMerchants'] as List<dynamic>?) ?? const [])
+          .map((item) => MerchantItem.fromJson(item as Map<String, dynamic>))
           .toList(),
     );
   }

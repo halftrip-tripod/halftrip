@@ -102,7 +102,8 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
   Future<bool> _prepare() async {
     final loaded = await ensureGoogleMapsJs(widget.apiKey);
     _pin = await _drawPin(_skyPin);
-    _pinHighlight = await _drawPin(const Color(0xFF0369A1));
+    // 선택한 가맹점 핀은 같은 계열 진한 파랑이면 구분이 안 된다 — 코랄로 확실히 바꾼다.
+    _pinHighlight = await _drawPin(_coralPin);
     await _buildNumberedPins();
     return loaded;
   }
@@ -188,6 +189,34 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
     return BitmapDescriptor.bytes(bytes!.buffer.asUint8List(), width: 30, height: 38);
   }
 
+  /// 코스 스톱이 여러 개면 전부 보이게 카메라를 맞춘다. 고정 줌 12에 평균
+  /// 중심만 잡으면 1번 마커만 보이고 나머지는 화면 밖으로 나갔다.
+  void _fitAllMarkers() {
+    final points = <LatLng>[
+      for (final r in widget.routeMarkers) LatLng(r.latitude, r.longitude),
+      if (widget.routeMarkers.isEmpty)
+        for (final m in widget.markers) LatLng(m.latitude, m.longitude),
+    ];
+    if (points.length < 2) return;
+    var south = points.first.latitude, north = points.first.latitude;
+    var west = points.first.longitude, east = points.first.longitude;
+    for (final p in points) {
+      if (p.latitude < south) south = p.latitude;
+      if (p.latitude > north) north = p.latitude;
+      if (p.longitude < west) west = p.longitude;
+      if (p.longitude > east) east = p.longitude;
+    }
+    final bounds = LatLngBounds(
+      southwest: LatLng(south, west),
+      northeast: LatLng(north, east),
+    );
+    // 지도 크기가 잡히기 전에 부르면 무시되는 기기가 있어 한 프레임 뒤에 맞춘다.
+    Future<void>.delayed(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      _controller?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 56));
+    });
+  }
+
   LatLng get _center {
     if (widget.initialCenterLatitude != null &&
         widget.initialCenterLongitude != null) {
@@ -268,6 +297,8 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
               // 네이티브 InfoWindow 대신 커스텀 상세 카드만 사용 (닫기 시 잔여 말풍선 방지)
               infoWindow: InfoWindow.noText,
               icon: _markerIcon(idx, m),
+              // 선택 핀이 겹친 핀 뒤에 가려지지 않게 맨 위로.
+              zIndexInt: m.id == widget.highlightedMarkerId ? 2 : 0,
               // 번호 핀(원형)은 중앙, 물방울(단독 장소)은 하단 팁 기준.
               anchor: widget.numberedMarkers
                   ? const Offset(0.5, 0.5)
@@ -354,6 +385,7 @@ class _GooglePlaceMapViewState extends State<GooglePlaceMapView> {
                     _controller = controller;
                     // 초기 가시 영역도 한 번 알린다 (뷰포트 기반 마커 필터용).
                     _notifyViewport();
+                    _fitAllMarkers();
                   },
                   onCameraIdle: _notifyViewport,
                 ),

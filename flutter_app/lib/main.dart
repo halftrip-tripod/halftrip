@@ -28,6 +28,17 @@ Future<void> main() async {
     // (manifest의 screenOrientation과 이중 잠금)
     await SystemChrome.setPreferredOrientations(
         [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
+    // Android 15+(targetSdk 35↑)는 시스템 바 아래까지 그리는 edge-to-edge가 강제라
+    // 기종마다 하단 버튼이 내비게이션 바에 잘렸다. 모든 기기에서 같은 모드로 맞추고
+    // 실제 인셋 처리는 _PhoneFrame의 SafeArea 한 곳에서 한다.
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.dark,
+      systemNavigationBarContrastEnforced: false,
+    ));
   }
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
     try {
@@ -159,8 +170,16 @@ class _PhoneFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
-      // 모바일 기기·좁은 창에서는 프레임 없이 그대로.
-      if (constraints.maxWidth <= 500) return child;
+      // 모바일 기기·좁은 창에서는 프레임 없이 그대로 — 단, 상태바·내비게이션 바
+      // 인셋은 여기서 한 번에 비운다. 화면마다 ListView에 padding을 직접 주거나
+      // 하단 CTA를 Align으로 붙여 인셋을 잃는 곳이 많아, 개별 SafeArea 대신
+      // 앱 전체를 안전 영역 안에 넣고 바깥은 배경색으로 칠한다.
+      if (constraints.maxWidth <= 500) {
+        return ColoredBox(
+          color: AppColors.bg,
+          child: SafeArea(child: child),
+        );
+      }
 
       const bezel = 12.0;
       final height = math.min(constraints.maxHeight - 56, 852.0);

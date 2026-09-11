@@ -262,8 +262,13 @@ class _ReceiptEvidenceScreenState extends State<ReceiptEvidenceScreen> {
               const SizedBox(height: 10),
               _Note(_acceptedPaymentMethods.isEmpty
                   ? '인정 결제수단은 지역마다 달라요. 지역 상세의 "결제 수단"을 확인하고 결제해 주세요.'
+                  // 서버 값이 CARD 같은 코드면 라벨로, 공고 원문 문구면 그대로.
+                  // (지역 상세와 같은 규칙 — 코드 매핑에만 기대면 "판별 실패"로 떴다)
                   : '${detail.trip.regionName} 인정 결제수단: '
-                      '${_acceptedPaymentMethods.map((code) => PaymentTypeWire.fromWire(code).label).join(' · ')}'),
+                      '${_acceptedPaymentMethods.map((code) {
+                        final type = PaymentTypeWire.fromWire(code);
+                        return type == PaymentType.unknown ? code : type.label;
+                      }).join(' · ')}'),
 
               // OCR 결과 (draft) — 등록 전에 "이 정보가 맞나요?"로 확인받는다.
               if (draft != null) ...[

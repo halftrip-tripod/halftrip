@@ -300,7 +300,7 @@ class PolicyScreen extends StatelessWidget {
 
   factory PolicyScreen.privacy() => const PolicyScreen(
         title: '개인정보 처리방침',
-        effectiveDate: '2026.09.02',
+        effectiveDate: '2026.09.07',
         sections: _privacySections,
       );
 
@@ -417,6 +417,7 @@ const _privacySections = [
           '· OpenAI, L.L.C.(미국) — 인증사진 적합성 판정, 영수증 문자 인식 / 이미지 데이터, 처리 즉시 결과 반환\n'
           '· Google LLC(미국) — 지도 표시, 푸시 알림(FCM) 전송 / 좌표·푸시 토큰\n'
           '· Render Services, Inc.(미국) — 서버 및 데이터 보관 / 제2항의 개인정보 일체\n'
+          '· Supabase, Inc.(미국) — 인증사진·영수증·숙박확인서·커뮤니티 사진 파일 보관 / 이미지·PDF 파일, 회원 탈퇴 또는 여행 기록 삭제 시 파기\n'
           '· 카카오(국내) — 소셜 로그인 인증\n'
           '이용자는 국외 이전을 거부할 수 있으나, 이 경우 서비스 이용이 제한될 수 있습니다.'),
   PolicySection('6. 개인정보의 파기',
