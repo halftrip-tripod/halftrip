@@ -1197,4 +1197,14 @@ class ApiTravelRepository implements TravelRepository {
       body: const {},
     );
   }
+
+  @override
+  Future<void> markNotificationRead(int userId, int notificationId) async {
+    await _jsonRequest(
+      'POST',
+      '/notifications/$notificationId/read',
+      query: {'userId': userId},
+      body: const {},
+    );
+  }
 }

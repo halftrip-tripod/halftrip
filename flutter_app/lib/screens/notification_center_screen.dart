@@ -60,8 +60,20 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
   /// 알림 탭 → refType/refId 딥링크 (계약: 핸드오프 G).
   /// 백엔드가 참조를 안 주면(딥링크 미배포) 탭해도 아무 동작 안 함.
   Future<void> _open(AppNotification noti) async {
+    // 누르면 먼저 읽음 처리 — 이동할 화면이 없는 알림도 읽음은 남긴다.
+    final controller = AppScope.of(context);
+    final userId = controller.currentUser?.id;
+    final notiId = noti.id;
+    if (userId != null && notiId != null && !noti.read) {
+      try {
+        await controller.repository.markNotificationRead(userId, notiId);
+      } catch (_) {}
+    }
     final refId = noti.refId;
-    if (refId == null) return;
+    if (refId == null) {
+      if (mounted) await _reload();
+      return;
+    }
     final nav = Navigator.of(context);
     switch (noti.refType) {
       case 'TRIP':
