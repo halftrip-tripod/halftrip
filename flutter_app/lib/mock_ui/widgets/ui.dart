@@ -281,8 +281,10 @@ class CtaBar extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
+          // 안내문(note)이 반투명 구간에 놓여 스크롤되는 목록 글자와 겹쳐 보였다 —
+          // 위쪽 얇은 띠만 페이드하고 그 아래는 불투명하게.
           colors: [Color(0x00F7FAFD), AppColors.bg],
-          stops: [0, .4],
+          stops: [0, .12],
         ),
       ),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
