@@ -402,6 +402,7 @@ enum NotificationType {
 
 class AppNotification {
   const AppNotification({
+    this.id,
     required this.type,
     required this.title,
     required this.body,
@@ -411,6 +412,8 @@ class AppNotification {
     this.refId,
   });
 
+  /// 서버 알림 id — 개별 읽음 처리용. 목(mock) 알림엔 없을 수 있다.
+  final int? id;
   final NotificationType type;
   final String title;
   final String body;
@@ -423,6 +426,7 @@ class AppNotification {
   final int? refId;
 
   AppNotification copyWith({bool? read}) => AppNotification(
+        id: id,
         type: type,
         title: title,
         body: body,
@@ -445,6 +449,7 @@ class AppNotification {
 
   factory AppNotification.fromJson(Map<String, dynamic> json) {
     return AppNotification(
+      id: (json['id'] as num?)?.toInt(),
       type: typeFromWire(json['type'] as String?),
       title: json['title'] as String? ?? '',
       body: json['body'] as String? ?? '',

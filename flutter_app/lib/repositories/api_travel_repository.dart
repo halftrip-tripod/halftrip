@@ -1220,4 +1220,14 @@ class ApiTravelRepository implements TravelRepository {
         ? '서버 오류가 발생했어요 (HTTP $status).'
         : 'API error $status: ${trimmed.length > 200 ? trimmed.substring(0, 200) : trimmed}';
   }
+
+  @override
+  Future<void> markNotificationRead(int userId, int notificationId) async {
+    await _jsonRequest(
+      'POST',
+      '/notifications/$notificationId/read',
+      query: {'userId': userId},
+      body: const {},
+    );
+  }
 }

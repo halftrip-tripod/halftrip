@@ -278,4 +278,7 @@ abstract class TravelRepository {
 
   /// 알림 모두 읽음 — POST /api/notifications/read-all?userId=.
   Future<void> markAllNotificationsRead(int userId);
+
+  /// 알림 하나 읽음 — POST /api/notifications/{id}/read?userId=. 알림을 눌렀을 때.
+  Future<void> markNotificationRead(int userId, int notificationId);
 }
