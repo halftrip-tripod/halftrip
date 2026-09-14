@@ -874,7 +874,7 @@ class MockTravelRepository implements TravelRepository {
 
   @override
   Future<List<TourAttraction>> getRegionAttractions(int regionId,
-          {String? type, String? keyword}) async =>
+          {String? type, String? keyword, String? access}) async =>
       const [];
 
   @override

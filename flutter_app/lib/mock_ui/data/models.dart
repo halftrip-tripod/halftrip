@@ -46,6 +46,8 @@ class CourseStop {
     this.longitude,
     this.address,
     this.placeId,
+    this.barrierFree = false,
+    this.petFriendly = false,
   });
 
   final int day;
@@ -55,6 +57,10 @@ class CourseStop {
   final String tag; // 관광지/맛집/숙소/카페 …
   final bool refund;
   final bool stay;
+  /// TourAPI 무장애 여행정보 등록 장소(경사로·장애인 화장실 등 편의시설) — ♿ 배지.
+  final bool barrierFree;
+  /// TourAPI 반려동물 동반여행 등록 장소 — 🐾 배지.
+  final bool petFriendly;
   // AI 코스 생성 결과(실서버 후보)일 때만 채워짐 — 지도·구글 상세정보 조회에 사용.
   final double? latitude;
   final double? longitude;

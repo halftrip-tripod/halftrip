@@ -888,6 +888,8 @@ class TourAttraction {
     this.latitude,
     this.longitude,
     this.eligibleForRefund = false,
+    this.barrierFree = false,
+    this.petFriendly = false,
   });
 
   final String contentId;
@@ -899,6 +901,8 @@ class TourAttraction {
   final double? latitude;
   final double? longitude;
   final bool eligibleForRefund; // 반값여행 환급 인정 관광지(지정관광지)인지
+  final bool barrierFree; // TourAPI 무장애 여행정보 서비스에 등록된 장소
+  final bool petFriendly; // TourAPI 반려동물 동반여행 서비스에 등록된 장소
 
   TourAttraction copyWith({bool? eligibleForRefund}) => TourAttraction(
         contentId: contentId,
@@ -910,6 +914,8 @@ class TourAttraction {
         latitude: latitude,
         longitude: longitude,
         eligibleForRefund: eligibleForRefund ?? this.eligibleForRefund,
+        barrierFree: barrierFree,
+        petFriendly: petFriendly,
       );
 
   factory TourAttraction.fromJson(Map<String, dynamic> json) {
@@ -922,6 +928,8 @@ class TourAttraction {
       tel: json['tel'] as String? ?? '',
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
+      barrierFree: json['barrierFree'] as bool? ?? false,
+      petFriendly: json['petFriendly'] as bool? ?? false,
     );
   }
 }
@@ -1838,6 +1846,8 @@ class SavedCourseStop {
     this.day = 1,
     this.time = '',
     this.category = '',
+    this.barrierFree = false,
+    this.petFriendly = false,
   });
 
   final int placeId;
@@ -1856,6 +1866,10 @@ class SavedCourseStop {
   /// sourceType(환급 여부)만으론 맛집·비환급 관광지가 뭉개져서 별도 저장. (예전 저장분엔 빈값)
   final String category;
 
+  /// 접근성 배지 — 무장애/반려동물 서비스 등록 장소. 서버 컬럼(V106)과 짝.
+  final bool barrierFree;
+  final bool petFriendly;
+
   factory SavedCourseStop.fromJson(Map<String, dynamic> json) {
     return SavedCourseStop(
       placeId: json['placeId'] as int? ?? 0,
@@ -1867,6 +1881,8 @@ class SavedCourseStop {
       day: json['day'] as int? ?? 1,
       time: json['time'] as String? ?? '',
       category: json['category'] as String? ?? '',
+      barrierFree: json['barrierFree'] as bool? ?? false,
+      petFriendly: json['petFriendly'] as bool? ?? false,
     );
   }
 
@@ -1880,6 +1896,8 @@ class SavedCourseStop {
         'day': day,
         'time': time,
         'category': category,
+        'barrierFree': barrierFree,
+        'petFriendly': petFriendly,
       };
 }
 

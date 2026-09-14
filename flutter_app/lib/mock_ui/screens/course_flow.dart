@@ -56,6 +56,8 @@ List<SavedCourseStop> savedStopsFromCourse(List<CourseStop> stops) => [
           day: s.day,
           time: s.time,
           category: s.tag, // 관광지/맛집/숙소 원본 보존 (refund 불리언으로 뭉개지 않게)
+          barrierFree: s.barrierFree,
+          petFriendly: s.petFriendly,
         ),
     ];
 
@@ -118,6 +120,8 @@ Course courseFromSaved(
             longitude: s.longitude == 0 ? null : s.longitude,
             address: s.address.isEmpty ? null : s.address,
             placeId: s.placeId == 0 ? null : s.placeId,
+            barrierFree: s.barrierFree,
+            petFriendly: s.petFriendly,
           );
         }(),
     ],
@@ -137,6 +141,8 @@ class _AiCand {
     this.latitude,
     this.longitude,
     this.placeId = 0,
+    this.barrierFree = false,
+    this.petFriendly = false,
   });
   final String name;
   final String category; // 관광지/맛집/숙소 …
@@ -146,6 +152,10 @@ class _AiCand {
   final double? latitude;
   final double? longitude;
   final int placeId;
+  /// 접근성 — 무장애/반려동물 서비스 등록 장소. 후보 정렬 가산 + 스톱 배지로 이어진다.
+  final bool barrierFree;
+  final bool petFriendly;
+  bool get accessible => barrierFree || petFriendly;
 
   Map<String, dynamic> toAiJson() => {
         'name': name,
@@ -153,6 +163,7 @@ class _AiCand {
         'address': address,
         'description': description,
         'eligibleForRefund': refund,
+        'accessible': accessible,
       };
 }
 
@@ -170,6 +181,8 @@ CourseStop _aiCandToStop(_AiCand c, int day) => CourseStop(
       longitude: c.longitude,
       address: c.address.isEmpty ? null : c.address,
       placeId: c.placeId == 0 ? null : c.placeId,
+      barrierFree: c.barrierFree,
+      petFriendly: c.petFriendly,
     );
 
 /// 취향 우선순위 기반 규칙 정렬 (LLM 실패/빈 결과 시 대체).
@@ -178,6 +191,7 @@ List<_AiCand> _rankAiCands(List<_AiCand> cands, List<String> prefs, int nights) 
   int score(_AiCand c) {
     final text = '${c.name} ${c.category} ${c.address} ${c.description}';
     var total = c.refund ? 5 : 0; // 환급 인정 약간 가산
+    if (c.accessible) total += 30; // 무장애·반려동물 조건 장소 우선
     for (var i = 0; i < prefs.length; i++) {
       final keywords = switch (prefs[i]) {
         '맛집' => ['맛집', '시장', '식당', '맛', '카페', '음식'],
@@ -225,7 +239,11 @@ Future<bool> regionHasDesignatedPlaces(dynamic controller, String regionName) as
 
 /// AI 후보 수집 — 지정관광지(환급) + TourAPI 관광지·맛집을 이름 기준으로 병합.
 /// 맛집이 빠져 있던 문제의 근본 픽스: 취향 1순위가 맛집이어도 후보에 맛집이 있어야 뽑힌다.
-Future<List<_AiCand>> _buildAiCandidates(dynamic controller, int regionId) async {
+/// [access]가 있으면(barrier_free|pet) 그 조건에 맞는 TourAPI 장소를 먼저 담고,
+/// 부족하면 일반 장소로 채운다 — 군 단위 지역은 등록 장소가 적어 필터만으로는 코스가 안 나온다.
+/// 접근성 장소는 accessible=true로 표시돼 정렬·안내에 쓰인다.
+Future<List<_AiCand>> _buildAiCandidates(dynamic controller, int regionId,
+    {String? access}) async {
   final repo = controller.repository;
   final cands = <_AiCand>[];
   final seen = <String>{};
@@ -235,6 +253,28 @@ Future<List<_AiCand>> _buildAiCandidates(dynamic controller, int regionId) async
     if (key.isEmpty || seen.contains(key)) return;
     seen.add(key);
     cands.add(c);
+  }
+
+  // ⓪ 접근성 조건 장소 — 지정관광지보다 먼저 넣어 우선 채택되게 한다.
+  if (access != null && access.isNotEmpty) {
+    for (final type in const ['관광지', '맛집']) {
+      try {
+        final tour = await repo.getRegionAttractions(regionId, type: type, access: access);
+        for (final a in tour) {
+          add(_AiCand(
+            name: a.title,
+            category: a.category.isEmpty ? type : a.category,
+            address: a.address,
+            description: '',
+            refund: a.eligibleForRefund,
+            latitude: a.latitude,
+            longitude: a.longitude,
+            barrierFree: access == 'barrier_free' || a.barrierFree,
+            petFriendly: access == 'pet' || a.petFriendly,
+          ));
+        }
+      } catch (_) {}
+    }
   }
 
   // ① 지정관광지(환급 인정) — 좌표·설명 보유.
@@ -724,6 +764,9 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
   // 여행에서 진입하면 여행 일정·인원을 그대로 프리필.
   late int _nights = widget.forTrip?.nights ?? 1;
   late int _people = widget.forTrip?.people ?? 2;
+  // 이동·동반 조건 — TourAPI 무장애 여행정보/반려동물 동반여행 서비스 등록 장소를 우선 배치.
+  bool _barrierFree = false;
+  bool _petFriendly = false;
   final _themes = [
     ('🍴', '맛집', '지역 미식·시장'),
     ('🌿', '자연', '바다·산·공원'),
@@ -795,7 +838,9 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
         throw Exception('연결된 지역 정보를 찾을 수 없습니다.');
       }
       // 후보 = 지정관광지(환급) + TourAPI 관광지 + 맛집. category·좌표 포함해 취향/동선 반영.
-      final cands = await _buildAiCandidates(controller, matched.first.id);
+      // 둘 다 켜면 무장애를 우선(휠체어 접근이 더 제약이 큼). 후보에 accessible로 표시된다.
+      final access = _barrierFree ? 'barrier_free' : (_petFriendly ? 'pet' : null);
+      final cands = await _buildAiCandidates(controller, matched.first.id, access: access);
       if (cands.isEmpty) {
         throw Exception('추천할 장소 데이터가 없습니다.');
       }
@@ -808,6 +853,7 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
           people: _people,
           themePriority: preferences,
           candidates: cands.map((c) => c.toAiJson()).toList(),
+          accessibility: access ?? '',
         );
         final byName = {for (final c in cands) _aiNormName(c.name): c};
         final sorted = [...result.stops]..sort((a, b) =>
@@ -823,6 +869,7 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
               name: cand.name, category: cat, address: cand.address,
               description: cand.description, refund: cand.refund,
               latitude: cand.latitude, longitude: cand.longitude, placeId: cand.placeId,
+              barrierFree: cand.barrierFree, petFriendly: cand.petFriendly,
             ),
             rs.day.clamp(1, _nights + 1),
           ));
@@ -957,6 +1004,29 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
               ),
           ],
         ),
+        const _FormLabel('이동·동반 조건'),
+        // 카드 없이 토글 2줄 — 라벨과 바로 붙게 스캐폴드 간격(16)을 되감는다.
+        Transform.translate(
+          offset: const Offset(0, -8),
+          child: Column(children: [
+            ToggleRow(
+              icon: Icons.accessible_forward_rounded,
+              label: '무장애 동선',
+              sub: '경사로·장애인 화장실 등 편의시설 등록 장소',
+              value: _barrierFree,
+              onChanged: (v) => setState(() => _barrierFree = v),
+            ),
+            ToggleRow(
+              icon: Icons.pets_rounded,
+              label: '반려동물 동반',
+              sub: '동반 입장 가능으로 등록된 장소',
+              value: _petFriendly,
+              onChanged: (v) => setState(() => _petFriendly = v),
+            ),
+          ]),
+        ),
+        if (_barrierFree || _petFriendly)
+          const NoteRow('조건에 맞는 장소를 먼저 담고, 부족하면 일반 장소로 채워요.'),
         // 지정관광지 제도가 없는 지역(영월·제천)에서는 환급 조건 안내를 뺀다.
         if (_hasDesignated == true)
           const NoteRow('환급 조건(지정관광지 2곳·숙박 포함)은 자동으로 충족되게 코스를 짜드려요.'),
@@ -2081,6 +2151,8 @@ class _CourseStopRow extends StatelessWidget {
                       if (tag.isNotEmpty && tag != '환급 인정')
                         _tag(tag, isFood ? const Color(0xFFFFF1E0) : AppColors.p100,
                             isFood ? const Color(0xFFB8731B) : AppColors.p700),
+                      if (stop.barrierFree) _tag('♿ 무장애', AppColors.violetTint, AppColors.violetDeep),
+                      if (stop.petFriendly) _tag('🐾 반려동물', AppColors.amberTint, AppColors.amberDeep),
                       if (stop.refund)
                         _tag(stop.stay ? '숙박 필수 ✓' : '환급 인정', AppColors.mintTint, AppColors.mintDeep),
                     ]),
