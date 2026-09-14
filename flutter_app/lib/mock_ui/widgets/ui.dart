@@ -1195,10 +1195,15 @@ Future<T?> showAppSheet<T>(BuildContext context, {required Widget child, bool sc
 /// 옵션 리스트 선택 시트.
 Future<String?> pickOption(BuildContext context,
     {required String title, required List<String> options}) {
+  // 시/도처럼 항목이 많으면 시트가 화면 꼭대기까지 차오른다 — 화면의 60%까지만
+  // 올라오고 그 안에서 스크롤하게 상한을 둔다.
+  final maxHeight = MediaQuery.sizeOf(context).height * 0.6;
   return showAppSheet<String>(
     context,
     scrollable: true,
-    child: Column(mainAxisSize: MainAxisSize.min, children: [
+    child: ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxHeight),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(24, 14, 24, 4),
         child: Align(
@@ -1221,7 +1226,8 @@ Future<String?> pickOption(BuildContext context,
         ),
       ),
       const SizedBox(height: 8),
-    ]),
+      ]),
+    ),
   );
 }
 
