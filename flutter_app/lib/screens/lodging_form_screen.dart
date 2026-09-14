@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
 
 import '../core/app_scope.dart';
+import '../widgets/tour_api_attribution.dart';
 import '../mock_ui/theme/app_colors.dart';
 import '../mock_ui/widgets/ui.dart';
 import '../models/app_models.dart';
@@ -2078,7 +2079,7 @@ class _LodgingSearchSheetState extends State<_LodgingSearchSheet> {
               },
             ),
           ),
-          const SizedBox(height: 8),
+          const TourApiAttribution(label: '숙소 정보', padding: EdgeInsets.only(top: 6, bottom: 4)),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
