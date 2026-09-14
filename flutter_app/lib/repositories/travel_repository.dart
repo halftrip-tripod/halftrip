@@ -59,8 +59,9 @@ abstract class TravelRepository {
   Future<List<RegionFestival>> getRegionFestivals(int regionId) async => const [];
 
   /// 지역 관광지·맛집·숙소 — TourAPI 실시간. type: 관광지|맛집|숙소|null(전체), keyword: 검색어(선택).
+  /// access: 'barrier_free' | 'pet' — 무장애/반려동물 서비스 등록 장소만 (TourAPI 교집합).
   Future<List<TourAttraction>> getRegionAttractions(int regionId,
-          {String? type, String? keyword}) async =>
+          {String? type, String? keyword, String? access}) async =>
       const [];
 
   /// TourAPI 관광지 상세 — 없으면 null(화면은 기본 정보만).
@@ -215,6 +216,8 @@ abstract class TravelRepository {
 
   // ── 커뮤니티 (/api/community — 2026-07-28 구현) ──
   Future<List<CommunityPostData>> getCommunityFeed({int? userId});
+  /// 게시글 단건 — 알림 딥링크(POST refId)로 상세를 열 때. userId를 주면 mine·likedByMe가 채워진다.
+  Future<CommunityPostData> getCommunityPost(int postId, {int? userId});
 
   /// 글 사진 업로드(POST /community/photos) — 공개 URL을 돌려준다. 글 등록 전에 먼저 올린다.
   Future<String> uploadCommunityPhoto({
@@ -278,4 +281,7 @@ abstract class TravelRepository {
 
   /// 알림 모두 읽음 — POST /api/notifications/read-all?userId=.
   Future<void> markAllNotificationsRead(int userId);
+
+  /// 알림 하나 읽음 — POST /api/notifications/{id}/read?userId=. 알림을 눌렀을 때.
+  Future<void> markNotificationRead(int userId, int notificationId);
 }

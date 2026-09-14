@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../core/app_scope.dart';
+import '../../data/residence_options.dart';
 import '../../models/app_models.dart';
 import '../../screens/mypage_screen.dart';
 import '../../screens/notification_center_screen.dart';
@@ -63,6 +64,23 @@ class _HomeTabState extends State<HomeTab> {
       if (!mounted) return;
       _load();
     });
+  }
+
+  /// 위치 칩 탭 → 거주지 변경(마이페이지와 같은 시/도 → 시/군/구 흐름).
+  /// 거주지가 바뀌면 접수 가능 지역이 달라지므로 홈을 다시 불러온다.
+  Future<void> _changeResidence() async {
+    final province = await pickOption(context,
+        title: '시 / 도', options: residenceOptions.keys.toList());
+    if (province == null || !mounted) return;
+    final city = await pickOption(context,
+        title: '시 / 군 / 구', options: residenceOptions[province] ?? const <String>[]);
+    if (city == null || !mounted) return;
+    await AppScope.of(context).updateResidence('$province $city');
+    if (!mounted) return;
+    await _load();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('거주지를 $province $city(으)로 바꿨어요.')));
   }
 
   Future<void> _load() async {
@@ -143,26 +161,35 @@ class _HomeTabState extends State<HomeTab> {
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -1.2, height: 1.05)),
               const SizedBox(height: 1),
               Row(children: [
-                Text(
-                  applying.isEmpty
-                      ? '곧 오픈하는 지역을 확인해보세요'
-                      : '지금 ${applying.length}개 지역이 접수 중이에요',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink5),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(999),
-                    boxShadow: AppShadows.soft,
+                // 글씨 확대 시 부제목이 위치 칩을 화면 밖으로 밀지 않게 부제목 쪽이 양보.
+                Expanded(
+                  child: Text(
+                    applying.isEmpty
+                        ? '곧 오픈하는 지역을 확인해보세요'
+                        : '지금 ${applying.length}개 지역이 접수 중이에요',
+                    maxLines: 2,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink5),
                   ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.place_outlined, size: 14, color: AppColors.p600),
-                    const SizedBox(width: 5),
-                    Text(residenceLabel,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink7)),
-                  ]),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _changeResidence,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(999),
+                      boxShadow: AppShadows.soft,
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.place_outlined, size: 14, color: AppColors.p600),
+                      const SizedBox(width: 5),
+                      Text(residenceLabel,
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink7)),
+                      const SizedBox(width: 2),
+                      const Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: AppColors.ink4),
+                    ]),
+                  ),
                 ),
               ]),
               const SizedBox(height: 9),
@@ -700,15 +727,23 @@ class _SoonRow extends StatelessWidget {
               size: 40, fontSize: 18, radius: 13, boxColor: Colors.white, shadow: true),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('${region.name} · ${region.province}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink9)),
-              const SizedBox(height: 2),
-              const Text('오픈 예정 · 조건은 상세에서 미리 확인',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.ink5)),
-            ]),
+            // 접수중 행과 같은 꼴 — 지역명 굵게 + 시도만 작게. "조건은 상세에서 확인" 같은
+            // 설명은 탭이 이미 '오픈예정'이라 중복이고, 두 줄로 늘어져 목록만 길어졌다.
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(region.name,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.ink9)),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(region.province,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink5)),
+                ),
+              ],
+            ),
           ),
           GestureDetector(
             onTap: () async {

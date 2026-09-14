@@ -17,6 +17,7 @@ import '../theme/app_colors.dart';
 import '../widgets/region_art.dart';
 import '../widgets/trip_calendar_sheet.dart' show kdate;
 import '../widgets/ui.dart';
+import '../../widgets/tour_api_attribution.dart';
 import 'my_trips_tab.dart' show regionEmojiOf;
 import 'tour_place_detail.dart';
 
@@ -56,15 +57,29 @@ List<SavedCourseStop> savedStopsFromCourse(List<CourseStop> stops) => [
           day: s.day,
           time: s.time,
           category: s.tag, // 관광지/맛집/숙소 원본 보존 (refund 불리언으로 뭉개지 않게)
+          barrierFree: s.barrierFree,
+          petFriendly: s.petFriendly,
         ),
     ];
 
 /// 영속 SavedCourse → 표시용 Course.
 Course courseFromSaved(
   SavedCourse saved, {
-  CourseSource source = CourseSource.manual,
+  CourseSource? source,
   String savedAgo = '',
 }) {
+  // SavedCourse에는 출처가 저장되지 않아 코스함에서 AI 코스도 '직접'으로 보였다.
+  // 유튜브는 제목·태그, AI는 생성 시 제목("환급 보장 코스")으로 되짚는다.
+  final isYoutube = saved.preferences.any((p) => p.contains('유튜브')) ||
+      saved.title.contains('유튜브');
+  final isAi = saved.preferences.contains('AI 추천') ||
+      saved.title.contains('환급 보장 코스');
+  final resolvedSource = source ??
+      (isYoutube
+          ? CourseSource.youtube
+          : isAi
+              ? CourseSource.ai
+              : CourseSource.manual);
   var emoji = '🗺️';
   for (final r in AppState.I.regions) {
     if (r.name == saved.regionName) {
@@ -78,7 +93,7 @@ Course courseFromSaved(
     region: saved.regionName,
     province: '',
     title: saved.title,
-    source: source,
+    source: resolvedSource,
     durationLabel: dayCount >= 2 ? '${dayCount - 1}박 $dayCount일' : '당일치기',
     placeCount: saved.stops.length,
     refundOk: false,
@@ -106,6 +121,8 @@ Course courseFromSaved(
             longitude: s.longitude == 0 ? null : s.longitude,
             address: s.address.isEmpty ? null : s.address,
             placeId: s.placeId == 0 ? null : s.placeId,
+            barrierFree: s.barrierFree,
+            petFriendly: s.petFriendly,
           );
         }(),
     ],
@@ -125,6 +142,8 @@ class _AiCand {
     this.latitude,
     this.longitude,
     this.placeId = 0,
+    this.barrierFree = false,
+    this.petFriendly = false,
   });
   final String name;
   final String category; // 관광지/맛집/숙소 …
@@ -134,6 +153,10 @@ class _AiCand {
   final double? latitude;
   final double? longitude;
   final int placeId;
+  /// 접근성 — 무장애/반려동물 서비스 등록 장소. 후보 정렬 가산 + 스톱 배지로 이어진다.
+  final bool barrierFree;
+  final bool petFriendly;
+  bool get accessible => barrierFree || petFriendly;
 
   Map<String, dynamic> toAiJson() => {
         'name': name,
@@ -141,6 +164,9 @@ class _AiCand {
         'address': address,
         'description': description,
         'eligibleForRefund': refund,
+        'accessible': accessible,
+        'barrierFree': barrierFree,
+        'petFriendly': petFriendly,
       };
 }
 
@@ -158,6 +184,8 @@ CourseStop _aiCandToStop(_AiCand c, int day) => CourseStop(
       longitude: c.longitude,
       address: c.address.isEmpty ? null : c.address,
       placeId: c.placeId == 0 ? null : c.placeId,
+      barrierFree: c.barrierFree,
+      petFriendly: c.petFriendly,
     );
 
 /// 취향 우선순위 기반 규칙 정렬 (LLM 실패/빈 결과 시 대체).
@@ -166,6 +194,8 @@ List<_AiCand> _rankAiCands(List<_AiCand> cands, List<String> prefs, int nights) 
   int score(_AiCand c) {
     final text = '${c.name} ${c.category} ${c.address} ${c.description}';
     var total = c.refund ? 5 : 0; // 환급 인정 약간 가산
+    if (c.barrierFree) total += 30; // 무장애·반려동물 조건 장소 우선(둘 다면 +60)
+    if (c.petFriendly) total += 30;
     for (var i = 0; i < prefs.length; i++) {
       final keywords = switch (prefs[i]) {
         '맛집' => ['맛집', '시장', '식당', '맛', '카페', '음식'],
@@ -213,16 +243,58 @@ Future<bool> regionHasDesignatedPlaces(dynamic controller, String regionName) as
 
 /// AI 후보 수집 — 지정관광지(환급) + TourAPI 관광지·맛집을 이름 기준으로 병합.
 /// 맛집이 빠져 있던 문제의 근본 픽스: 취향 1순위가 맛집이어도 후보에 맛집이 있어야 뽑힌다.
-Future<List<_AiCand>> _buildAiCandidates(dynamic controller, int regionId) async {
+/// [access]가 있으면(barrier_free|pet) 그 조건에 맞는 TourAPI 장소를 먼저 담고,
+/// 부족하면 일반 장소로 채운다 — 군 단위 지역은 등록 장소가 적어 필터만으로는 코스가 안 나온다.
+/// 접근성 장소는 accessible=true로 표시돼 정렬·안내에 쓰인다.
+Future<List<_AiCand>> _buildAiCandidates(dynamic controller, int regionId,
+    {List<String> accesses = const []}) async {
   final repo = controller.repository;
   final cands = <_AiCand>[];
-  final seen = <String>{};
+  final indexByKey = <String, int>{};
 
   void add(_AiCand c) {
     final key = _aiNormName(c.name);
-    if (key.isEmpty || seen.contains(key)) return;
-    seen.add(key);
+    if (key.isEmpty) return;
+    final existing = indexByKey[key];
+    if (existing != null) {
+      // 같은 장소가 무장애·반려동물 양쪽 목록에 다 있으면 플래그를 합친다.
+      final e = cands[existing];
+      if ((c.barrierFree && !e.barrierFree) || (c.petFriendly && !e.petFriendly)) {
+        cands[existing] = _AiCand(
+          name: e.name, category: e.category, address: e.address, description: e.description,
+          refund: e.refund, latitude: e.latitude, longitude: e.longitude, placeId: e.placeId,
+          barrierFree: e.barrierFree || c.barrierFree,
+          petFriendly: e.petFriendly || c.petFriendly,
+        );
+      }
+      return;
+    }
+    indexByKey[key] = cands.length;
     cands.add(c);
+  }
+
+  // ⓪ 접근성 조건 장소 — 지정관광지보다 먼저 넣어 우선 채택되게 한다. 조건마다 따로 조회.
+  for (final access in accesses) {
+    for (final type in const ['관광지', '맛집']) {
+      try {
+        final tour = await repo.getRegionAttractions(regionId, type: type, access: access);
+        for (final a in tour) {
+          add(_AiCand(
+            name: a.title,
+            category: a.category.isEmpty ? type : a.category,
+            address: a.address,
+            description: '',
+            refund: a.eligibleForRefund,
+            latitude: a.latitude,
+            longitude: a.longitude,
+            // 서버가 필터를 적용했을 때만 true로 내려준다 — access를 모르는 옛 서버가
+            // 전체 목록을 돌려주면 전부 조건 장소로 오인하지 않게 응답 플래그만 믿는다.
+            barrierFree: a.barrierFree,
+            petFriendly: a.petFriendly,
+          ));
+        }
+      } catch (_) {}
+    }
   }
 
   // ① 지정관광지(환급 인정) — 좌표·설명 보유.
@@ -706,12 +778,15 @@ class CourseAiScreen extends StatefulWidget {
 
 class _CourseAiScreenState extends State<CourseAiScreen> {
   /// 지역에 지정관광지가 있는지 — 없으면 환급 조건 안내를 숨긴다.
-  bool _hasDesignated = true;
+  bool? _hasDesignated; // null = 확인 전(안내를 잠깐 띄웠다 지우지 않게)
   bool _designatedChecked = false;
 
   // 여행에서 진입하면 여행 일정·인원을 그대로 프리필.
   late int _nights = widget.forTrip?.nights ?? 1;
   late int _people = widget.forTrip?.people ?? 2;
+  // 이동·동반 조건 — TourAPI 무장애 여행정보/반려동물 동반여행 서비스 등록 장소를 우선 배치.
+  bool _barrierFree = false;
+  bool _petFriendly = false;
   final _themes = [
     ('🍴', '맛집', '지역 미식·시장'),
     ('🌿', '자연', '바다·산·공원'),
@@ -783,7 +858,9 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
         throw Exception('연결된 지역 정보를 찾을 수 없습니다.');
       }
       // 후보 = 지정관광지(환급) + TourAPI 관광지 + 맛집. category·좌표 포함해 취향/동선 반영.
-      final cands = await _buildAiCandidates(controller, matched.first.id);
+      // 켠 조건마다 등록 장소를 따로 받아 후보 앞에 둔다(둘 다면 양쪽 배지).
+      final accesses = [if (_barrierFree) 'barrier_free', if (_petFriendly) 'pet'];
+      final cands = await _buildAiCandidates(controller, matched.first.id, accesses: accesses);
       if (cands.isEmpty) {
         throw Exception('추천할 장소 데이터가 없습니다.');
       }
@@ -796,6 +873,7 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
           people: _people,
           themePriority: preferences,
           candidates: cands.map((c) => c.toAiJson()).toList(),
+          accessibility: accesses.join(','),
         );
         final byName = {for (final c in cands) _aiNormName(c.name): c};
         final sorted = [...result.stops]..sort((a, b) =>
@@ -811,6 +889,7 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
               name: cand.name, category: cat, address: cand.address,
               description: cand.description, refund: cand.refund,
               latitude: cand.latitude, longitude: cand.longitude, placeId: cand.placeId,
+              barrierFree: cand.barrierFree, petFriendly: cand.petFriendly,
             ),
             rs.day.clamp(1, _nights + 1),
           ));
@@ -945,8 +1024,31 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
               ),
           ],
         ),
+        const _FormLabel('이동·동반 조건'),
+        // 카드 없이 토글 2줄 — 라벨과 바로 붙게 스캐폴드 간격(16)을 되감는다.
+        Transform.translate(
+          offset: const Offset(0, -8),
+          child: Column(children: [
+            ToggleRow(
+              icon: Icons.accessible_forward_rounded,
+              label: '무장애 동선',
+              sub: '경사로·장애인 화장실 등 편의시설 등록 장소',
+              value: _barrierFree,
+              onChanged: (v) => setState(() => _barrierFree = v),
+            ),
+            ToggleRow(
+              icon: Icons.pets_rounded,
+              label: '반려동물 동반',
+              sub: '동반 입장 가능으로 등록된 장소',
+              value: _petFriendly,
+              onChanged: (v) => setState(() => _petFriendly = v),
+            ),
+          ]),
+        ),
+        if (_barrierFree || _petFriendly)
+          const NoteRow('조건에 맞는 장소를 먼저 담고, 부족하면 일반 장소로 채워요.'),
         // 지정관광지 제도가 없는 지역(영월·제천)에서는 환급 조건 안내를 뺀다.
-        if (_hasDesignated)
+        if (_hasDesignated == true)
           const NoteRow('환급 조건(지정관광지 2곳·숙박 포함)은 자동으로 충족되게 코스를 짜드려요.'),
       ],
     );
@@ -1445,6 +1547,8 @@ class _CourseSimScreenState extends State<CourseSimScreen> {
         stops.where((s) => days.length < 2 || s.day == _mapDay).toList();
     return DetailScaffold(
       title: '${region.name} 코스',
+      // 안내문 + 버튼 2개짜리 CTA는 기본 하단 여백보다 높아 마지막 카드를 덮었다.
+      padding: const EdgeInsets.fromLTRB(14, 4, 14, 180),
       cta: CtaBar(
         note: forTrip != null
             ? '저장하면 이 여행의 확정 코스로 연결돼요'
@@ -1558,7 +1662,72 @@ class _CourseSimScreenState extends State<CourseSimScreen> {
               });
             },
           ),
+          // 장소 정보는 한국관광공사 TourAPI — 공모전 규정 6-2 출처 표기.
+          const TourApiAttribution(label: '장소 정보'),
         ]);
+  }
+}
+
+/// 지도 + DAY 칩 + 타임라인 — 생성 결과·코스 상세와 같은 구성.
+/// 다른 화면(유튜브 결과)에서도 코스 상세와 똑같이 보이게 쓰는 공용 본문.
+class CourseDaysBody extends StatefulWidget {
+  const CourseDaysBody({super.key, required this.stops, this.startDate});
+  final List<CourseStop> stops;
+  final DateTime? startDate;
+
+  @override
+  State<CourseDaysBody> createState() => _CourseDaysBodyState();
+}
+
+class _CourseDaysBodyState extends State<CourseDaysBody> {
+  int _mapDay = 1;
+  int? _focusStopId;
+
+  @override
+  Widget build(BuildContext context) {
+    final days = widget.stops.map((s) => s.day).toSet().toList()..sort();
+    if (days.isEmpty) days.add(1);
+    final activeDay = days.contains(_mapDay) ? _mapDay : days.first;
+    final mapStops = widget.stops.where((s) => s.day == activeDay).toList();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _buildStopsMap(context, mapStops, focusId: _focusStopId),
+      if (days.length >= 2) ...[
+        const SizedBox(height: 8),
+        Center(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              for (final d in days) ...[
+                if (d != days.first) const SizedBox(width: 8),
+                _DayChip(
+                  label: 'DAY $d',
+                  active: activeDay == d,
+                  onTap: () => setState(() {
+                    _mapDay = d;
+                    _focusStopId = null;
+                  }),
+                ),
+              ],
+            ]),
+          ),
+        ),
+      ],
+      const SizedBox(height: 10),
+      _TimelineSection(
+        stops: widget.stops,
+        startDate: widget.startDate,
+        selectedStopId: _focusStopId,
+        onStopTap: (s) {
+          if (s.latitude == null || s.longitude == null) return;
+          setState(() {
+            if (days.length >= 2) _mapDay = s.day;
+            _focusStopId = s.placeId ?? s.name.hashCode;
+          });
+        },
+      ),
+      // 장소 정보(관광지·맛집·무장애·반려동물)는 한국관광공사 TourAPI — 공모전 규정 6-2 출처 표기.
+      const TourApiAttribution(label: '장소 정보'),
+    ]);
   }
 }
 
@@ -1918,6 +2087,8 @@ class _CourseViewScreenState extends State<CourseViewScreen> {
               });
             },
           ),
+          // 장소 정보는 한국관광공사 TourAPI — 공모전 규정 6-2 출처 표기.
+          const TourApiAttribution(label: '장소 정보'),
         ]),
       ],
     );
@@ -2006,6 +2177,8 @@ class _CourseStopRow extends StatelessWidget {
                       if (tag.isNotEmpty && tag != '환급 인정')
                         _tag(tag, isFood ? const Color(0xFFFFF1E0) : AppColors.p100,
                             isFood ? const Color(0xFFB8731B) : AppColors.p700),
+                      if (stop.barrierFree) _tag('♿ 무장애', AppColors.violetTint, AppColors.violetDeep),
+                      if (stop.petFriendly) _tag('🐾 반려동물', AppColors.amberTint, AppColors.amberDeep),
                       if (stop.refund)
                         _tag(stop.stay ? '숙박 필수 ✓' : '환급 인정', AppColors.mintTint, AppColors.mintDeep),
                     ]),
@@ -2237,11 +2410,15 @@ class CourseEditScreen extends StatefulWidget {
 
 class _CourseEditScreenState extends State<CourseEditScreen> {
   /// 지역에 지정관광지가 있는지 — 없으면 환급 카운터("N/2곳")를 숨긴다.
-  bool _hasDesignated = true;
+  /// null = 아직 확인 전. 확인 전에 true로 두면 "0/2곳"이 잠깐 떴다가 사라진다.
+  bool? _hasDesignated;
   bool _designatedChecked = false;
 
   /// 지도에 표시할 일차 (1박2일이면 DAY 1/2 토글).
   int _mapDay = 1;
+
+  /// "일차 추가"로 늘린 빈 일차 수 — 장소를 넣어야 저장에 남는다(일차는 스톱의 day로만 영속).
+  int _extraDays = 0;
 
   @override
   void didChangeDependencies() {
@@ -2266,7 +2443,7 @@ class _CourseEditScreenState extends State<CourseEditScreen> {
     }
     final m = RegExp(r'(\d+)\s*박\s*(\d+)\s*일').firstMatch(c.durationLabel);
     final labelDays = m != null ? int.parse(m.group(2)!) : 1;
-    return labelDays > maxDay ? labelDays : maxDay;
+    return (labelDays > maxDay ? labelDays : maxDay) + _extraDays;
   }
 
   /// 리스트 행 탭 → 지도의 해당 핀을 가운데로 + 정보창 열기.
@@ -2360,7 +2537,7 @@ class _CourseEditScreenState extends State<CourseEditScreen> {
         ),
         // 환급 인정 관광지 포함 여부 — 담은 스톱 중 지정관광지 개수로 판단(숙박은 미판정).
         // 지정관광지 제도가 없는 지역은 카운터 숨김(담긴 환급 장소가 있으면 예외적으로 표시).
-        if (c.stops.isNotEmpty && (_hasDesignated || refundCount > 0))
+        if (c.stops.isNotEmpty && (_hasDesignated == true || refundCount > 0))
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             decoration: BoxDecoration(
@@ -2444,6 +2621,32 @@ class _CourseEditScreenState extends State<CourseEditScreen> {
             ),
           ),
         ],
+        // 일차 추가 — 여행에 묶인 코스는 여행 기간이 일수라 숨긴다. 최대 7일.
+        if (widget.forTrip == null && dayCount < 7)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: GestureDetector(
+              onTap: () => setState(() {
+                _extraDays += 1;
+                _mapDay = dayCount + 1;
+              }),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.line, width: 1.5),
+                ),
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  const Icon(Icons.calendar_month_rounded, size: 17, color: AppColors.ink7),
+                  const SizedBox(width: 7),
+                  Text('DAY ${dayCount + 1} 추가 ($dayCount박 ${dayCount + 1}일로)',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink7)),
+                ]),
+              ),
+            ),
+          ),
+        const TourApiAttribution(label: '장소 정보'),
       ],
     );
   }
@@ -2563,7 +2766,11 @@ class _CourseSearchScreenState extends State<CourseSearchScreen> {
         _designated = (await repo.getPlaceInfoDetail(_regionId!)).halfPricePlaces;
       }
     } catch (_) {
+      // 지역 해석 실패(서버 502 등) — 빈 결과로 굳히지 않고 에러 상태로 두어 재시도하게.
       _regionId = null;
+      _regionResolved = true;
+      if (mounted) setState(() => _future = Future.error(StateError('region')));
+      return;
     }
     _regionResolved = true;
     _reload();
@@ -2571,11 +2778,16 @@ class _CourseSearchScreenState extends State<CourseSearchScreen> {
 
   void _reload() {
     final id = _regionId;
+    if (id == null) {
+      // 처음 열 때 서버가 죽어 있었으면 여기서 다시 해석부터 시도한다.
+      _regionResolved = false;
+      setState(() {});
+      _resolveAndLoad();
+      return;
+    }
     final type = _cat == 0 ? null : _cats[_cat];
     setState(() {
-      _future = id == null
-          ? Future.value(const <TourAttraction>[])
-          : _loadMerged(id, type, _query.isEmpty ? null : _query);
+      _future = _loadMerged(id, type, _query.isEmpty ? null : _query);
     });
   }
 
@@ -2694,6 +2906,18 @@ class _CourseSearchScreenState extends State<CourseSearchScreen> {
                 child: Center(child: CircularProgressIndicator()),
               );
             }
+            if (snapshot.hasError) {
+              // 서버 오류는 "결과 없음"과 구분 — 잠깐 죽었다 살아나는 경우가 있어 재시도 버튼.
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 40),
+                child: Column(children: [
+                  const Text('서버가 잠시 응답하지 않아요.',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink4)),
+                  const SizedBox(height: 12),
+                  SecondaryButton('다시 시도', onTap: _reload),
+                ]),
+              );
+            }
             final results = snapshot.data ?? const <TourAttraction>[];
             if (results.isEmpty) {
               return const Padding(
@@ -2760,6 +2984,7 @@ class _CourseSearchScreenState extends State<CourseSearchScreen> {
                     }
                   }),
                 ),
+              const TourApiAttribution(label: '검색 결과'),
             ]);
           },
         ),

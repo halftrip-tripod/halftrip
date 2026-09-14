@@ -402,6 +402,7 @@ enum NotificationType {
 
 class AppNotification {
   const AppNotification({
+    this.id,
     required this.type,
     required this.title,
     required this.body,
@@ -411,6 +412,8 @@ class AppNotification {
     this.refId,
   });
 
+  /// 서버 알림 id — 개별 읽음 처리용. 목(mock) 알림엔 없을 수 있다.
+  final int? id;
   final NotificationType type;
   final String title;
   final String body;
@@ -423,6 +426,7 @@ class AppNotification {
   final int? refId;
 
   AppNotification copyWith({bool? read}) => AppNotification(
+        id: id,
         type: type,
         title: title,
         body: body,
@@ -445,6 +449,7 @@ class AppNotification {
 
   factory AppNotification.fromJson(Map<String, dynamic> json) {
     return AppNotification(
+      id: (json['id'] as num?)?.toInt(),
       type: typeFromWire(json['type'] as String?),
       title: json['title'] as String? ?? '',
       body: json['body'] as String? ?? '',
@@ -883,6 +888,8 @@ class TourAttraction {
     this.latitude,
     this.longitude,
     this.eligibleForRefund = false,
+    this.barrierFree = false,
+    this.petFriendly = false,
   });
 
   final String contentId;
@@ -894,6 +901,8 @@ class TourAttraction {
   final double? latitude;
   final double? longitude;
   final bool eligibleForRefund; // 반값여행 환급 인정 관광지(지정관광지)인지
+  final bool barrierFree; // TourAPI 무장애 여행정보 서비스에 등록된 장소
+  final bool petFriendly; // TourAPI 반려동물 동반여행 서비스에 등록된 장소
 
   TourAttraction copyWith({bool? eligibleForRefund}) => TourAttraction(
         contentId: contentId,
@@ -905,6 +914,8 @@ class TourAttraction {
         latitude: latitude,
         longitude: longitude,
         eligibleForRefund: eligibleForRefund ?? this.eligibleForRefund,
+        barrierFree: barrierFree,
+        petFriendly: petFriendly,
       );
 
   factory TourAttraction.fromJson(Map<String, dynamic> json) {
@@ -917,6 +928,8 @@ class TourAttraction {
       tel: json['tel'] as String? ?? '',
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
+      barrierFree: json['barrierFree'] as bool? ?? false,
+      petFriendly: json['petFriendly'] as bool? ?? false,
     );
   }
 }
@@ -1044,6 +1057,7 @@ class MerchantMapSearchResult {
     required this.centerLongitude,
     required this.merchantCount,
     required this.markers,
+    this.visibleMerchants = const [],
   });
 
   final RegionSummary region;
@@ -1051,6 +1065,8 @@ class MerchantMapSearchResult {
   final double centerLongitude;
   final int merchantCount;
   final List<MerchantMarkerItem> markers;
+  /// 지도 범위 안 목록용 상세(중심 가까운 순 최대 200). 서버가 없으면 빈 목록.
+  final List<MerchantItem> visibleMerchants;
 
   factory MerchantMapSearchResult.fromJson(Map<String, dynamic> json) {
     return MerchantMapSearchResult(
@@ -1060,6 +1076,9 @@ class MerchantMapSearchResult {
       merchantCount: json['merchantCount'] as int? ?? 0,
       markers: ((json['merchants'] as List<dynamic>?) ?? const [])
           .map((item) => MerchantMarkerItem.fromJson(item as Map<String, dynamic>))
+          .toList(),
+      visibleMerchants: ((json['visibleMerchants'] as List<dynamic>?) ?? const [])
+          .map((item) => MerchantItem.fromJson(item as Map<String, dynamic>))
           .toList(),
     );
   }
@@ -1827,6 +1846,8 @@ class SavedCourseStop {
     this.day = 1,
     this.time = '',
     this.category = '',
+    this.barrierFree = false,
+    this.petFriendly = false,
   });
 
   final int placeId;
@@ -1845,6 +1866,10 @@ class SavedCourseStop {
   /// sourceType(환급 여부)만으론 맛집·비환급 관광지가 뭉개져서 별도 저장. (예전 저장분엔 빈값)
   final String category;
 
+  /// 접근성 배지 — 무장애/반려동물 서비스 등록 장소. 서버 컬럼(V106)과 짝.
+  final bool barrierFree;
+  final bool petFriendly;
+
   factory SavedCourseStop.fromJson(Map<String, dynamic> json) {
     return SavedCourseStop(
       placeId: json['placeId'] as int? ?? 0,
@@ -1856,6 +1881,8 @@ class SavedCourseStop {
       day: json['day'] as int? ?? 1,
       time: json['time'] as String? ?? '',
       category: json['category'] as String? ?? '',
+      barrierFree: json['barrierFree'] as bool? ?? false,
+      petFriendly: json['petFriendly'] as bool? ?? false,
     );
   }
 
@@ -1869,6 +1896,8 @@ class SavedCourseStop {
         'day': day,
         'time': time,
         'category': category,
+        'barrierFree': barrierFree,
+        'petFriendly': petFriendly,
       };
 }
 

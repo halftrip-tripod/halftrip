@@ -2,15 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../core/app_config.dart';
+import '../core/app_controller.dart';
 import '../core/app_scope.dart';
 import '../models/app_models.dart';
+import '../mock_ui/data/models.dart' show CourseStop;
 import '../theme/app_colors.dart';
 import '../widgets/ui/app_card.dart';
-import '../widgets/place_map_view.dart';
 import '../mock_ui/screens/course_flow.dart'
-    show CourseEditScreen, CourseViewScreen, courseFromSaved, savedStopsFromCourse;
-import 'planner_screen.dart';
+    show CourseDaysBody, CourseEditScreen, CourseViewScreen, courseFromSaved, savedStopsFromCourse;
 import 'youtube_course_start_screen.dart'
     show YoutubeCourseStartScreen, YoutubeVideoPreview, youtubeVideoId;
 import 'youtube_travel_plan_screen.dart';
@@ -48,7 +47,6 @@ class _YoutubeCourseAnalysisScreenState
   bool _creating = true;
   Timer? _pollingTimer;
   bool _saving = false;
-  int? _selectedStopOrder;
   final TextEditingController _titleController = TextEditingController();
 
   @override
@@ -65,12 +63,43 @@ class _YoutubeCourseAnalysisScreenState
   void dispose() {
     _pollingTimer?.cancel();
     _titleController.dispose();
+    final controller = _controllerForDispose;
+    if (controller != null && controller.activeYoutubeJobId == _jobId) {
+      controller.activeYoutubeJobId = null;
+    }
     super.dispose();
+  }
+
+  /// dispose에서는 context 조회가 안전하지 않아 미리 잡아 둔다.
+  AppController? _controllerForDispose;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _controllerForDispose = AppScope.of(context);
+  }
+
+  /// 표시용 스톱 — 코스함에 저장된 코스(일차·카테고리 반영)를 우선, 아직 없으면
+  /// 결과를 같은 규칙으로 일차 분배해 만든다. 코스 상세와 동일한 모양이 되도록.
+  List<CourseStop> _viewStops(YoutubeCourseJobItem job, YoutubeCourseJobResult result) {
+    final controller = AppScope.of(context);
+    final saved = controller.findSavedCourseForJob(job.jobId) ??
+        SavedCourse(
+          id: job.jobId,
+          regionId: job.regionId,
+          regionName: job.regionName,
+          title: result.title,
+          preferences: const [],
+          stops: controller.youtubeStopsByDay(job, result),
+          createdAt: DateTime.now(),
+        );
+    return courseFromSaved(saved).stops;
   }
 
   Future<void> _boot() async {
     if (widget.jobId != null && widget.jobId!.isNotEmpty) {
       _jobId = widget.jobId;
+      AppScope.of(context).activeYoutubeJobId = _jobId;
       setState(() {
         _creating = false;
       });
@@ -127,6 +156,8 @@ class _YoutubeCourseAnalysisScreenState
         _jobId = response.jobId;
         _creating = false;
       });
+      // 이 화면이 보고 있는 잡 — 완료 푸시가 와도 "보기" 스낵바로 한 번 더 열지 않게.
+      controller.activeYoutubeJobId = response.jobId;
       if (tripDetail != null) {
         await controller.trackPendingYoutubeCourseJob(
           PendingYoutubeCourseJob(
@@ -217,124 +248,6 @@ class _YoutubeCourseAnalysisScreenState
     }
   }
 
-  List<PlaceMapMarkerData> _buildMarkers(YoutubeCourseJobResult result) {
-    return result.stops
-        .map(
-          (stop) => PlaceMapMarkerData(
-            id: stop.order,
-            name: stop.placeName,
-            address: stop.address,
-            latitude: stop.latitude,
-            longitude: stop.longitude,
-            selected: true,
-            regionLabel: stop.category,
-            phoneNumber: stop.phoneNumber,
-            categoryName: stop.category,
-            placeUrl: stop.placeUrl,
-            websiteUri: stop.websiteUri,
-            internationalPhoneNumber: stop.internationalPhoneNumber,
-            rating: stop.rating,
-            userRatingCount: stop.userRatingCount,
-            businessStatus: stop.businessStatus,
-            priceLevel: stop.priceLevel,
-            types: stop.types,
-            openingHours: stop.openingHours,
-            editorialSummary: stop.editorialSummary,
-            googlePlaceDetails: stop.googlePlaceDetails,
-          ),
-        )
-        .toList();
-  }
-
-  List<PlaceMapRoutePoint> _buildRoutePoints(YoutubeCourseJobResult result) {
-    return result.stops
-        .map(
-          (stop) => PlaceMapRoutePoint(
-            id: stop.order,
-            latitude: stop.latitude,
-            longitude: stop.longitude,
-          ),
-        )
-        .toList();
-  }
-
-
-
-  Future<PlaceMapMarkerData?> _loadGoogleMarkerDetails(
-    PlaceMapMarkerData marker,
-  ) async {
-    try {
-      final controller = AppScope.of(context);
-      final detail = await controller.repository.searchGooglePlaceDetail(
-        placeName: marker.name,
-        address: marker.address,
-        latitude: marker.latitude,
-        longitude: marker.longitude,
-      );
-      if (detail == null) {
-        return null;
-      }
-      return PlaceMapMarkerData(
-        id: marker.id,
-        name: detail.placeName.isNotEmpty ? detail.placeName : marker.name,
-        address: detail.address.isNotEmpty ? detail.address : marker.address,
-        latitude: detail.latitude == 0 ? marker.latitude : detail.latitude,
-        longitude: detail.longitude == 0 ? marker.longitude : detail.longitude,
-        selected: marker.selected,
-        regionLabel:
-            detail.category.isNotEmpty ? detail.category : marker.regionLabel,
-        imageAssetPath: marker.imageAssetPath,
-        actionLabel: marker.actionLabel,
-        phoneNumber:
-            detail.phoneNumber.isNotEmpty
-                ? detail.phoneNumber
-                : marker.phoneNumber,
-        roadAddress:
-            detail.address.isNotEmpty ? detail.address : marker.roadAddress,
-        categoryName:
-            detail.category.isNotEmpty ? detail.category : marker.categoryName,
-        placeUrl:
-            detail.placeUrl.isNotEmpty ? detail.placeUrl : marker.placeUrl,
-        websiteUri:
-            detail.websiteUri.isNotEmpty
-                ? detail.websiteUri
-                : marker.websiteUri,
-        internationalPhoneNumber:
-            detail.internationalPhoneNumber.isNotEmpty
-                ? detail.internationalPhoneNumber
-                : marker.internationalPhoneNumber,
-        rating: detail.rating ?? marker.rating,
-        userRatingCount:
-            detail.userRatingCount == 0
-                ? marker.userRatingCount
-                : detail.userRatingCount,
-        businessStatus:
-            detail.businessStatus.isNotEmpty
-                ? detail.businessStatus
-                : marker.businessStatus,
-        priceLevel:
-            detail.priceLevel.isNotEmpty
-                ? detail.priceLevel
-                : marker.priceLevel,
-        types: detail.types.isNotEmpty ? detail.types : marker.types,
-        openingHours:
-            detail.openingHours.isNotEmpty
-                ? detail.openingHours
-                : marker.openingHours,
-        editorialSummary:
-            detail.editorialSummary.isNotEmpty
-                ? detail.editorialSummary
-                : marker.editorialSummary,
-        googlePlaceDetails:
-            detail.googlePlaceDetails.isNotEmpty
-                ? detail.googlePlaceDetails
-                : marker.googlePlaceDetails,
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
   PlaceCategory _resolvePlaceCategory(YoutubeCourseJobStop stop) {
     final category = stop.category.toLowerCase();
     if (category.contains('식당') ||
@@ -388,7 +301,7 @@ class _YoutubeCourseAnalysisScreenState
         _job!,
         preferredTitle: _titleController.text.trim(),
       );
-      final savedCourse = controller.findSavedCourse(_job!.jobId);
+      final savedCourse = controller.findSavedCourseForJob(_job!.jobId);
       final tripId = widget.tripDetail?.trip.id ?? _job?.tripId;
       if (tripId != null) {
         // 여행에서 진입 — 플래너 적용 + 확정 코스 연결까지.
@@ -453,8 +366,18 @@ class _YoutubeCourseAnalysisScreenState
     final job = _job;
     if (job == null) return;
     final controller = AppScope.of(context);
-    final saved = controller.findSavedCourse(job.jobId);
-    if (saved == null) return;
+    var saved = controller.findSavedCourseForJob(job.jobId);
+    if (saved == null && job.result != null) {
+      // 자동 저장이 안 됐거나(앱 재설치 등) 매핑이 없으면 지금 저장하고 다시 찾는다.
+      await controller.saveCompletedYoutubeCourse(job);
+      saved = controller.findSavedCourseForJob(job.jobId);
+    }
+    if (saved == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('코스함에서 이 코스를 찾지 못했어요. 코스함에서 열어 주세요.')));
+      return;
+    }
     final viewCourse = courseFromSaved(saved);
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => CourseEditScreen(course: viewCourse)),
@@ -491,23 +414,9 @@ class _YoutubeCourseAnalysisScreenState
   Widget build(BuildContext context) {
     final job = _job;
     final result = job?.result;
-    final markers =
-        result == null ? const <PlaceMapMarkerData>[] : _buildMarkers(result);
-    final routePoints =
-        result == null
-            ? const <PlaceMapRoutePoint>[]
-            : _buildRoutePoints(result);
     final pending =
         _creating || job == null || job.isPending || job.isProcessing;
 
-    // 처음엔 아무것도 선택하지 않는다 — 일정·핀을 탭했을 때만 포커스.
-    final selectedStop =
-        result == null || result.stops.isEmpty || _selectedStopOrder == null
-            ? null
-            : result.stops.firstWhere(
-              (stop) => stop.order == _selectedStopOrder,
-              orElse: () => result.stops.first,
-            );
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -641,16 +550,17 @@ class _YoutubeCourseAnalysisScreenState
             ),
       body:
           result != null
-              ? _CompletedItineraryView(
-                result: result,
-                markers: markers,
-                routePoints: routePoints,
-                selectedStop: selectedStop,
-                onSelectStop: (stop) {
-                  setState(() => _selectedStopOrder = stop.order);
-                },
-                onMarkerDetailsRequested: _loadGoogleMarkerDetails,
-              )
+              // 코스 상세(코스함)와 같은 화면 구성 — 지도·DAY 칩·타임라인.
+              ? ListView(
+                  padding: const EdgeInsets.fromLTRB(14, 4, 14, 24),
+                  children: [
+                    CourseDaysBody(
+                      key: ValueKey('yt-days-${job!.jobId}-${result.stops.length}'),
+                      stops: _viewStops(job, result),
+                      startDate: widget.tripDetail?.trip.startDate,
+                    ),
+                  ],
+                )
               : ListView(
                 padding: const EdgeInsets.fromLTRB(14, 4, 14, 32),
                 children: [
@@ -682,263 +592,6 @@ class _YoutubeCourseAnalysisScreenState
 }
 
 /// 완료 화면 — AI 코스 결과와 동일한 구성: 지도(탭한 장소 포커스) + 상세 일정.
-class _CompletedItineraryView extends StatelessWidget {
-  const _CompletedItineraryView({
-    required this.result,
-    required this.markers,
-    required this.routePoints,
-    required this.selectedStop,
-    required this.onSelectStop,
-    required this.onMarkerDetailsRequested,
-  });
-
-  final YoutubeCourseJobResult result;
-  final List<PlaceMapMarkerData> markers;
-  final List<PlaceMapRoutePoint> routePoints;
-  final YoutubeCourseJobStop? selectedStop;
-  final ValueChanged<YoutubeCourseJobStop> onSelectStop;
-  final Future<PlaceMapMarkerData?> Function(PlaceMapMarkerData marker)
-  onMarkerDetailsRequested;
-
-  @override
-  Widget build(BuildContext context) {
-    final focus = selectedStop;
-    final hasFocusGeo =
-        focus != null && focus.latitude != 0 && focus.longitude != 0;
-    return ListView(
-      clipBehavior: Clip.none,
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: PlaceMapView(
-            // 일정 탭으로 포커스가 바뀌면 지도를 그 핀 중심으로 다시 그린다.
-            key: ValueKey('yt-course-map-${focus?.order}'),
-            markers: markers,
-            routeMarkers: routePoints,
-            connectSequentially: true,
-            highlightedMarkerId: focus?.order,
-            initialCenterLatitude: hasFocusGeo ? focus.latitude : null,
-            initialCenterLongitude: hasFocusGeo ? focus.longitude : null,
-            emptyMessage: '생성된 지도 마커가 없습니다.',
-            kakaoEnabled: AppConfig.fromEnvironment().canUseKakaoMap,
-            onMarkerTap: (markerId) {
-              for (final stop in result.stops) {
-                if (stop.order == markerId) {
-                  onSelectStop(stop);
-                  break;
-                }
-              }
-            },
-            onMarkerDetailsRequested: onMarkerDetailsRequested,
-            height: 280,
-          ),
-        ),
-        const SizedBox(height: 14),
-        const Padding(
-          padding: EdgeInsets.only(left: 2, bottom: 10),
-          child: Text(
-            '상세 일정',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w900,
-              color: AppColors.ink9,
-              letterSpacing: -.3,
-            ),
-          ),
-        ),
-        _RouteTimeline(
-          stops: result.stops,
-          selectedOrder: selectedStop?.order,
-          onSelect: onSelectStop,
-        ),
-      ],
-    );
-  }
-}
-
-class _RouteTimeline extends StatelessWidget {
-  const _RouteTimeline({
-    required this.stops,
-    required this.selectedOrder,
-    required this.onSelect,
-  });
-
-  final List<YoutubeCourseJobStop> stops;
-  final int? selectedOrder;
-  final ValueChanged<YoutubeCourseJobStop> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    if (stops.isEmpty) {
-      return const Center(child: Text('표시할 일정이 없습니다.'));
-    }
-    return Column(
-      children: [
-        for (var index = 0; index < stops.length; index++)
-          _TimelineStopTile(
-            stop: stops[index],
-            selected: stops[index].order == selectedOrder,
-            first: index == 0,
-            last: index == stops.length - 1,
-            onTap: () => onSelect(stops[index]),
-          ),
-      ],
-    );
-  }
-}
-
-class _TimelineStopTile extends StatelessWidget {
-  const _TimelineStopTile({
-    required this.stop,
-    required this.selected,
-    required this.first,
-    required this.last,
-    required this.onTap,
-  });
-
-  final YoutubeCourseJobStop stop;
-  final bool selected;
-  final bool first;
-  final bool last;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    const primary = AppColors.p500;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(
-              width: 38,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  if (!first)
-                    const Positioned(
-                      top: 0,
-                      bottom: 20,
-                      child: VerticalDivider(
-                        width: 2,
-                        thickness: 2,
-                        color: AppColors.p200,
-                      ),
-                    ),
-                  if (!last)
-                    const Positioned(
-                      top: 20,
-                      bottom: 0,
-                      child: VerticalDivider(
-                        width: 2,
-                        thickness: 2,
-                        color: AppColors.p200,
-                      ),
-                    ),
-                  Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: selected ? primary : Colors.white,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: primary, width: 2),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      '${stop.order}',
-                      style: TextStyle(
-                        color: selected ? Colors.white : primary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: selected ? AppColors.p50 : Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: selected ? primary : const Color(0xFFE8EAF0),
-                    width: selected ? 1.4 : 1,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      stop.placeName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.ink9,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 5),
-                    // AI 코스 타임라인과 동일한 뱃지 — 카테고리 + 환급 인정.
-                    Wrap(
-                      spacing: 5,
-                      runSpacing: 4,
-                      children: [
-                        _badge(
-                          stop.category.isEmpty ? '관광지' : stop.category,
-                          _isFoodCategory(stop.category)
-                              ? const Color(0xFFFFF1E0)
-                              : AppColors.p100,
-                          _isFoodCategory(stop.category)
-                              ? const Color(0xFFB8731B)
-                              : AppColors.p700,
-                        ),
-                        if (!_isFoodCategory(stop.category))
-                          _badge('환급 인정', AppColors.mintTint,
-                              AppColors.mintDeep),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// 저장 규칙(app_controller)과 동일 — 식당·카페 계열은 가맹점, 나머지는 환급 인정.
-  static bool _isFoodCategory(String category) {
-    final c = category.toLowerCase();
-    return c.contains('식당') ||
-        c.contains('카페') ||
-        c.contains('음식') ||
-        c.contains('주점') ||
-        c.contains('미용');
-  }
-
-  Widget _badge(String label, Color bg, Color fg) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-            color: bg, borderRadius: BorderRadius.circular(999)),
-        child: Text(label,
-            style: TextStyle(
-                fontSize: 10.5, fontWeight: FontWeight.w800, color: fg)),
-      );
-}
-
-
 /// 영상 링크 카드 (디자인 ytinput).
 class _VideoCard extends StatelessWidget {
   const _VideoCard({required this.youtubeUrl});

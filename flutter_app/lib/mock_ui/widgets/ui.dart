@@ -281,8 +281,10 @@ class CtaBar extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
+          // 안내문(note)이 반투명 구간에 놓여 스크롤되는 목록 글자와 겹쳐 보였다 —
+          // 위쪽 얇은 띠만 페이드하고 그 아래는 불투명하게.
           colors: [Color(0x00F7FAFD), AppColors.bg],
-          stops: [0, .4],
+          stops: [0, .12],
         ),
       ),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -595,12 +597,16 @@ class ToggleRow extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onChanged,
+    this.sub,
   });
 
   final IconData icon;
   final String label;
   final bool value;
   final ValueChanged<bool> onChanged;
+
+  /// 라벨 아래 한 줄 설명(선택).
+  final String? sub;
 
   @override
   Widget build(BuildContext context) {
@@ -610,9 +616,17 @@ class ToggleRow extends StatelessWidget {
         Icon(icon, size: 20, color: AppColors.ink5),
         const SizedBox(width: 12),
         Expanded(
-          child: Text(label,
-              style: const TextStyle(
-                  fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink9)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label,
+                style: const TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink9)),
+            if (sub != null) ...[
+              const SizedBox(height: 2),
+              Text(sub!,
+                  style: const TextStyle(
+                      fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.ink4)),
+            ],
+          ]),
         ),
         Switch(value: value, onChanged: onChanged),
       ]),
@@ -1014,8 +1028,14 @@ class _CourseMapPainter extends CustomPainter {
 String? refundProofRequirement(String? conditionText) {
   final text = (conditionText ?? '').trim();
   if (text.isEmpty) return null;
-  var head = text.split('·').first.split('+').first.trim();
-  head = head.replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim(); // 괄호 부연은 뺀다
+  // 괄호 부연부터 뺀다 — 괄호 안의 '·'·'+'가 구절 구분자로 오인되지 않게.
+  var head = text.replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim();
+  // 구절 구분자는 양옆에 공백이 있는 ' · ' / ' + '. 서천 "유료·무료 관광지 각 1곳"처럼
+  // 낱말 사이의 '·'는 나열이라 자르면 "유료"만 남는다. 공백 없는 구분자는 폴백.
+  final clause = head.split(RegExp(r'\s+[·+]\s+')).first.trim();
+  head = clause.contains(RegExp(r'[·+]')) && clause == head
+      ? head.split('·').first.split('+').first.trim()
+      : clause;
   return head.isEmpty ? null : head;
 }
 
@@ -1187,10 +1207,15 @@ Future<T?> showAppSheet<T>(BuildContext context, {required Widget child, bool sc
 /// 옵션 리스트 선택 시트.
 Future<String?> pickOption(BuildContext context,
     {required String title, required List<String> options}) {
+  // 시/도처럼 항목이 많으면 시트가 화면 꼭대기까지 차오른다 — 화면의 60%까지만
+  // 올라오고 그 안에서 스크롤하게 상한을 둔다.
+  final maxHeight = MediaQuery.sizeOf(context).height * 0.6;
   return showAppSheet<String>(
     context,
     scrollable: true,
-    child: Column(mainAxisSize: MainAxisSize.min, children: [
+    child: ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxHeight),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(24, 14, 24, 4),
         child: Align(
@@ -1213,7 +1238,8 @@ Future<String?> pickOption(BuildContext context,
         ),
       ),
       const SizedBox(height: 8),
-    ]),
+      ]),
+    ),
   );
 }
 
@@ -1226,7 +1252,8 @@ class DetailScaffold extends StatelessWidget {
     this.cta,
     this.actions,
     this.closeIcon = false,
-    this.padding = const EdgeInsets.fromLTRB(14, 4, 14, 120),
+    // CTA 바(약 104) 위로 마지막 항목이 붙지 않게 여유를 둔다.
+    this.padding = const EdgeInsets.fromLTRB(14, 4, 14, 140),
   });
 
   final String title;
