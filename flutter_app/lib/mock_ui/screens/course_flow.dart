@@ -164,6 +164,8 @@ class _AiCand {
         'description': description,
         'eligibleForRefund': refund,
         'accessible': accessible,
+        'barrierFree': barrierFree,
+        'petFriendly': petFriendly,
       };
 }
 
