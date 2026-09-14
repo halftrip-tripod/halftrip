@@ -360,13 +360,14 @@ class ApiTravelRepository implements TravelRepository {
 
   @override
   Future<List<TourAttraction>> getRegionAttractions(int regionId,
-      {String? type, String? keyword}) async {
+      {String? type, String? keyword, String? access}) async {
     final response = await _jsonRequest(
       'GET',
       '/regions/$regionId/attractions',
       query: {
         if (type != null && type.isNotEmpty) 'type': type,
         if (keyword != null && keyword.isNotEmpty) 'q': keyword,
+        if (access != null && access.isNotEmpty) 'access': access,
       },
     );
     return ((response['data'] as List<dynamic>?) ?? const [])
@@ -457,6 +458,8 @@ class ApiTravelRepository implements TravelRepository {
             // 표시용 카테고리·계획표 시각 — 없으면 코스함에서 전부 '가맹점' 핀으로 보인다.
             'category': stop.category.isEmpty ? null : stop.category,
             'visitTime': stop.time.isEmpty ? null : stop.time,
+            'barrierFree': stop.barrierFree,
+            'petFriendly': stop.petFriendly,
           },
       ],
     };
@@ -492,6 +495,8 @@ class ApiTravelRepository implements TravelRepository {
               day: (stop['dayNumber'] as num?)?.toInt() ?? 1,
               time: stop['visitTime'] as String? ?? '',
               category: stop['category'] as String? ?? '',
+              barrierFree: stop['barrierFree'] as bool? ?? false,
+              petFriendly: stop['petFriendly'] as bool? ?? false,
             ))
         .toList();
     final summary = (json['summary'] as String? ?? '').trim();

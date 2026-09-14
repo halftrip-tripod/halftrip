@@ -597,12 +597,16 @@ class ToggleRow extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onChanged,
+    this.sub,
   });
 
   final IconData icon;
   final String label;
   final bool value;
   final ValueChanged<bool> onChanged;
+
+  /// 라벨 아래 한 줄 설명(선택).
+  final String? sub;
 
   @override
   Widget build(BuildContext context) {
@@ -612,9 +616,17 @@ class ToggleRow extends StatelessWidget {
         Icon(icon, size: 20, color: AppColors.ink5),
         const SizedBox(width: 12),
         Expanded(
-          child: Text(label,
-              style: const TextStyle(
-                  fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink9)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label,
+                style: const TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink9)),
+            if (sub != null) ...[
+              const SizedBox(height: 2),
+              Text(sub!,
+                  style: const TextStyle(
+                      fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.ink4)),
+            ],
+          ]),
         ),
         Switch(value: value, onChanged: onChanged),
       ]),

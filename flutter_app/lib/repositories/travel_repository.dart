@@ -59,8 +59,9 @@ abstract class TravelRepository {
   Future<List<RegionFestival>> getRegionFestivals(int regionId) async => const [];
 
   /// 지역 관광지·맛집·숙소 — TourAPI 실시간. type: 관광지|맛집|숙소|null(전체), keyword: 검색어(선택).
+  /// access: 'barrier_free' | 'pet' — 무장애/반려동물 서비스 등록 장소만 (TourAPI 교집합).
   Future<List<TourAttraction>> getRegionAttractions(int regionId,
-          {String? type, String? keyword}) async =>
+          {String? type, String? keyword, String? access}) async =>
       const [];
 
   /// TourAPI 관광지 상세 — 없으면 null(화면은 기본 정보만).

@@ -54,6 +54,8 @@ class CourseAiService {
     required int people,
     required List<String> themePriority,
     required List<Map<String, dynamic>> candidates,
+    /// 'barrier_free' | 'pet' | '' — 무장애/반려동물 조건. accessible=true 후보를 우선하라는 힌트.
+    String accessibility = '',
   }) async {
     final baseUri = Uri.parse(_config.fastApiBaseUrl);
     final basePath = baseUri.path.endsWith('/')
@@ -68,6 +70,7 @@ class CourseAiService {
         'nights': nights,
         'people': people,
         'theme_priority': themePriority,
+        'accessibility': accessibility,
         'candidates': candidates,
       }),
     );
