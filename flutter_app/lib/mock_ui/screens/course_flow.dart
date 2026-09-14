@@ -17,6 +17,7 @@ import '../theme/app_colors.dart';
 import '../widgets/region_art.dart';
 import '../widgets/trip_calendar_sheet.dart' show kdate;
 import '../widgets/ui.dart';
+import '../../widgets/tour_api_attribution.dart';
 import 'my_trips_tab.dart' show regionEmojiOf;
 import 'tour_place_detail.dart';
 
@@ -1661,6 +1662,8 @@ class _CourseSimScreenState extends State<CourseSimScreen> {
               });
             },
           ),
+          // 장소 정보는 한국관광공사 TourAPI — 공모전 규정 6-2 출처 표기.
+          const TourApiAttribution(label: '장소 정보'),
         ]);
   }
 }
@@ -1722,6 +1725,8 @@ class _CourseDaysBodyState extends State<CourseDaysBody> {
           });
         },
       ),
+      // 장소 정보(관광지·맛집·무장애·반려동물)는 한국관광공사 TourAPI — 공모전 규정 6-2 출처 표기.
+      const TourApiAttribution(label: '장소 정보'),
     ]);
   }
 }
@@ -2082,6 +2087,8 @@ class _CourseViewScreenState extends State<CourseViewScreen> {
               });
             },
           ),
+          // 장소 정보는 한국관광공사 TourAPI — 공모전 규정 6-2 출처 표기.
+          const TourApiAttribution(label: '장소 정보'),
         ]),
       ],
     );
@@ -2639,6 +2646,7 @@ class _CourseEditScreenState extends State<CourseEditScreen> {
               ),
             ),
           ),
+        const TourApiAttribution(label: '장소 정보'),
       ],
     );
   }
@@ -2976,6 +2984,7 @@ class _CourseSearchScreenState extends State<CourseSearchScreen> {
                     }
                   }),
                 ),
+              const TourApiAttribution(label: '검색 결과'),
             ]);
           },
         ),
