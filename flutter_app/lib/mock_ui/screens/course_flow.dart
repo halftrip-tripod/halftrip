@@ -718,7 +718,7 @@ class CourseAiScreen extends StatefulWidget {
 
 class _CourseAiScreenState extends State<CourseAiScreen> {
   /// 지역에 지정관광지가 있는지 — 없으면 환급 조건 안내를 숨긴다.
-  bool _hasDesignated = true;
+  bool? _hasDesignated; // null = 확인 전(안내를 잠깐 띄웠다 지우지 않게)
   bool _designatedChecked = false;
 
   // 여행에서 진입하면 여행 일정·인원을 그대로 프리필.
@@ -958,7 +958,7 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
           ],
         ),
         // 지정관광지 제도가 없는 지역(영월·제천)에서는 환급 조건 안내를 뺀다.
-        if (_hasDesignated)
+        if (_hasDesignated == true)
           const NoteRow('환급 조건(지정관광지 2곳·숙박 포함)은 자동으로 충족되게 코스를 짜드려요.'),
       ],
     );
@@ -1573,6 +1573,67 @@ class _CourseSimScreenState extends State<CourseSimScreen> {
             },
           ),
         ]);
+  }
+}
+
+/// 지도 + DAY 칩 + 타임라인 — 생성 결과·코스 상세와 같은 구성.
+/// 다른 화면(유튜브 결과)에서도 코스 상세와 똑같이 보이게 쓰는 공용 본문.
+class CourseDaysBody extends StatefulWidget {
+  const CourseDaysBody({super.key, required this.stops, this.startDate});
+  final List<CourseStop> stops;
+  final DateTime? startDate;
+
+  @override
+  State<CourseDaysBody> createState() => _CourseDaysBodyState();
+}
+
+class _CourseDaysBodyState extends State<CourseDaysBody> {
+  int _mapDay = 1;
+  int? _focusStopId;
+
+  @override
+  Widget build(BuildContext context) {
+    final days = widget.stops.map((s) => s.day).toSet().toList()..sort();
+    if (days.isEmpty) days.add(1);
+    final activeDay = days.contains(_mapDay) ? _mapDay : days.first;
+    final mapStops = widget.stops.where((s) => s.day == activeDay).toList();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _buildStopsMap(context, mapStops, focusId: _focusStopId),
+      if (days.length >= 2) ...[
+        const SizedBox(height: 8),
+        Center(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              for (final d in days) ...[
+                if (d != days.first) const SizedBox(width: 8),
+                _DayChip(
+                  label: 'DAY $d',
+                  active: activeDay == d,
+                  onTap: () => setState(() {
+                    _mapDay = d;
+                    _focusStopId = null;
+                  }),
+                ),
+              ],
+            ]),
+          ),
+        ),
+      ],
+      const SizedBox(height: 10),
+      _TimelineSection(
+        stops: widget.stops,
+        startDate: widget.startDate,
+        selectedStopId: _focusStopId,
+        onStopTap: (s) {
+          if (s.latitude == null || s.longitude == null) return;
+          setState(() {
+            if (days.length >= 2) _mapDay = s.day;
+            _focusStopId = s.placeId ?? s.name.hashCode;
+          });
+        },
+      ),
+    ]);
   }
 }
 
@@ -2251,11 +2312,15 @@ class CourseEditScreen extends StatefulWidget {
 
 class _CourseEditScreenState extends State<CourseEditScreen> {
   /// 지역에 지정관광지가 있는지 — 없으면 환급 카운터("N/2곳")를 숨긴다.
-  bool _hasDesignated = true;
+  /// null = 아직 확인 전. 확인 전에 true로 두면 "0/2곳"이 잠깐 떴다가 사라진다.
+  bool? _hasDesignated;
   bool _designatedChecked = false;
 
   /// 지도에 표시할 일차 (1박2일이면 DAY 1/2 토글).
   int _mapDay = 1;
+
+  /// "일차 추가"로 늘린 빈 일차 수 — 장소를 넣어야 저장에 남는다(일차는 스톱의 day로만 영속).
+  int _extraDays = 0;
 
   @override
   void didChangeDependencies() {
@@ -2280,7 +2345,7 @@ class _CourseEditScreenState extends State<CourseEditScreen> {
     }
     final m = RegExp(r'(\d+)\s*박\s*(\d+)\s*일').firstMatch(c.durationLabel);
     final labelDays = m != null ? int.parse(m.group(2)!) : 1;
-    return labelDays > maxDay ? labelDays : maxDay;
+    return (labelDays > maxDay ? labelDays : maxDay) + _extraDays;
   }
 
   /// 리스트 행 탭 → 지도의 해당 핀을 가운데로 + 정보창 열기.
@@ -2374,7 +2439,7 @@ class _CourseEditScreenState extends State<CourseEditScreen> {
         ),
         // 환급 인정 관광지 포함 여부 — 담은 스톱 중 지정관광지 개수로 판단(숙박은 미판정).
         // 지정관광지 제도가 없는 지역은 카운터 숨김(담긴 환급 장소가 있으면 예외적으로 표시).
-        if (c.stops.isNotEmpty && (_hasDesignated || refundCount > 0))
+        if (c.stops.isNotEmpty && (_hasDesignated == true || refundCount > 0))
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             decoration: BoxDecoration(
@@ -2458,6 +2523,31 @@ class _CourseEditScreenState extends State<CourseEditScreen> {
             ),
           ),
         ],
+        // 일차 추가 — 여행에 묶인 코스는 여행 기간이 일수라 숨긴다. 최대 7일.
+        if (widget.forTrip == null && dayCount < 7)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: GestureDetector(
+              onTap: () => setState(() {
+                _extraDays += 1;
+                _mapDay = dayCount + 1;
+              }),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.line, width: 1.5),
+                ),
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  const Icon(Icons.calendar_month_rounded, size: 17, color: AppColors.ink7),
+                  const SizedBox(width: 7),
+                  Text('DAY ${dayCount + 1} 추가 ($dayCount박 ${dayCount + 1}일로)',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink7)),
+                ]),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -2577,7 +2667,11 @@ class _CourseSearchScreenState extends State<CourseSearchScreen> {
         _designated = (await repo.getPlaceInfoDetail(_regionId!)).halfPricePlaces;
       }
     } catch (_) {
+      // 지역 해석 실패(서버 502 등) — 빈 결과로 굳히지 않고 에러 상태로 두어 재시도하게.
       _regionId = null;
+      _regionResolved = true;
+      if (mounted) setState(() => _future = Future.error(StateError('region')));
+      return;
     }
     _regionResolved = true;
     _reload();
@@ -2585,11 +2679,16 @@ class _CourseSearchScreenState extends State<CourseSearchScreen> {
 
   void _reload() {
     final id = _regionId;
+    if (id == null) {
+      // 처음 열 때 서버가 죽어 있었으면 여기서 다시 해석부터 시도한다.
+      _regionResolved = false;
+      setState(() {});
+      _resolveAndLoad();
+      return;
+    }
     final type = _cat == 0 ? null : _cats[_cat];
     setState(() {
-      _future = id == null
-          ? Future.value(const <TourAttraction>[])
-          : _loadMerged(id, type, _query.isEmpty ? null : _query);
+      _future = _loadMerged(id, type, _query.isEmpty ? null : _query);
     });
   }
 
@@ -2706,6 +2805,18 @@ class _CourseSearchScreenState extends State<CourseSearchScreen> {
               return const Padding(
                 padding: EdgeInsets.symmetric(vertical: 40),
                 child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snapshot.hasError) {
+              // 서버 오류는 "결과 없음"과 구분 — 잠깐 죽었다 살아나는 경우가 있어 재시도 버튼.
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 40),
+                child: Column(children: [
+                  const Text('서버가 잠시 응답하지 않아요.',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink4)),
+                  const SizedBox(height: 12),
+                  SecondaryButton('다시 시도', onTap: _reload),
+                ]),
               );
             }
             final results = snapshot.data ?? const <TourAttraction>[];

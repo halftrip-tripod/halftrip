@@ -30,6 +30,12 @@ class AppController extends ChangeNotifier {
   List<TripSummary> trips = const [];
   List<SavedCourse> savedCourses = const [];
   Map<int, String> selectedCourseIdsByTrip = const <int, String>{};
+  /// 유튜브 잡 id → 코스함 코스 id. 완료 코스는 처음엔 jobId를 코스 id로 저장하지만
+  /// 서버가 숫자 id를 주면 바뀌므로, 결과 화면의 "코스 편집하기"가 다시 찾을 수 있게 남긴다.
+  Map<String, String> youtubeCourseIdsByJob = const <String, String>{};
+
+  /// 지금 결과 화면이 열려 보고 있는 유튜브 잡 — 완료 푸시가 와도 스낵바·재진입을 막는다.
+  String? activeYoutubeJobId;
   List<PendingYoutubeCourseJob> pendingYoutubeCourseJobs = const [];
   Set<int> appliedTripIds = const <int>{};
 
@@ -37,6 +43,7 @@ class AppController extends ChangeNotifier {
   static const _selectedCoursesKey = 'selected_course_ids_by_trip_v1';
   static const _pendingYoutubeJobsKey = 'pending_youtube_jobs_v1';
   static const _appliedTripsKey = 'applied_trip_ids_v1';
+  static const _youtubeCourseIdsKey = 'youtube_course_ids_by_job_v1';
 
   // 로그인 세션 영속화 — 토큰은 일반 SharedPreferences가 아니라 secure storage에.
   // (Android Keystore 암호화 / iOS Keychain. 웹은 브라우저 저장소 기반)
@@ -206,6 +213,7 @@ class AppController extends ChangeNotifier {
     if (user == null || _repository is! ApiTravelRepository) {
       return;
     }
+    mock.AppState.I.syncProfile(user);
     await mock.AppState.I.attachCommunityServer(_repository, user.id);
   }
 
@@ -244,6 +252,7 @@ class AppController extends ChangeNotifier {
       nickname: effectiveNickname,
       avatarPreset: avatarPreset,
     );
+    mock.AppState.I.syncProfile(currentUser!);
     notifyListeners();
     try {
       await repository.updateProfile(
@@ -268,6 +277,7 @@ class AppController extends ChangeNotifier {
     await _signOutSocialSdks(unlink: true);
     savedCourses = const [];
     selectedCourseIdsByTrip = const <int, String>{};
+    youtubeCourseIdsByJob = const <String, String>{};
     pendingYoutubeCourseJobs = const [];
     logout();
   }
@@ -503,6 +513,10 @@ class AppController extends ChangeNotifier {
           entry.key: entry.value == course.id ? saved.id : entry.value,
       };
       selectedCourseIdsByTrip = remapped;
+      youtubeCourseIdsByJob = {
+        for (final entry in youtubeCourseIdsByJob.entries)
+          entry.key: entry.value == course.id ? saved.id : entry.value,
+      };
       await _persistLocalDashboardData();
       notifyListeners();
     } catch (_) {
@@ -538,10 +552,7 @@ class AppController extends ChangeNotifier {
       return false;
     }
 
-    final existing = savedCourses.cast<SavedCourse?>().firstWhere(
-          (item) => item?.id == job.jobId,
-          orElse: () => null,
-        );
+    final existing = findSavedCourseForJob(job.jobId);
     final customTitle = preferredTitle?.trim() ?? '';
     final resolvedTitle = existing?.title.trim().isNotEmpty == true
         ? existing!.title
@@ -551,31 +562,28 @@ class AppController extends ChangeNotifier {
                 ? result.title.trim()
                 : '${job.regionName} 유튜브 추천 코스';
 
+    // 이미 서버 id로 저장된 코스면 그 id로 갱신(중복 생성 방지). saveCourse가 서버 id를
+    // 받으면 youtubeCourseIdsByJob도 같이 새 id로 옮긴다.
+    final courseId = existing?.id ?? job.jobId;
+    youtubeCourseIdsByJob = {...youtubeCourseIdsByJob, job.jobId: courseId};
     await saveCourse(
       SavedCourse(
-        id: job.jobId,
+        id: courseId,
         regionId: job.regionId,
         regionName: job.regionName,
         title: resolvedTitle,
         preferences: existing?.preferences ?? const <String>[],
-        stops: result.stops
-            .map(
-              (stop) => SavedCourseStop(
-                placeId: stop.order,
-                name: stop.placeName,
-                address: stop.address,
-                latitude: stop.latitude,
-                longitude: stop.longitude,
-                sourceType: _savedCourseSourceType(stop),
-              ),
-            )
-            .toList(),
+        stops: youtubeStopsByDay(job, result),
         createdAt: existing?.createdAt ?? job.updatedAt ?? job.createdAt ?? DateTime.now(),
       ),
     );
     await _removePendingYoutubeCourseJob(job.jobId);
     return true;
   }
+
+  /// 유튜브 잡으로 만든 코스함 코스 — 서버 id로 바뀐 뒤에도 찾는다.
+  SavedCourse? findSavedCourseForJob(String jobId) =>
+      findSavedCourse(youtubeCourseIdsByJob[jobId] ?? jobId);
 
   SavedCourse? findSavedCourse(String courseId) {
     return savedCourses.cast<SavedCourse?>().firstWhere(
@@ -740,6 +748,43 @@ class AppController extends ChangeNotifier {
     return course;
   }
 
+  /// 유튜브 결과는 일차 정보가 없는 평면 목록이라 전부 DAY 1로 저장됐다.
+  /// 여행에서 만든 코스면 여행 기간, 아니면 제목·요약의 "N박 M일"로 일수를 유추해
+  /// 순서대로 고르게 나눈다. 못 알아내면 하루.
+  List<SavedCourseStop> youtubeStopsByDay(
+      YoutubeCourseJobItem job, YoutubeCourseJobResult result) {
+    var days = 1;
+    final tripId = job.tripId;
+    if (tripId != null) {
+      for (final trip in trips) {
+        if (trip.id == tripId) {
+          days = trip.endDate.difference(trip.startDate).inDays + 1;
+          break;
+        }
+      }
+    }
+    if (days <= 1) {
+      final m = RegExp(r'(\d+)\s*박\s*(\d+)\s*일')
+          .firstMatch('${result.title} ${result.summary} ${job.youtubeUrl}');
+      if (m != null) days = int.parse(m.group(2)!);
+    }
+    days = days.clamp(1, 7);
+    final perDay = (result.stops.length / days).ceil().clamp(1, 99);
+    return [
+      for (final (index, stop) in result.stops.indexed)
+        SavedCourseStop(
+          placeId: stop.order,
+          name: stop.placeName,
+          address: stop.address,
+          latitude: stop.latitude,
+          longitude: stop.longitude,
+          sourceType: _savedCourseSourceType(stop),
+          day: (index ~/ perDay) + 1,
+          category: stop.category,
+        ),
+    ];
+  }
+
   String _savedCourseSourceType(YoutubeCourseJobStop stop) {
     final category = stop.category.toLowerCase();
     if (category.contains('식당') ||
@@ -826,6 +871,7 @@ class AppController extends ChangeNotifier {
     final rawSelectedCourseIds = preferences.getString(_selectedCoursesKey);
     if (rawSelectedCourseIds == null || rawSelectedCourseIds.isEmpty) {
       selectedCourseIdsByTrip = const <int, String>{};
+    youtubeCourseIdsByJob = const <String, String>{};
     } else {
       final decoded = jsonDecode(rawSelectedCourseIds) as Map<String, dynamic>;
       selectedCourseIdsByTrip = decoded.map(
@@ -844,6 +890,11 @@ class AppController extends ChangeNotifier {
         .map(int.tryParse)
         .whereType<int>()
         .toSet();
+    final rawYoutubeIds = preferences.getString(_youtubeCourseIdsKey);
+    youtubeCourseIdsByJob = rawYoutubeIds == null || rawYoutubeIds.isEmpty
+        ? const <String, String>{}
+        : (jsonDecode(rawYoutubeIds) as Map<String, dynamic>)
+            .map((key, value) => MapEntry(key, value.toString()));
   }
 
   Future<void> _persistLocalDashboardData() async {
@@ -868,6 +919,7 @@ class AppController extends ChangeNotifier {
       _appliedTripsKey,
       appliedTripIds.map((item) => item.toString()).toList(),
     );
+    await preferences.setString(_youtubeCourseIdsKey, jsonEncode(youtubeCourseIdsByJob));
   }
 
   Future<void> _syncFcmToken() async {
@@ -913,6 +965,8 @@ class AppController extends ChangeNotifier {
     final jobId = message.data['jobId'];
     if (type == 'YOUTUBE_COURSE_COMPLETED' && jobId is String && jobId.isNotEmpty) {
       await _syncCompletedYoutubeCourse(jobId);
+      // 결과 화면에서 기다리는 중이면 폴링이 곧 완료를 그린다 — 스낵바로 또 열지 않는다.
+      if (jobId == activeYoutubeJobId) return;
       scaffoldMessengerKey.currentState?.showSnackBar(
         SnackBar(
           content: const Text('유튜브 코스 생성이 완료되었습니다.'),
@@ -946,6 +1000,7 @@ class AppController extends ChangeNotifier {
     final jobId = message.data['jobId'];
     if (type == 'YOUTUBE_COURSE_COMPLETED' && jobId is String && jobId.isNotEmpty) {
       await _syncCompletedYoutubeCourse(jobId);
+      if (jobId == activeYoutubeJobId) return; // 이미 그 결과 화면 위에 있다
       _openYoutubeJob(jobId);
     }
   }
