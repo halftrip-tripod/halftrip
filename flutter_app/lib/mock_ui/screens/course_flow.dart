@@ -1662,6 +1662,8 @@ class _CourseSimScreenState extends State<CourseSimScreen> {
               });
             },
           ),
+          // 장소 정보는 한국관광공사 TourAPI — 공모전 규정 6-2 출처 표기.
+          const TourApiAttribution(label: '장소 정보'),
         ]);
   }
 }
@@ -2085,6 +2087,8 @@ class _CourseViewScreenState extends State<CourseViewScreen> {
               });
             },
           ),
+          // 장소 정보는 한국관광공사 TourAPI — 공모전 규정 6-2 출처 표기.
+          const TourApiAttribution(label: '장소 정보'),
         ]),
       ],
     );

@@ -8,7 +8,7 @@ class TourApiAttribution extends StatelessWidget {
   const TourApiAttribution({
     super.key,
     this.label,
-    this.padding = const EdgeInsets.symmetric(vertical: 8),
+    this.padding = const EdgeInsets.only(top: 6, right: 4, bottom: 2),
   });
 
   /// 무엇의 출처인지 앞에 붙는 수식어 (예: '장소 정보' → "장소 정보 출처: ⓒ한국관광공사").
@@ -19,15 +19,20 @@ class TourApiAttribution extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final prefix = label == null ? '' : '$label ';
+    // 오른쪽 아래 구석에 작게 — 콘텐츠 흐름을 방해하지 않되 화면마다 같은 자리.
     return Padding(
       padding: padding,
-      child: Text(
-        '$prefix출처: ⓒ한국관광공사',
-        textAlign: TextAlign.center,
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: Color(0xFF9AA3AF),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Text(
+          '$prefix출처: ⓒ한국관광공사',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF9AA3AF),
+          ),
         ),
       ),
     );

@@ -2079,7 +2079,7 @@ class _LodgingSearchSheetState extends State<_LodgingSearchSheet> {
               },
             ),
           ),
-          const TourApiAttribution(label: '숙소 정보', padding: EdgeInsets.only(top: 6, bottom: 4)),
+          const TourApiAttribution(label: '숙소 정보', padding: EdgeInsets.only(top: 4, right: 2, bottom: 6)),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
