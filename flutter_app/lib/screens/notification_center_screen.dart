@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/app_scope.dart';
 import '../models/app_models.dart';
+import '../mock_ui/screens/community.dart' show CommunityDetailScreen;
 import '../mock_ui/screens/course_flow.dart';
 import '../mock_ui/screens/region_detail.dart';
 import '../mock_ui/screens/trip_detail.dart';
@@ -87,14 +88,36 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
       case 'REGION':
         await _openRegion(refId);
       case 'POST':
-        // 커뮤니티 백엔드(핸드오프 J) 전까지는 커뮤니티 탭으로.
-        mock.AppState.I.tabRequest.value = 3;
-        nav.pop();
+        await _openPost(refId);
       case 'MERCHANT':
         mock.AppState.I.tabRequest.value = 2;
         nav.pop();
     }
     if (mounted) await _reload();
+  }
+
+  /// 좋아요·댓글·언급 알림 → 해당 게시글 상세. 목록에 없으면(다른 사용자 글이
+  /// 피드 밖으로 밀렸거나 앱 재시작) 서버에서 단건으로 받아 온다.
+  Future<void> _openPost(int postId) async {
+    final s = mock.AppState.I;
+    var post = s.postByServerId(postId);
+    if (post == null) {
+      try {
+        final data = await AppScope.of(context)
+            .repository
+            .getCommunityPost(postId, userId: s.communityUserId);
+        post = s.upsertServerPost(data);
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('글을 불러오지 못했어요. 삭제됐거나 비공개로 바뀌었을 수 있어요.')));
+        return;
+      }
+    }
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => CommunityDetailScreen(post: post!)),
+    );
   }
 
   /// 실서버 regionId → 지역 상세(실 API) 진입.

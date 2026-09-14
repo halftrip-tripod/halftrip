@@ -577,6 +577,9 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
   final _comment = TextEditingController();
   _Cmt? _replyTo; // 답글 대상 (인스타식 — 루트 댓글)
   late List<_Cmt> _comments = _seedComments();
+  // 서버 댓글 조회 순번 — 늦게 도착한 옛 응답(글 열자마자 보낸 첫 조회가 서버
+  // 콜드스타트로 수 초 뒤 도착)이 방금 단 댓글을 빈 목록으로 덮지 않게 한다.
+  int _commentsSeq = 0;
 
   /// 첨부 코스 카드 탭 — 코스 상세로 보낸다. 지도·DAY별 일정·저장이 다 거기 있다.
   void _openAttachedCourse(BuildContext context, Post p) {
@@ -658,10 +661,11 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
     final s = AppState.I;
     final serverId = widget.post.serverId;
     if (!s.serverMode || serverId == null) return;
+    final seq = ++_commentsSeq;
     try {
       final items = await s.communityRepository!
           .getCommunityComments(serverId, userId: s.communityUserId);
-      if (!mounted) return;
+      if (!mounted || seq != _commentsSeq) return;
       setState(() {
         _comments = [
           for (final c in items)
@@ -701,27 +705,43 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
     final s = AppState.I;
     final serverId = widget.post.serverId;
     final target = _replyTo;
+    final optimistic = _Cmt(
+      authorId: s.communityUserId,
+      // 낙관 표시: 루트 밑에 flat (서버도 같은 규칙으로 정규화)
+      parentId: target == null ? null : (target.parentId ?? target.id),
+      emoji: s.avatarEmoji,
+      nick: s.nickname,
+      time: '방금',
+      body: text,
+      isAuthor: widget.post.mine,
+    );
+    // 아직 안 끝난 이전 조회는 무효화 — 그 응답이 낙관 댓글을 지우지 않게.
+    _commentsSeq++;
     setState(() {
-      _comments.add(_Cmt(
-        // 낙관 표시: 루트 밑에 flat (서버도 같은 규칙으로 정규화)
-        parentId: target == null ? null : (target.parentId ?? target.id),
-        emoji: s.avatarEmoji,
-        nick: s.nickname,
-        time: '방금',
-        body: text,
-        isAuthor: widget.post.mine,
-      ));
+      _comments.add(optimistic);
       widget.post.comments += 1;
       _comment.clear();
       _replyTo = null;
     });
+    s.update(); // 피드 카드의 댓글 수도 바로 갱신
     if (s.serverMode && serverId != null) {
       try {
         await s.communityRepository!.addCommunityComment(
             serverId, s.communityUserId!, text,
             parentId: target?.id, mentionUserId: target?.authorId);
-        await _loadServerComments(); // 서버 정렬·id 반영
-      } catch (_) {}
+      } catch (_) {
+        // 등록 실패 — 낙관 댓글을 거두고 알린다 (조용히 두면 안 올라간 댓글이 남는다).
+        if (!mounted) return;
+        setState(() {
+          _comments.remove(optimistic);
+          widget.post.comments -= 1;
+          _comment.text = text;
+        });
+        s.update();
+        showToast(context, '댓글을 등록하지 못했어요. 잠시 후 다시 시도해 주세요.');
+        return;
+      }
+      await _loadServerComments(); // 서버 정렬·id 반영 (실패해도 낙관 댓글은 남는다)
     }
   }
 
@@ -823,6 +843,11 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
   Future<void> _blockAuthor(int? authorId, String nick) async {
     if (authorId == null) {
       showMock(context, '이 글은 작성자 정보가 없어 차단할 수 없어요.');
+      return;
+    }
+    // 서버도 막지만(400) 앱에서 먼저 거른다 — 내 글·댓글엔 메뉴 자체가 안 뜨는 게 정상.
+    if (AppState.I.serverMode && authorId == AppState.I.communityUserId) {
+      showMock(context, '자기 자신은 차단할 수 없어요.');
       return;
     }
     final ok = await showConfirmDialog(
@@ -929,21 +954,27 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
   }
 
   Future<void> _deleteComment(_Cmt c) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (d) => AlertDialog(
-        content: const Text('이 댓글을 삭제할까요?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('취소')),
-          TextButton(onPressed: () => Navigator.pop(d, true), child: const Text('삭제')),
-        ],
-      ),
+    // 루트 댓글이면 밑의 답글도 함께 지운다 (서버도 같은 규칙).
+    final replies = c.parentId == null
+        ? _comments.where((r) => r.parentId != null && r.parentId == c.id).toList()
+        : const <_Cmt>[];
+    final ok = await showConfirmDialog(
+      context,
+      title: '댓글을 삭제할까요?',
+      message: replies.isEmpty
+          ? '삭제한 댓글은 되돌릴 수 없어요.'
+          : '답글 ${replies.length}개도 함께 삭제돼요. 되돌릴 수 없어요.',
+      confirmLabel: '삭제',
+      danger: true,
     );
-    if (ok != true || !mounted) return;
+    if (!ok || !mounted) return;
     setState(() {
       _comments.remove(c);
-      widget.post.comments = (widget.post.comments - 1).clamp(0, 1 << 30);
+      _comments.removeWhere((r) => replies.contains(r));
+      widget.post.comments =
+          (widget.post.comments - 1 - replies.length).clamp(0, 1 << 30);
     });
+    AppState.I.update(); // 피드 카드·마이페이지 집계도 같은 Post 객체라 즉시 반영
     final s = AppState.I;
     if (s.serverMode && c.id != null && c.id! > 0) {
       try {
@@ -956,7 +987,11 @@ class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
   /// 인스타식 댓글 행 — 답글은 들여쓰기. 내 댓글은 길게 눌러 삭제.
   Widget _commentRow(_Cmt c) {
     final isReply = c.parentId != null;
-    final myComment = c.nick == AppState.I.nickname;
+    // 실서버 모드는 작성자 id로 판별 — 닉네임 비교는 동명이인·프로필 미동기화에 취약.
+    final s = AppState.I;
+    final myComment = s.serverMode
+        ? c.authorId != null && c.authorId == s.communityUserId
+        : c.nick == s.nickname;
     return GestureDetector(
       // 내 댓글은 삭제, 남의 댓글은 신고·차단 시트.
       onLongPress: () => myComment ? _deleteComment(c) : _openCommentMenu(c),

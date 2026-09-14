@@ -1662,6 +1662,10 @@ class MockTravelRepository implements TravelRepository {
   Future<List<CommunityPostData>> getCommunityFeed({int? userId}) async => const [];
 
   @override
+  Future<CommunityPostData> getCommunityPost(int postId, {int? userId}) async =>
+      throw UnsupportedError('mock: community post $postId');
+
+  @override
   Future<String> uploadCommunityPhoto({
     required int userId,
     required Uint8List bytes,
