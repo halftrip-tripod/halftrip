@@ -1038,6 +1038,8 @@ class _StageBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 라벨 칸 폭을 글씨 배율에 맞춰 늘려 '신청 완료'가 두 줄로 쪼개지지 않게.
+    final labelWidth = MediaQuery.textScalerOf(context).scale(62);
     return AppCard(
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
       child: Row(
@@ -1058,7 +1060,7 @@ class _StageBar extends StatelessWidget {
                 ),
               ),
             SizedBox(
-              width: 62,
+              width: labelWidth,
               child: Column(
                 children: [
                   Container(
@@ -1096,6 +1098,8 @@ class _StageBar extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     _labels[i],
+                    maxLines: 1,
+                    softWrap: false,
                     style: TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w700,

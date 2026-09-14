@@ -454,6 +454,9 @@ class ApiTravelRepository implements TravelRepository {
             'latitude': stop.latitude == 0 ? null : stop.latitude,
             'longitude': stop.longitude == 0 ? null : stop.longitude,
             'sourceType': stop.sourceType,
+            // 표시용 카테고리·계획표 시각 — 없으면 코스함에서 전부 '가맹점' 핀으로 보인다.
+            'category': stop.category.isEmpty ? null : stop.category,
+            'visitTime': stop.time.isEmpty ? null : stop.time,
           },
       ],
     };
@@ -487,6 +490,8 @@ class ApiTravelRepository implements TravelRepository {
               longitude: (stop['longitude'] as num?)?.toDouble() ?? 0,
               sourceType: stop['sourceType'] as String? ?? 'PLACE',
               day: (stop['dayNumber'] as num?)?.toInt() ?? 1,
+              time: stop['visitTime'] as String? ?? '',
+              category: stop['category'] as String? ?? '',
             ))
         .toList();
     final summary = (json['summary'] as String? ?? '').trim();
@@ -945,6 +950,13 @@ class ApiTravelRepository implements TravelRepository {
     return ((response['data'] as List<dynamic>?) ?? const [])
         .map((e) => CommunityPostData.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  @override
+  Future<CommunityPostData> getCommunityPost(int postId, {int? userId}) async {
+    final response = await _jsonRequest('GET', '/community/posts/$postId',
+        query: userId == null ? null : {'userId': userId});
+    return CommunityPostData.fromJson(response['data'] as Map<String, dynamic>);
   }
 
   @override

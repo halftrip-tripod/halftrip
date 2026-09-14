@@ -215,6 +215,8 @@ abstract class TravelRepository {
 
   // ── 커뮤니티 (/api/community — 2026-07-28 구현) ──
   Future<List<CommunityPostData>> getCommunityFeed({int? userId});
+  /// 게시글 단건 — 알림 딥링크(POST refId)로 상세를 열 때. userId를 주면 mine·likedByMe가 채워진다.
+  Future<CommunityPostData> getCommunityPost(int postId, {int? userId});
 
   /// 글 사진 업로드(POST /community/photos) — 공개 URL을 돌려준다. 글 등록 전에 먼저 올린다.
   Future<String> uploadCommunityPhoto({
