@@ -191,7 +191,8 @@ List<_AiCand> _rankAiCands(List<_AiCand> cands, List<String> prefs, int nights) 
   int score(_AiCand c) {
     final text = '${c.name} ${c.category} ${c.address} ${c.description}';
     var total = c.refund ? 5 : 0; // 환급 인정 약간 가산
-    if (c.accessible) total += 30; // 무장애·반려동물 조건 장소 우선
+    if (c.barrierFree) total += 30; // 무장애·반려동물 조건 장소 우선(둘 다면 +60)
+    if (c.petFriendly) total += 30;
     for (var i = 0; i < prefs.length; i++) {
       final keywords = switch (prefs[i]) {
         '맛집' => ['맛집', '시장', '식당', '맛', '카페', '음식'],
@@ -243,20 +244,34 @@ Future<bool> regionHasDesignatedPlaces(dynamic controller, String regionName) as
 /// 부족하면 일반 장소로 채운다 — 군 단위 지역은 등록 장소가 적어 필터만으로는 코스가 안 나온다.
 /// 접근성 장소는 accessible=true로 표시돼 정렬·안내에 쓰인다.
 Future<List<_AiCand>> _buildAiCandidates(dynamic controller, int regionId,
-    {String? access}) async {
+    {List<String> accesses = const []}) async {
   final repo = controller.repository;
   final cands = <_AiCand>[];
-  final seen = <String>{};
+  final indexByKey = <String, int>{};
 
   void add(_AiCand c) {
     final key = _aiNormName(c.name);
-    if (key.isEmpty || seen.contains(key)) return;
-    seen.add(key);
+    if (key.isEmpty) return;
+    final existing = indexByKey[key];
+    if (existing != null) {
+      // 같은 장소가 무장애·반려동물 양쪽 목록에 다 있으면 플래그를 합친다.
+      final e = cands[existing];
+      if ((c.barrierFree && !e.barrierFree) || (c.petFriendly && !e.petFriendly)) {
+        cands[existing] = _AiCand(
+          name: e.name, category: e.category, address: e.address, description: e.description,
+          refund: e.refund, latitude: e.latitude, longitude: e.longitude, placeId: e.placeId,
+          barrierFree: e.barrierFree || c.barrierFree,
+          petFriendly: e.petFriendly || c.petFriendly,
+        );
+      }
+      return;
+    }
+    indexByKey[key] = cands.length;
     cands.add(c);
   }
 
-  // ⓪ 접근성 조건 장소 — 지정관광지보다 먼저 넣어 우선 채택되게 한다.
-  if (access != null && access.isNotEmpty) {
+  // ⓪ 접근성 조건 장소 — 지정관광지보다 먼저 넣어 우선 채택되게 한다. 조건마다 따로 조회.
+  for (final access in accesses) {
     for (final type in const ['관광지', '맛집']) {
       try {
         final tour = await repo.getRegionAttractions(regionId, type: type, access: access);
@@ -269,8 +284,10 @@ Future<List<_AiCand>> _buildAiCandidates(dynamic controller, int regionId,
             refund: a.eligibleForRefund,
             latitude: a.latitude,
             longitude: a.longitude,
-            barrierFree: access == 'barrier_free' || a.barrierFree,
-            petFriendly: access == 'pet' || a.petFriendly,
+            // 서버가 필터를 적용했을 때만 true로 내려준다 — access를 모르는 옛 서버가
+            // 전체 목록을 돌려주면 전부 조건 장소로 오인하지 않게 응답 플래그만 믿는다.
+            barrierFree: a.barrierFree,
+            petFriendly: a.petFriendly,
           ));
         }
       } catch (_) {}
@@ -838,9 +855,9 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
         throw Exception('연결된 지역 정보를 찾을 수 없습니다.');
       }
       // 후보 = 지정관광지(환급) + TourAPI 관광지 + 맛집. category·좌표 포함해 취향/동선 반영.
-      // 둘 다 켜면 무장애를 우선(휠체어 접근이 더 제약이 큼). 후보에 accessible로 표시된다.
-      final access = _barrierFree ? 'barrier_free' : (_petFriendly ? 'pet' : null);
-      final cands = await _buildAiCandidates(controller, matched.first.id, access: access);
+      // 켠 조건마다 등록 장소를 따로 받아 후보 앞에 둔다(둘 다면 양쪽 배지).
+      final accesses = [if (_barrierFree) 'barrier_free', if (_petFriendly) 'pet'];
+      final cands = await _buildAiCandidates(controller, matched.first.id, accesses: accesses);
       if (cands.isEmpty) {
         throw Exception('추천할 장소 데이터가 없습니다.');
       }
@@ -853,7 +870,7 @@ class _CourseAiScreenState extends State<CourseAiScreen> {
           people: _people,
           themePriority: preferences,
           candidates: cands.map((c) => c.toAiJson()).toList(),
-          accessibility: access ?? '',
+          accessibility: accesses.join(','),
         );
         final byName = {for (final c in cands) _aiNormName(c.name): c};
         final sorted = [...result.stops]..sort((a, b) =>
