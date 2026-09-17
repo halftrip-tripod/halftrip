@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../utils/error_text.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -829,31 +830,18 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('필드 배치 저장에 실패했습니다: $error')));
+      ).showSnackBar(SnackBar(content: Text('필드 배치 저장에 실패했어요. ${describeError(error)}')));
     } finally {
       if (mounted) setState(() => _layoutSaving = false);
     }
   }
 
   Widget _buildLoadError(Object? error) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline_rounded, size: 36),
-            const SizedBox(height: 12),
-            Text('숙박확인서를 불러오지 못했습니다.\n$error', textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: () => setState(() => _future = _load()),
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('다시 시도'),
-            ),
-          ],
-        ),
-      ),
+    return AppErrorState(
+      title: '숙박확인서를 불러오지 못했어요',
+      error: error,
+      onRetry: () => setState(() => _future = _load()),
+      compact: true,
     );
   }
 

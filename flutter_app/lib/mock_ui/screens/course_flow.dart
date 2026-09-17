@@ -2908,15 +2908,8 @@ class _CourseSearchScreenState extends State<CourseSearchScreen> {
             }
             if (snapshot.hasError) {
               // 서버 오류는 "결과 없음"과 구분 — 잠깐 죽었다 살아나는 경우가 있어 재시도 버튼.
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 40),
-                child: Column(children: [
-                  const Text('서버가 잠시 응답하지 않아요.',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink4)),
-                  const SizedBox(height: 12),
-                  SecondaryButton('다시 시도', onTap: _reload),
-                ]),
-              );
+              return AppErrorState(
+                  title: '검색 결과를 불러오지 못했어요', error: snapshot.error, onRetry: _reload, compact: true);
             }
             final results = snapshot.data ?? const <TourAttraction>[];
             if (results.isEmpty) {
