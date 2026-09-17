@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../utils/error_text.dart';
 import '../theme/app_colors.dart';
 
 // 체크박스 정본 — 실화면·목업 공용이라 디자인 시스템(lib/widgets/ui/)에 둔다.
@@ -244,6 +245,59 @@ class SectionTitle extends StatelessWidget {
 }
 
 /// ℹ️ 안내 문구 행.
+/// 화면 로딩 실패 공용 상태 — 아이콘·제목·짧은 이유·다시 시도.
+/// 예외 원문(Exception: …, SocketException, 502 HTML)은 [describe]가 사용자 문구로 정리한다.
+class AppErrorState extends StatelessWidget {
+  const AppErrorState({
+    super.key,
+    this.title = '화면을 불러오지 못했어요',
+    this.error,
+    this.message,
+    this.onRetry,
+    this.compact = false,
+  });
+
+  final String title;
+  final Object? error;
+  /// 직접 문구를 주면 [error] 대신 쓴다.
+  final String? message;
+  final VoidCallback? onRetry;
+  /// 리스트 안에 끼워 넣을 때 — 위아래 여백만 두고 가운데 정렬은 안 한다.
+  final bool compact;
+
+  static String describe(Object? error) => describeError(error);
+
+  @override
+  Widget build(BuildContext context) {
+    final body = Column(mainAxisSize: MainAxisSize.min, children: [
+      Container(
+        width: 56,
+        height: 56,
+        alignment: Alignment.center,
+        decoration: const BoxDecoration(color: AppColors.p50, shape: BoxShape.circle),
+        child: const Icon(Icons.cloud_off_rounded, size: 26, color: AppColors.p600),
+      ),
+      const SizedBox(height: 14),
+      Text(title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink9)),
+      const SizedBox(height: 6),
+      Text(message ?? describe(error),
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+              fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink5, height: 1.5)),
+      if (onRetry != null) ...[
+        const SizedBox(height: 18),
+        SizedBox(width: 160, child: SecondaryButton('다시 시도', onTap: onRetry)),
+      ],
+    ]);
+    if (compact) {
+      return Padding(padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24), child: body);
+    }
+    return Center(child: Padding(padding: const EdgeInsets.all(24), child: body));
+  }
+}
+
 class NoteRow extends StatelessWidget {
   const NoteRow(this.text, {super.key, this.icon = Icons.info_outline_rounded});
   final String text;
@@ -1109,6 +1163,47 @@ Future<bool> showConfirmDialog(
   );
   return result ?? false;
 }
+
+/// 오류 팝업 — 업로드·저장·생성처럼 "동작"이 실패했을 때. 원문은 [describeError]로 정리해 보여준다.
+/// [retryLabel]을 주면 다시 시도 버튼이 생기고, 눌렀으면 true를 돌려준다.
+Future<bool> showErrorDialog(
+  BuildContext context, {
+  String title = '문제가 생겼어요',
+  Object? error,
+  String? message,
+  String? retryLabel,
+}) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (c) => _appDialogFrame(
+      title: title,
+      body: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          width: 34,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(color: AppColors.coralTint, shape: BoxShape.circle),
+          child: const Icon(Icons.error_outline_rounded, size: 19, color: AppColors.coralDeep),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(message ?? describeError(error),
+              style: const TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink5, height: 1.5)),
+        ),
+      ]),
+      buttons: [
+        SecondaryButton('닫기', onTap: () => Navigator.pop(c, false)),
+        if (retryLabel != null) PrimaryButton(retryLabel, onTap: () => Navigator.pop(c, true)),
+      ],
+    ),
+  );
+  return result ?? false;
+}
+
+/// 오류 토스트 — 가벼운 실패 안내. 원문이 아니라 정리된 문구만 띄운다.
+void showErrorToast(BuildContext context, Object? error, {String? prefix}) =>
+    showMock(context, '${prefix == null ? '' : '$prefix '}${describeError(error)}');
 
 /// 한 줄 입력 다이얼로그 — 코스 이름 바꾸기 등. 비우거나 취소하면 null.
 Future<String?> showTextInputDialog(

@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import '../utils/error_text.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -187,7 +188,7 @@ class _ReceiptEvidenceScreenState extends State<ReceiptEvidenceScreen> {
       };
 
   void _snack(String m) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(describeError(m))));
 
   @override
   Widget build(BuildContext context) {

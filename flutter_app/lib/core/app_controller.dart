@@ -11,6 +11,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/app_models.dart';
+import '../utils/error_text.dart';
 import '../repositories/mock_travel_repository.dart';
 import '../repositories/api_travel_repository.dart';
 import '../repositories/travel_repository.dart';
@@ -824,7 +825,7 @@ class AppController extends ChangeNotifier {
     try {
       return await task();
     } catch (error) {
-      errorMessage = error.toString();
+      errorMessage = describeError(error);
       notifyListeners();
       rethrow;
     }
@@ -844,7 +845,7 @@ class AppController extends ChangeNotifier {
       await task();
     } catch (error) {
       if (epoch == _sessionEpoch) {
-        errorMessage = error.toString();
+        errorMessage = describeError(error);
       }
       rethrow;
     } finally {
