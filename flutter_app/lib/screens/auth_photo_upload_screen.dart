@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import '../utils/error_text.dart';
+import '../mock_ui/widgets/ui.dart' show showErrorDialog;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -154,7 +155,9 @@ class _AuthPhotoUploadScreenState extends State<AuthPhotoUploadScreen> {
       await _reload();
     } catch (error) {
       if (!mounted) return;
-      _snack('인증사진 업로드에 실패했어요: $error');
+      // 업로드·판정 실패는 팝업으로 — 원인(서버 연결 등)을 읽고 바로 다시 시도할 수 있게.
+      setState(() => _uploading = false); // 팝업 뒤에 스피너가 남지 않게 먼저 내린다.
+      await showErrorDialog(context, title: '인증사진을 올리지 못했어요', error: error);
     } finally {
       if (mounted) setState(() => _uploading = false);
     }

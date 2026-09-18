@@ -12,6 +12,19 @@ import '../models/app_models.dart';
 import '../utils/browser_file_download.dart';
 import 'travel_repository.dart';
 
+/// HTTP 응답이 실패로 끝난 경우 — 상태코드를 들고 있어 호출부가 "인증 실패"(401·403·404)와
+/// "서버 장애"(5xx·네트워크)를 문구가 아니라 코드로 가른다. toString은 사용자 문구만 돌려준다.
+class ApiException implements Exception {
+  const ApiException(this.statusCode, this.message);
+  final int statusCode;
+  final String message;
+
+  bool get isAuthFailure => statusCode == 401 || statusCode == 403 || statusCode == 404;
+
+  @override
+  String toString() => message;
+}
+
 class ApiTravelRepository implements TravelRepository {
   ApiTravelRepository(this.config);
 
@@ -79,11 +92,11 @@ class ApiTravelRepository implements TravelRepository {
     final response = await _guard(() => _send(method, uri, headers, body));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(_describeHttpError(response.statusCode, response.body));
+      throw ApiException(response.statusCode, _describeHttpError(response.statusCode, response.body));
     }
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     if (decoded['success'] == false) {
-      throw Exception(decoded['message'] ?? '요청에 실패했습니다.');
+      throw ApiException(response.statusCode, (decoded['message'] as String?) ?? '요청에 실패했습니다.');
     }
     return decoded;
   }

@@ -620,8 +620,11 @@ class _CourseRegionScreenState extends State<CourseRegionScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     // 실서버 지역 목록 — 접수중/오픈예정 상태·차수는 visitkorea 동기화 값을 그대로 쓴다.
-    _future ??= AppScope.of(context).repository.getRegions();
+    _future ??= _loadRegions();
   }
+
+  Future<List<RegionSummary>> _loadRegions() =>
+      AppScope.of(context).repository.getRegions();
 
   /// 선택한 서버 지역 → 목업 Region (코스 생성 화면들이 이름·이모지·도만 쓴다).
   Region _toMockRegion(RegionSummary r) {
@@ -682,6 +685,15 @@ class _CourseRegionScreenState extends State<CourseRegionScreen> {
               return const Padding(
                 padding: EdgeInsets.symmetric(vertical: 40),
                 child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snapshot.hasError) {
+              // 서버 오류를 "지역 없음"으로 보이지 않게 — 재시도로 다시 불러온다.
+              return AppErrorState(
+                title: '지역 목록을 불러오지 못했어요',
+                error: snapshot.error,
+                onRetry: () => setState(() => _future = _loadRegions()),
+                compact: true,
               );
             }
             final all = snapshot.data ?? const <RegionSummary>[];
@@ -2765,11 +2777,11 @@ class _CourseSearchScreenState extends State<CourseSearchScreen> {
       if (_regionId != null) {
         _designated = (await repo.getPlaceInfoDetail(_regionId!)).halfPricePlaces;
       }
-    } catch (_) {
-      // 지역 해석 실패(서버 502 등) — 빈 결과로 굳히지 않고 에러 상태로 두어 재시도하게.
+    } catch (e) {
+      // 지역 해석 실패(서버 502 등) — 빈 결과로 굳히지 않고 원인 그대로 에러 상태로 두어 재시도하게.
       _regionId = null;
       _regionResolved = true;
-      if (mounted) setState(() => _future = Future.error(StateError('region')));
+      if (mounted) setState(() => _future = Future.error(e));
       return;
     }
     _regionResolved = true;
