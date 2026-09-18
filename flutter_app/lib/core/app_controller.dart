@@ -184,12 +184,9 @@ class AppController extends ChangeNotifier {
     } catch (error) {
       currentUser = null;
       debugPrint('[세션] 복원 실패: $error');
-      final message = error.toString();
-      // 401/403은 _describeHttpError가 문구로 바꿔 보내므로 문구로도 판별한다.
-      final authFailure = message.contains('401') ||
-          message.contains('403') ||
-          message.contains('로그인이 만료') ||
-          message.contains('권한이 없');
+      // 401(토큰 무효)·403(토큰 사용자 ≠ 저장 userId)·404(계정 없음)는 세션을 버린다.
+      // 그 외(5xx·타임아웃·연결 실패)는 서버 장애로 보고 세션을 유지한다.
+      final authFailure = error is ApiException && error.isAuthFailure;
       if (authFailure) {
         repo.clearSession();
         await clearPersistedSession();

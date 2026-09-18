@@ -836,7 +836,7 @@ class RefundPlaceListScreen extends StatelessWidget {
                 boxShadow: AppShadows.soft,
               ),
               child: Row(children: [
-                PlaceIllust(p.name, width: 64, height: 64),
+                PlaceIllust(p.name, width: 56, height: 56),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -847,19 +847,10 @@ class RefundPlaceListScreen extends StatelessWidget {
                             fontSize: 14.5, fontWeight: FontWeight.w800, color: AppColors.ink9)),
                     const SizedBox(height: 3),
                     Text(p.address,
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink5)),
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                          color: AppColors.mintTint, borderRadius: BorderRadius.circular(999)),
-                      child: const Text('환급 인정',
-                          style: TextStyle(
-                              fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.mintDeep)),
-                    ),
+                            fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink5, height: 1.4)),
                   ]),
                 ),
                 const Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.ink4),
