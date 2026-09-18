@@ -288,7 +288,15 @@ class AppErrorState extends StatelessWidget {
               fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink5, height: 1.5)),
       if (onRetry != null) ...[
         const SizedBox(height: 18),
-        SizedBox(width: 160, child: SecondaryButton('다시 시도', onTap: onRetry)),
+        // SecondaryButton은 CtaBar(Row)용 Expanded라 Row 안에 두고 폭만 제한한다.
+        Row(children: [
+          const Spacer(),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 180),
+            child: Row(children: [SecondaryButton('다시 시도', onTap: onRetry)]),
+          ),
+          const Spacer(),
+        ]),
       ],
     ]);
     if (compact) {

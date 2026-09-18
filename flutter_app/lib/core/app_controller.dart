@@ -25,6 +25,23 @@ class AppController extends ChangeNotifier {
   final TravelRepository _repository;
   bool isBusy = false;
   String? errorMessage;
+
+  /// 저장된 세션은 있는데 서버에 닿지 못해 복원을 못 한 상태 — 로그인 화면 대신
+  /// 재시도 화면을 띄우는 데 쓴다. 인증 실패(만료)면 null.
+  String? sessionRestoreError;
+
+  /// 재시도 — 성공하면 메인으로, 또 실패하면 같은 화면에 머문다.
+  Future<bool> retryRestoreSession() {
+    sessionRestoreError = null;
+    notifyListeners();
+    return restoreSession();
+  }
+
+  /// "다른 계정으로 로그인" — 재시도 화면을 닫고 로그인 화면으로.
+  void dismissSessionRestoreError() {
+    sessionRestoreError = null;
+    notifyListeners();
+  }
   AppUser? currentUser;
   // 소셜 신규 가입 직후 거주지 입력 온보딩이 필요한지 여부.
   bool needsResidenceSetup = false;
@@ -165,13 +182,24 @@ class AppController extends ChangeNotifier {
       debugPrint('[세션] 복원 성공 userId=$userId');
       return true;
     } catch (error) {
-      repo.clearSession();
       currentUser = null;
       debugPrint('[세션] 복원 실패: $error');
       final message = error.toString();
-      if (message.contains('401') || message.contains('403')) {
+      // 401/403은 _describeHttpError가 문구로 바꿔 보내므로 문구로도 판별한다.
+      final authFailure = message.contains('401') ||
+          message.contains('403') ||
+          message.contains('로그인이 만료') ||
+          message.contains('권한이 없');
+      if (authFailure) {
+        repo.clearSession();
         await clearPersistedSession();
+        sessionRestoreError = null;
+      } else {
+        // 서버가 잠깐 죽은 것 — 세션은 그대로 두고 "다시 시도" 화면을 띄운다.
+        // (예전엔 로그인 화면으로 보내서 로그아웃된 것처럼 보였다.)
+        sessionRestoreError = describeError(error);
       }
+      notifyListeners();
       return false;
     }
   }

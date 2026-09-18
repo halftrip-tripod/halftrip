@@ -14,6 +14,7 @@ import 'mock_ui/screens/onboarding.dart';
 import 'mock_ui/screens/shell.dart';
 import 'mock_ui/screens/splash.dart';
 import 'mock_ui/theme/app_theme.dart';
+import 'mock_ui/widgets/ui.dart' show AppErrorState;
 import 'repositories/api_travel_repository.dart';
 import 'repositories/mock_travel_repository.dart';
 import 'repositories/travel_repository.dart';
@@ -142,6 +143,9 @@ class _RootGateState extends State<_RootGate> {
               child: AnimatedBuilder(
                 animation: controller,
                 builder: (context, _) {
+                  if (!controller.isLoggedIn && controller.sessionRestoreError != null) {
+                    return _SessionRetryScreen(controller: controller);
+                  }
                   if (!controller.isLoggedIn) {
                     return const LoginScreen();
                   }
@@ -152,6 +156,52 @@ class _RootGateState extends State<_RootGate> {
                 },
               ),
             ),
+    );
+  }
+}
+
+/// 세션은 남아 있는데 서버에 닿지 못했을 때 — 로그아웃시키지 않고 재시도하게 한다.
+class _SessionRetryScreen extends StatefulWidget {
+  const _SessionRetryScreen({required this.controller});
+  final AppController controller;
+
+  @override
+  State<_SessionRetryScreen> createState() => _SessionRetryScreenState();
+}
+
+class _SessionRetryScreenState extends State<_SessionRetryScreen> {
+  bool _retrying = false;
+
+  Future<void> _retry() async {
+    if (_retrying) return;
+    setState(() => _retrying = true);
+    // 재시도 중엔 컨트롤러가 오류를 비워 이 화면이 사라질 수 있어 mounted를 확인한다.
+    await widget.controller.retryRestoreSession();
+    if (mounted) setState(() => _retrying = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      body: SafeArea(
+        child: Column(children: [
+          Expanded(
+            child: _retrying
+                ? const Center(child: CircularProgressIndicator())
+                : AppErrorState(
+                    title: '서버에 연결하지 못했어요',
+                    message: '네트워크 상태를 확인하거나 잠시 후 다시 시도해 주세요.\n로그인 정보는 그대로 남아 있어요.',
+                    onRetry: _retry,
+                  ),
+          ),
+          TextButton(
+            onPressed: _retrying ? null : widget.controller.dismissSessionRestoreError,
+            child: const Text('다른 계정으로 로그인'),
+          ),
+          const SizedBox(height: 16),
+        ]),
+      ),
     );
   }
 }
