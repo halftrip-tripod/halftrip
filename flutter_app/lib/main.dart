@@ -14,7 +14,7 @@ import 'mock_ui/screens/onboarding.dart';
 import 'mock_ui/screens/shell.dart';
 import 'mock_ui/screens/splash.dart';
 import 'mock_ui/theme/app_theme.dart';
-import 'mock_ui/widgets/ui.dart' show AppErrorState;
+import 'mock_ui/widgets/ui.dart' show AppErrorState, PrimaryButton, SecondaryButton;
 import 'repositories/api_travel_repository.dart';
 import 'repositories/mock_travel_repository.dart';
 import 'repositories/travel_repository.dart';
@@ -185,22 +185,32 @@ class _SessionRetryScreenState extends State<_SessionRetryScreen> {
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: SafeArea(
-        child: Column(children: [
-          Expanded(
-            child: _retrying
-                ? const Center(child: CircularProgressIndicator())
-                : AppErrorState(
-                    title: '서버에 연결하지 못했어요',
-                    message: '네트워크 상태를 확인하거나 잠시 후 다시 시도해 주세요.\n로그인 정보는 그대로 남아 있어요.',
-                    onRetry: _retry,
-                  ),
-          ),
-          TextButton(
-            onPressed: _retrying ? null : widget.controller.dismissSessionRestoreError,
-            child: const Text('다른 계정으로 로그인'),
-          ),
-          const SizedBox(height: 16),
-        ]),
+        child: _retrying
+            ? const Center(child: CircularProgressIndicator())
+            : Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    const AppErrorState(
+                      title: '서버에 연결하지 못했어요',
+                      message: '네트워크 상태를 확인하거나 잠시 후 다시 시도해 주세요.\n로그인 정보는 그대로 남아 있어요.',
+                      compact: true,
+                    ),
+                    // 다시 시도(주) · 다른 계정으로 로그인(보조) — 같은 폭으로 위아래.
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 220),
+                      child: Column(children: [
+                        Row(children: [PrimaryButton('다시 시도', onTap: _retry)]),
+                        const SizedBox(height: 10),
+                        Row(children: [
+                          SecondaryButton('다른 계정으로 로그인',
+                              onTap: widget.controller.dismissSessionRestoreError),
+                        ]),
+                      ]),
+                    ),
+                  ]),
+                ),
+              ),
       ),
     );
   }

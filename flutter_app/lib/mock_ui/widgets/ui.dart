@@ -293,14 +293,14 @@ class AppErrorState extends StatelessWidget {
           const Spacer(),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 180),
-            child: Row(children: [SecondaryButton('다시 시도', onTap: onRetry)]),
+            child: Row(children: [PrimaryButton('다시 시도', onTap: onRetry)]),
           ),
           const Spacer(),
         ]),
       ],
     ]);
     if (compact) {
-      return Padding(padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24), child: body);
+      return Padding(padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8), child: body);
     }
     return Center(child: Padding(padding: const EdgeInsets.all(24), child: body));
   }
@@ -1201,8 +1201,12 @@ Future<bool> showErrorDialog(
         ),
       ]),
       buttons: [
-        SecondaryButton('닫기', onTap: () => Navigator.pop(c, false)),
-        if (retryLabel != null) PrimaryButton(retryLabel, onTap: () => Navigator.pop(c, true)),
+        // 재시도 버튼이 있을 때만 닫기를 보조(회색)로, 아니면 닫기가 주 버튼(파랑).
+        if (retryLabel != null) ...[
+          SecondaryButton('닫기', onTap: () => Navigator.pop(c, false)),
+          PrimaryButton(retryLabel, onTap: () => Navigator.pop(c, true)),
+        ] else
+          PrimaryButton('닫기', onTap: () => Navigator.pop(c, false)),
       ],
     ),
   );
