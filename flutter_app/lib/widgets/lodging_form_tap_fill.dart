@@ -4,7 +4,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../models/app_models.dart';
-import 'pdf_embed_view.dart';
+// 웹에서도 pdfx로 페이지를 이미지로 그린다 — 브라우저 내장 뷰어(<embed>)는 배율·여백을 제멋대로
+// 잡아 좌표를 겹칠 수 없다. io 구현은 dart:io를 쓰지 않아 웹에서도 그대로 돈다.
+import 'pdf_embed_view_io.dart';
 
 /// 숙박확인서 양식 위에 직접 입력하는 화면.
 ///
@@ -245,6 +247,7 @@ class _LodgingFormTapFillState extends State<LodgingFormTapFill>
                       height: contentHeight,
                       pageCount: pageCount,
                       authToken: widget.authToken,
+                      plain: true,
                     ),
                   ),
                   for (var i = 0; i < widget.fields.length; i++)
@@ -322,8 +325,8 @@ class _LodgingFormTapFillState extends State<LodgingFormTapFill>
                 : 0.0;
             final attention = _attentionKey == field.key && field.editable;
             final color = attention
-                ? const Color(0xFFEF4444).withOpacity(0.18)
-                : const Color(0xFF3B82F6).withOpacity(0.22 * pulse);
+                ? const Color(0xFFEF4444).withValues(alpha: 0.18)
+                : const Color(0xFF3B82F6).withValues(alpha: 0.22 * pulse);
             return DecoratedBox(
               decoration: BoxDecoration(
                 color: color,
@@ -428,6 +431,7 @@ class _FittedValue extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final centered = _isCentered(rect, scale);
+    // 60%까지 줄여도 안 들어가면 잘라낸다(서버 PDF도 같은 규칙) — 옆 글자 위로 넘치지 않게.
     return Align(
       alignment: centered ? Alignment.center : Alignment.centerLeft,
       child: Padding(
@@ -435,7 +439,7 @@ class _FittedValue extends StatelessWidget {
         child: Text(
           text,
           maxLines: 1,
-          overflow: TextOverflow.clip,
+          overflow: TextOverflow.ellipsis,
           softWrap: false,
           style: _fittedStyle(text, rect, scale, false),
         ),
