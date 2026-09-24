@@ -13,6 +13,7 @@ import '../models/app_models.dart';
 import '../widgets/lodging_form_preview.dart';
 import '../widgets/lodging_form_tap_fill.dart';
 import '../widgets/pdf_embed_view.dart';
+import '../utils/lodging_payload_parts.dart';
 import '../widgets/signature_pad.dart';
 
 class LodgingFormScreen extends StatefulWidget {
@@ -181,7 +182,7 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
 
       if (field.isCheckbox) {
         activeCheckboxKeys.add(field.key);
-        _checkboxValues[field.key] = payload[field.key] as bool? ?? false;
+        _checkboxValues[field.key] = initialCheckboxValue(field.key, payload);
         continue;
       }
 
@@ -190,7 +191,7 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
         field.key,
         TextEditingController.new,
       );
-      controller.text = payload[field.key]?.toString() ?? '';
+      controller.text = initialTextValue(field.key, payload);
     }
 
     final textKeysToRemove =
@@ -1665,7 +1666,17 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
                 signatureValues: _signatureValues,
                 onTapSignature: _editSignature,
                 onToggleCheckbox: (key) => setState(() {
-                  _checkboxValues[key] = !(_checkboxValues[key] ?? false);
+                  final checked = !(_checkboxValues[key] ?? false);
+                  _checkboxValues[key] = checked;
+                  // "□동의 □미동의"는 한 쌍 — 하나를 고르면 다른 하나는 푼다.
+                  final pair = key.endsWith('_yes')
+                      ? '${key.substring(0, key.length - 4)}_no'
+                      : key.endsWith('_no')
+                          ? '${key.substring(0, key.length - 3)}_yes'
+                          : null;
+                  if (checked && pair != null && _checkboxValues.containsKey(pair)) {
+                    _checkboxValues[pair] = false;
+                  }
                 }),
                 onPickDate: _pickDate,
               ),
@@ -1695,6 +1706,11 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
     FocusScope.of(context).unfocus();
     for (final field in formData.template.fields) {
       if (!field.editable || field.isCheckbox || field.type == 'hidden') continue;
+      // "□기타( ____ )"는 기타를 고를 때만 쓴다.
+      if (field.key.endsWith('_other_text') &&
+          !(_checkboxValues[field.key.replaceFirst('_text', '')] ?? false)) {
+        continue;
+      }
       final empty = field.isSignature
           ? (_signatureValues[field.key] ?? '').trim().isEmpty
           : (_textControllers[field.key]?.text.trim() ?? '').isEmpty;
