@@ -74,8 +74,24 @@ String derivePayloadPart(String key, Map<String, dynamic> payload) {
   return '';
 }
 
+final _isoRange = RegExp(
+  r'^\s*(\d{4})-(\d{2})-(\d{2})\s*~\s*(\d{4})-(\d{2})-(\d{2})\s*$',
+);
+
+/// "2026-10-03 ~ 2026-10-05" → "10.3 ~ 10.5(2박)" — 양식 예시 형식. 숙박기간 칸이 좁아 ISO는 잘린다.
+String compactRange(String value) {
+  final match = _isoRange.firstMatch(value);
+  if (match == null) return value;
+  final g = [for (var i = 1; i <= 6; i++) int.parse(match.group(i)!)];
+  final nights = DateTime(g[3], g[4], g[5]).difference(DateTime(g[0], g[1], g[2])).inDays;
+  return '${g[1]}.${g[2]} ~ ${g[4]}.${g[5]}${nights > 0 ? '($nights박)' : ''}';
+}
+
 /// 글자 칸의 처음 값 — 저장된 값이 없으면 원래 키에서 만든 조각.
 String initialTextValue(String key, Map<String, dynamic> payload) {
+  if (key == 'trip_date_range') {
+    return compactRange(payload[key]?.toString() ?? '');
+  }
   final value = payload[key]?.toString() ?? '';
   return value.trim().isEmpty ? derivePayloadPart(key, payload) : value;
 }

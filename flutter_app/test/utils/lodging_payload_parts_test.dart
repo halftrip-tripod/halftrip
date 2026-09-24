@@ -29,4 +29,10 @@ void main() {
     expect(initialCheckboxValue('agreed_personal_info_yes', payload), isTrue);
     expect(initialCheckboxValue('agreed_personal_info_no', payload), isFalse);
   });
+
+  test('숙박기간은 양식 예시 형식으로 줄인다', () {
+    expect(compactRange('2026-10-03 ~ 2026-10-05'), '10.3 ~ 10.5(2박)');
+    expect(initialTextValue('trip_date_range', payload), '5.1 ~ 5.3(2박)');
+    expect(compactRange('5.1 ~ 5.2(1박)'), '5.1 ~ 5.2(1박)');
+  });
 }
