@@ -1674,6 +1674,7 @@ class LodgingFormTemplateItem {
     required this.fields,
     required this.notes,
     this.electronicSignatureAllowed = true,
+    this.tapToFill = false,
   });
 
   final int templateId;
@@ -1690,6 +1691,10 @@ class LodgingFormTemplateItem {
   /// 서버가 값을 안 내려주면 true(기존 동작 유지) — 실물만 인정되는 지역만 명시적으로 false.
   final bool electronicSignatureAllowed;
 
+  /// 좌표가 서버에서 PDF로부터 추출돼 칸에 정확히 맞는 양식 — 양식 위에 직접 입력하는 화면으로 연다.
+  /// 손으로 잰 좌표(값이 없거나 false)는 칸에서 밀리므로 목록형 입력 화면을 쓴다.
+  final bool tapToFill;
+
   LodgingFormTemplateItem copyWith({
     int? templateId,
     String? templateKey,
@@ -1700,6 +1705,7 @@ class LodgingFormTemplateItem {
     List<LodgingFormFieldItem>? fields,
     List<String>? notes,
     bool? electronicSignatureAllowed,
+    bool? tapToFill,
   }) {
     return LodgingFormTemplateItem(
       templateId: templateId ?? this.templateId,
@@ -1712,6 +1718,7 @@ class LodgingFormTemplateItem {
       notes: notes ?? this.notes,
       electronicSignatureAllowed:
           electronicSignatureAllowed ?? this.electronicSignatureAllowed,
+      tapToFill: tapToFill ?? this.tapToFill,
     );
   }
 
@@ -1725,6 +1732,7 @@ class LodgingFormTemplateItem {
       previewSubtitle: json['previewSubtitle'] as String? ?? '',
       electronicSignatureAllowed:
           json['electronicSignatureAllowed'] as bool? ?? true,
+      tapToFill: json['tapToFill'] as bool? ?? false,
       fields: ((json['fields'] as List<dynamic>?) ?? [])
           .map(
             (item) =>

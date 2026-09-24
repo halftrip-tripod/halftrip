@@ -10,11 +10,15 @@ class PdfEmbedView extends StatefulWidget {
     this.height = 640,
     this.pageCount = 1,
     this.authToken,
+    this.plain = false,
   });
 
   final String url;
   final double height;
   final int pageCount;
+
+  /// 테두리·모서리 없이 페이지 이미지만 그린다 — 양식 위에 입력칸을 겹칠 때 좌표가 어긋나지 않게.
+  final bool plain;
 
   /// 보호된 PDF(채워진 숙박확인서 등)를 열 때 실어 보낼 세션 토큰.
   final String? authToken;
@@ -61,11 +65,13 @@ class _PdfEmbedViewState extends State<PdfEmbedView> {
         return Container(
           height: widget.height,
           clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-          ),
+          decoration: widget.plain
+              ? const BoxDecoration(color: Colors.white)
+              : BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
           child: FutureBuilder<_RenderedPdfDocument>(
             future: _getPageFuture(
               url: widget.url,
