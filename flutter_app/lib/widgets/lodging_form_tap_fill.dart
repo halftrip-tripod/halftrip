@@ -362,7 +362,10 @@ class _LodgingFormTapFillState extends State<LodgingFormTapFill>
       builder: (context, value, _) {
         final style = _fittedStyle(value.text, rect, pageScale, field.multiline);
         final centered = _isCentered(rect, pageScale);
-        return Align(
+        // 예시 문구가 칸을 다 차지한 곳(text_mask) — 값을 넣으면 흰 바탕으로 예시를 가린다(서버 PDF와 같게).
+        final mask = field.type == 'text_mask' && value.text.trim().isNotEmpty;
+        return Container(
+          color: mask ? Colors.white : null,
           alignment: centered ? Alignment.center : Alignment.centerLeft,
           child: TextField(
             controller: controller,
