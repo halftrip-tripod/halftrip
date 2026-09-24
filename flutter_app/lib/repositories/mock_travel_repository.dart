@@ -874,7 +874,7 @@ class MockTravelRepository implements TravelRepository {
 
   @override
   Future<List<TourAttraction>> getRegionAttractions(int regionId,
-          {String? type, String? keyword}) async =>
+          {String? type, String? keyword, String? access}) async =>
       const [];
 
   @override
@@ -1662,6 +1662,10 @@ class MockTravelRepository implements TravelRepository {
   Future<List<CommunityPostData>> getCommunityFeed({int? userId}) async => const [];
 
   @override
+  Future<CommunityPostData> getCommunityPost(int postId, {int? userId}) async =>
+      throw UnsupportedError('mock: community post $postId');
+
+  @override
   Future<String> uploadCommunityPhoto({
     required int userId,
     required Uint8List bytes,
@@ -1795,6 +1799,13 @@ class MockTravelRepository implements TravelRepository {
   Future<void> markAllNotificationsRead(int userId) async {
     _notifications =
         _notifications.map((n) => n.copyWith(read: true)).toList();
+  }
+
+  @override
+  Future<void> markNotificationRead(int userId, int notificationId) async {
+    _notifications = _notifications
+        .map((n) => n.id == notificationId ? n.copyWith(read: true) : n)
+        .toList();
   }
 
   static List<AppNotification> _seedNotifications() {

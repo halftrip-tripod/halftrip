@@ -103,10 +103,16 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
               ]),
             ]),
             const SizedBox(height: 14),
-            Row(children: [
-              Pill(r.statusLabel, tone: _isPreparing ? PillTone.gray : PillTone.sky),
-              if (r.digitalBenefitAvailable) ...[const SizedBox(width: 8), const Pill('디민증 중복혜택', tone: PillTone.mint)],
-              const Spacer(),
+            // 배지가 세 개(상태·디민증·D-day)면 한 줄에 다 안 들어가 서로 붙는다 —
+            // 왼쪽 배지들은 Wrap으로 줄바꿈시키고 D-day 칩은 오른쪽에 고정.
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(
+                child: Wrap(spacing: 8, runSpacing: 6, children: [
+                  Pill(r.statusLabel, tone: _isPreparing ? PillTone.gray : PillTone.sky),
+                  if (r.digitalBenefitAvailable) const Pill('디민증 중복혜택', tone: PillTone.mint),
+                ]),
+              ),
+              const SizedBox(width: 8),
               DdayChip(
                 // 마감된 지역·지난 날짜엔 D-음수를 만들지 않는다.
                 r.statusCode.toUpperCase() == 'CLOSED'
@@ -485,7 +491,7 @@ class _AttractionsSectionState extends State<_AttractionsSection> {
                   ),
                 ),
             ],
-            const Text('출처: ⓒ한국관광공사',
+            const Text('출처: ©한국관광공사',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.ink4)),
           ]);
         },
@@ -512,7 +518,7 @@ class _FestivalSection extends StatelessWidget {
           child: _DCard(title: '이 지역 축제 소식', children: [
             // 같은 지역·시즌이면 축제는 많아야 한두 개 — 세로로 쌓아 섹션이 늘어나게.
             for (final festival in festivals) _FestivalRow(festival: festival),
-            const Text('출처: ⓒ한국관광공사',
+            const Text('출처: ©한국관광공사',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.ink4)),
           ]),
         );

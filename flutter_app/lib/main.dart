@@ -28,6 +28,11 @@ Future<void> main() async {
     // (manifest의 screenOrientation과 이중 잠금)
     await SystemChrome.setPreferredOrientations(
         [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
+    // Android 15+(targetSdk 35↑)는 시스템 바 아래까지 그리는 edge-to-edge가 강제라
+    // 기종마다 하단 버튼이 내비게이션 바에 잘렸다. 모든 기기에서 같은 모드로 맞추고
+    // 실제 인셋 처리는 _PhoneFrame의 SafeArea 한 곳에서 한다.
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(_lightSystemBars);
   }
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
     try {
@@ -151,6 +156,16 @@ class _RootGateState extends State<_RootGate> {
   }
 }
 
+/// 밝은 배경용 시스템 바 스타일 — 투명 바 + 어두운 아이콘.
+const _lightSystemBars = SystemUiOverlayStyle(
+  statusBarColor: Colors.transparent,
+  statusBarIconBrightness: Brightness.dark,
+  statusBarBrightness: Brightness.light,
+  systemNavigationBarColor: Colors.transparent,
+  systemNavigationBarIconBrightness: Brightness.dark,
+  systemNavigationBarContrastEnforced: false,
+);
+
 /// 데스크톱 브라우저에서는 390×844 폰 목업 프레임 안에 렌더링.
 class _PhoneFrame extends StatelessWidget {
   const _PhoneFrame({required this.child});
@@ -159,8 +174,28 @@ class _PhoneFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
-      // 모바일 기기·좁은 창에서는 프레임 없이 그대로.
-      if (constraints.maxWidth <= 500) return child;
+      // 모바일 기기·좁은 창에서는 프레임 없이 그대로 — 단, 상태바·내비게이션 바
+      // 인셋은 여기서 한 번에 비운다. 화면마다 ListView에 padding을 직접 주거나
+      // 하단 CTA를 Align으로 붙여 인셋을 잃는 곳이 많아, 개별 SafeArea 대신
+      // 앱 전체를 안전 영역 안에 넣고 바깥은 배경색으로 칠한다.
+      if (constraints.maxWidth <= 500) {
+        // 상태바·내비게이션 바 아이콘은 밝은 배경 위라 어두운 색이어야 한다.
+        // main()의 setSystemUIOverlayStyle만으로는 첫 프레임 이후 흰 아이콘으로
+        // 되돌아가는 기기(갤럭시 3버튼 내비)가 있어, 시스템 바 영역까지 덮는 이
+        // 최상위 박스에 스타일을 걸어 매 프레임 유지한다.
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: _lightSystemBars,
+          child: ColoredBox(
+            color: AppColors.bg,
+            // 시스템 글씨 크기는 1.3배까지만 반영. 그 이상(갤럭시 최대 2.0)은
+            // 고정폭 라벨·칩·단계 표시가 줄바꿈되며 깨져서 상한을 둔다.
+            child: MediaQuery.withClampedTextScaling(
+              maxScaleFactor: 1.3,
+              child: SafeArea(child: child),
+            ),
+          ),
+        );
+      }
 
       const bezel = 12.0;
       final height = math.min(constraints.maxHeight - 56, 852.0);

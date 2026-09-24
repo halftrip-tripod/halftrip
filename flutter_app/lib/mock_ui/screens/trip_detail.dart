@@ -257,7 +257,13 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       ),
     );
     final course = proxy.course;
-    if (course == null || !mounted) return;
+    if (!mounted) return;
+    if (course == null) {
+      // 직접 만들기 화면은 스스로 저장·연결하고 돌아오므로, 여기서 새로고침만 하면 된다.
+      // 예전엔 그대로 return해 "여행 코스" 칸이 재진입 전까지 안 바뀌었다.
+      await _reload();
+      return;
+    }
 
     final controller = AppScope.of(context);
     final saved = SavedCourse(
@@ -481,11 +487,15 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     final authRequired = detail.trip.authRequiredCount ?? 2;
     final spent = detail.trip.totalSpentAmount;
     final goal = detail.trip.refundConditionAmount;
+    // 앱에서 작성·서명해 저장한 확인서는 서버가 PDF로 렌더한다 — 업로드 파일이
+    // 없어도 신청인 서명이 저장돼 있으면 작성 완료. 예전엔 업로드 파일만 봐서
+    // 저장 직후에도 "미작성"으로 남았다.
     final lodgingDone =
         detail.uploadedFiles.any(
           (f) => f.fileCategory == FileCategory.lodgingConfirmation,
         ) ||
-        detail.lodgingInfo?.uploadedFileId != null;
+        detail.lodgingInfo?.uploadedFileId != null ||
+        (detail.lodgingInfo?.signatureSvgPath.trim().isNotEmpty ?? false);
 
     return [
       _TripHeader(detail: detail, stage: TripStageView.during),
@@ -588,11 +598,15 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             .where((f) => f.fileCategory == FileCategory.authPhoto)
             .length;
     final authRequired = detail.trip.authRequiredCount ?? 2;
+    // 앱에서 작성·서명해 저장한 확인서는 서버가 PDF로 렌더한다 — 업로드 파일이
+    // 없어도 신청인 서명이 저장돼 있으면 작성 완료. 예전엔 업로드 파일만 봐서
+    // 저장 직후에도 "미작성"으로 남았다.
     final lodgingDone =
         detail.uploadedFiles.any(
           (f) => f.fileCategory == FileCategory.lodgingConfirmation,
         ) ||
-        detail.lodgingInfo?.uploadedFileId != null;
+        detail.lodgingInfo?.uploadedFileId != null ||
+        (detail.lodgingInfo?.signatureSvgPath.trim().isNotEmpty ?? false);
     final spentOk =
         detail.trip.refundConditionAmount <= 0 ||
         detail.trip.totalSpentAmount >= detail.trip.refundConditionAmount;
@@ -1024,6 +1038,8 @@ class _StageBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 라벨 칸 폭을 글씨 배율에 맞춰 늘려 '신청 완료'가 두 줄로 쪼개지지 않게.
+    final labelWidth = MediaQuery.textScalerOf(context).scale(62);
     return AppCard(
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
       child: Row(
@@ -1044,7 +1060,7 @@ class _StageBar extends StatelessWidget {
                 ),
               ),
             SizedBox(
-              width: 62,
+              width: labelWidth,
               child: Column(
                 children: [
                   Container(
@@ -1082,6 +1098,8 @@ class _StageBar extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     _labels[i],
+                    maxLines: 1,
+                    softWrap: false,
                     style: TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w700,

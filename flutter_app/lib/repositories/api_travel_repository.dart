@@ -113,7 +113,7 @@ class ApiTravelRepository implements TravelRepository {
     }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('API error ${response.statusCode}: ${response.body}');
+      throw Exception(_describeHttpError(response.statusCode, response.body));
     }
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     if (decoded['success'] == false) {
@@ -360,13 +360,14 @@ class ApiTravelRepository implements TravelRepository {
 
   @override
   Future<List<TourAttraction>> getRegionAttractions(int regionId,
-      {String? type, String? keyword}) async {
+      {String? type, String? keyword, String? access}) async {
     final response = await _jsonRequest(
       'GET',
       '/regions/$regionId/attractions',
       query: {
         if (type != null && type.isNotEmpty) 'type': type,
         if (keyword != null && keyword.isNotEmpty) 'q': keyword,
+        if (access != null && access.isNotEmpty) 'access': access,
       },
     );
     return ((response['data'] as List<dynamic>?) ?? const [])
@@ -454,6 +455,11 @@ class ApiTravelRepository implements TravelRepository {
             'latitude': stop.latitude == 0 ? null : stop.latitude,
             'longitude': stop.longitude == 0 ? null : stop.longitude,
             'sourceType': stop.sourceType,
+            // 표시용 카테고리·계획표 시각 — 없으면 코스함에서 전부 '가맹점' 핀으로 보인다.
+            'category': stop.category.isEmpty ? null : stop.category,
+            'visitTime': stop.time.isEmpty ? null : stop.time,
+            'barrierFree': stop.barrierFree,
+            'petFriendly': stop.petFriendly,
           },
       ],
     };
@@ -487,6 +493,10 @@ class ApiTravelRepository implements TravelRepository {
               longitude: (stop['longitude'] as num?)?.toDouble() ?? 0,
               sourceType: stop['sourceType'] as String? ?? 'PLACE',
               day: (stop['dayNumber'] as num?)?.toInt() ?? 1,
+              time: stop['visitTime'] as String? ?? '',
+              category: stop['category'] as String? ?? '',
+              barrierFree: stop['barrierFree'] as bool? ?? false,
+              petFriendly: stop['petFriendly'] as bool? ?? false,
             ))
         .toList();
     final summary = (json['summary'] as String? ?? '').trim();
@@ -948,6 +958,13 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<CommunityPostData> getCommunityPost(int postId, {int? userId}) async {
+    final response = await _jsonRequest('GET', '/community/posts/$postId',
+        query: userId == null ? null : {'userId': userId});
+    return CommunityPostData.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  @override
   Future<String> uploadCommunityPhoto({
     required int userId,
     required Uint8List bytes,
@@ -1193,6 +1210,39 @@ class ApiTravelRepository implements TravelRepository {
     await _jsonRequest(
       'POST',
       '/notifications/read-all',
+      query: {'userId': userId},
+      body: const {},
+    );
+  }
+
+  /// 실패 응답을 사람이 읽을 문장으로. 서버 재시작 중엔 Render가 502 HTML 페이지를
+  /// 돌려주는데, 그 원문을 그대로 띄우면 화면이 HTML 소스로 가득 찬다.
+  static String _describeHttpError(int status, String body) {
+    final trimmed = body.trim();
+    if (trimmed.startsWith('{')) {
+      try {
+        final decoded = jsonDecode(trimmed);
+        final message = decoded is Map ? decoded['message'] : null;
+        if (message is String && message.isNotEmpty) return message;
+      } catch (_) {}
+    }
+    if (status == 502 || status == 503 || status == 504) {
+      return '서버가 잠시 응답하지 않아요 (HTTP $status). 잠시 후 다시 시도해 주세요.';
+    }
+    if (status == 401) return '로그인이 만료됐어요. 다시 로그인해 주세요.';
+    if (status == 403) return '이 요청을 할 권한이 없어요.';
+    if (status == 404) return '요청한 정보를 찾을 수 없어요.';
+    final looksLikeHtml = trimmed.startsWith('<');
+    return looksLikeHtml
+        ? '서버 오류가 발생했어요 (HTTP $status).'
+        : 'API error $status: ${trimmed.length > 200 ? trimmed.substring(0, 200) : trimmed}';
+  }
+
+  @override
+  Future<void> markNotificationRead(int userId, int notificationId) async {
+    await _jsonRequest(
+      'POST',
+      '/notifications/$notificationId/read',
       query: {'userId': userId},
       body: const {},
     );

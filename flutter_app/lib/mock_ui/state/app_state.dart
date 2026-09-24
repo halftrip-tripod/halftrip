@@ -280,6 +280,18 @@ class AppState extends ChangeNotifier {
   TravelRepository? get communityRepository => _repository;
   int? get communityUserId => _serverUserId;
 
+  /// 실서버 사용자 프로필을 커뮤니티 표시용 상태에 반영 — 댓글 입력창 아바타,
+  /// 낙관 표시 댓글·글의 닉네임/아바타가 목업 기본값(🐳 여행하는민트42)이 아니라
+  /// 실제 계정으로 보이게. 로그인·프로필 수정 때 컨트롤러가 호출한다.
+  void syncProfile(api.AppUser user) {
+    final avatar = decodeAvatar(
+        user.avatarPreset.isNotEmpty ? user.avatarPreset : defaultAvatarPreset);
+    if (user.nickname.trim().isNotEmpty) nickname = user.nickname.trim();
+    avatarEmoji = avatar.emoji;
+    avatarBg = avatar.color;
+    notifyListeners();
+  }
+
   /// 로그인 직후(실서버 모드) 컨트롤러가 호출 — 서버 피드·내 글로 posts를 채운다.
   Future<void> attachCommunityServer(TravelRepository repository, int userId) async {
     _repository = repository;
@@ -314,6 +326,27 @@ class AppState extends ChangeNotifier {
     } catch (_) {
       // 서버 실패 시 기존 목록 유지.
     }
+  }
+
+  /// 서버 id로 로컬 목록에서 찾기 — 알림 딥링크가 목록에 이미 있는 글을 다시 안 받게.
+  Post? postByServerId(int serverId) {
+    for (final p in posts) {
+      if (p.serverId == serverId) return p;
+    }
+    return null;
+  }
+
+  /// 서버에서 단건으로 받은 글을 목록에 넣거나 갱신 — 상세 화면은 이 객체를 본다.
+  Post upsertServerPost(api.CommunityPostData data) {
+    final post = _toPost(data);
+    final index = posts.indexWhere((p) => p.serverId == data.id);
+    if (index >= 0) {
+      posts[index] = post;
+    } else {
+      posts.insert(0, post);
+    }
+    notifyListeners();
+    return post;
   }
 
   Post _toPost(api.CommunityPostData data) {

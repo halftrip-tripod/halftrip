@@ -48,6 +48,33 @@ class _MerchantMapScreenState extends State<MerchantMapScreen> {
   bool _initialized = false;
   int _category = 0;
   int? _highlightedId;
+  // 지도 범위 안 가맹점(서버가 중심 가까운 순 최대 200) — 지역 전체를 내려받지 않는다.
+  List<MerchantItem>? _inBounds;
+  int? _inBoundsCount;
+  int _boundsRequestSeq = 0;
+
+  Future<void> _loadInBounds(PlaceMapViewport viewport) async {
+    final seq = ++_boundsRequestSeq;
+    try {
+      final result = await AppScope.of(context).repository.getMerchantMap(
+        regionId: widget.regionId,
+        southLat: viewport.minLatitude,
+        northLat: viewport.maxLatitude,
+        westLng: viewport.minLongitude,
+        eastLng: viewport.maxLongitude,
+      );
+      if (!mounted || seq != _boundsRequestSeq) return;
+      if (result.visibleMerchants.isEmpty && result.merchantCount > 0) {
+        return; // 옛 서버(visibleMerchants 없음) — 지역 상세 목록을 그대로 쓴다.
+      }
+      setState(() {
+        _inBounds = result.visibleMerchants;
+        _inBoundsCount = result.merchantCount;
+      });
+    } catch (_) {
+      // 범위 조회 실패 시 지역 상세의 기본 목록이 남아 있으니 조용히 넘어간다.
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -80,7 +107,7 @@ class _MerchantMapScreenState extends State<MerchantMapScreen> {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          final merchants = snapshot.data!.merchants;
+          final merchants = _inBounds ?? snapshot.data!.merchants;
           final categories = _categories(merchants);
           final visible = merchants
               .where((m) =>
@@ -197,8 +224,10 @@ class _MerchantMapScreenState extends State<MerchantMapScreen> {
                   initialCenterLatitude: selected?.latitude,
                   initialCenterLongitude: selected?.longitude,
                   onMarkerTap: (id) => setState(() => _highlightedId = id),
-                  onViewportChanged: (viewport) =>
-                      setState(() => _viewport = viewport),
+                  onViewportChanged: (viewport) {
+                    setState(() => _viewport = viewport);
+                    _loadInBounds(viewport);
+                  },
                   height: 300,
                 ),
               ),
@@ -213,7 +242,12 @@ class _MerchantMapScreenState extends State<MerchantMapScreen> {
                           fontWeight: FontWeight.w800,
                           color: AppColors.ink5)),
                   const Spacer(),
-                  Text('${visible.length}곳',
+                  Text(
+                      _inBoundsCount == null
+                          ? '${visible.length}곳'
+                          : (_category == 0
+                              ? '지도 범위 $_inBoundsCount곳'
+                              : '${visible.length}곳 · 지도 범위 $_inBoundsCount곳'),
                       style: const TextStyle(
                           fontFamily: 'Pretendard',
                           fontSize: 13,

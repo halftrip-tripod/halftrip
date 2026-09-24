@@ -6,11 +6,14 @@ import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
 
 import '../core/app_scope.dart';
+import '../widgets/tour_api_attribution.dart';
 import '../mock_ui/theme/app_colors.dart';
 import '../mock_ui/widgets/ui.dart';
 import '../models/app_models.dart';
 import '../widgets/lodging_form_preview.dart';
+import '../widgets/lodging_form_tap_fill.dart';
 import '../widgets/pdf_embed_view.dart';
+import '../utils/lodging_payload_parts.dart';
 import '../widgets/signature_pad.dart';
 
 class LodgingFormScreen extends StatefulWidget {
@@ -36,6 +39,10 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
   // "화면 맞춤"과 같은 배율에서 시작한다.
   double _previewZoom = 1.0;
   String? _selectedFieldKey;
+  // 양식 위 직접 입력 화면에서 "목록으로 입력"을 고르면 기존 입력 페이지로 돌아간다.
+  bool _listInputMode = false;
+  final LodgingFormTapFillController _tapFillController =
+      LodgingFormTapFillController();
   // 앱 차원 개인정보 제공 동의 (양식에 동의 필드가 없는 지역용 — 페이로드 미포함).
   bool _appPrivacyAgreed = false;
 
@@ -175,7 +182,7 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
 
       if (field.isCheckbox) {
         activeCheckboxKeys.add(field.key);
-        _checkboxValues[field.key] = payload[field.key] as bool? ?? false;
+        _checkboxValues[field.key] = initialCheckboxValue(field.key, payload);
         continue;
       }
 
@@ -184,7 +191,7 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
         field.key,
         TextEditingController.new,
       );
-      controller.text = payload[field.key]?.toString() ?? '';
+      controller.text = initialTextValue(field.key, payload);
     }
 
     final textKeysToRemove =
@@ -909,6 +916,15 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
       closeIcon: widget.editorMode,
       padding: const EdgeInsets.fromLTRB(14, 4, 14, 36),
       children: [
+        if (formData.template.tapToFill)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => setState(() => _listInputMode = false),
+              icon: const Icon(Icons.description_outlined, size: 18),
+              label: const Text('양식 위에 직접 입력'),
+            ),
+          ),
         if (!_electronicSignatureAllowed) _buildPhysicalSignatureNotice(),
         if (sections[0].isNotEmpty) _section('신청자 정보', AppCard(child: _fieldColumn(sections[0]))),
         if (sections[1].isNotEmpty) _section('숙박업소 정보', AppCard(child: _fieldColumn(sections[1]))),
@@ -1574,6 +1590,15 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
             );
           }
           final formData = _formData ?? snapshot.data!;
+          final templatePdfUrl = AppScope.of(context)
+              .repository
+              .getLodgingFormTemplatePreviewUrl(widget.tripId);
+          if (formData.template.tapToFill &&
+              !_listInputMode &&
+              templatePdfUrl != null &&
+              templatePdfUrl.isNotEmpty) {
+            return _buildTapFillEditor(formData, templatePdfUrl);
+          }
           if (formData.template.sourceFormat.toUpperCase() == 'DOCX') {
             return _buildDocxEditor(formData);
           }
@@ -1597,6 +1622,108 @@ class _LodgingFormScreenState extends State<LodgingFormScreen> {
           );
         },
       );
+  }
+
+  /// 양식 위에 직접 입력하는 화면 — 빈칸을 누르면 그 자리에 커서가 생긴다.
+  /// 작은 화면·접근성용으로 목록형 입력으로 바꿀 수 있고, 값은 두 화면이 공유한다.
+  Widget _buildTapFillEditor(LodgingFormData formData, String templatePdfUrl) {
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      appBar: AppBar(
+        title: Text('${formData.regionName} 숙박확인서',
+            style: const TextStyle(fontWeight: FontWeight.w800)),
+        centerTitle: false,
+        actions: [
+          IconButton(
+            tooltip: '목록으로 입력',
+            onPressed: () => setState(() => _listInputMode = true),
+            icon: const Icon(Icons.list_alt_outlined),
+          ),
+          IconButton(
+            tooltip: 'PDF 내려받기',
+            onPressed: _downloadPdf,
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            if (!_electronicSignatureAllowed)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+                child: _buildPhysicalSignatureNotice(),
+              ),
+            Expanded(
+              child: LodgingFormTapFill(
+                controller: _tapFillController,
+                fields: formData.template.fields,
+                templatePdfUrl: templatePdfUrl,
+                authToken: AppScope.of(context).repository.authToken,
+                textControllers: _textControllers,
+                checkboxValues: _checkboxValues,
+                signatureValues: _signatureValues,
+                onTapSignature: _editSignature,
+                onToggleCheckbox: (key) => setState(() {
+                  final checked = !(_checkboxValues[key] ?? false);
+                  _checkboxValues[key] = checked;
+                  // "□동의 □미동의"는 한 쌍 — 하나를 고르면 다른 하나는 푼다.
+                  final pair = key.endsWith('_yes')
+                      ? '${key.substring(0, key.length - 4)}_no'
+                      : key.endsWith('_no')
+                          ? '${key.substring(0, key.length - 3)}_yes'
+                          : null;
+                  if (checked && pair != null && _checkboxValues.containsKey(pair)) {
+                    _checkboxValues[pair] = false;
+                  }
+                }),
+                onPickDate: _pickDate,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
+              child: FilledButton(
+                onPressed: () => _saveFromTapFill(formData),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: const Text('저장',
+                    style: TextStyle(fontWeight: FontWeight.w800)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 비어 있는 칸이 있으면 저장 전에 그 칸으로 데려가 짚어 준다. 평소엔 양식에 아무 표시도 없다.
+  Future<void> _saveFromTapFill(LodgingFormData formData) async {
+    FocusScope.of(context).unfocus();
+    for (final field in formData.template.fields) {
+      if (!field.editable || field.isCheckbox || field.type == 'hidden') continue;
+      // "□기타( ____ )"는 기타를 고를 때만 쓴다.
+      if (field.key.endsWith('_other_text') &&
+          !(_checkboxValues[field.key.replaceFirst('_text', '')] ?? false)) {
+        continue;
+      }
+      final empty = field.isSignature
+          ? (_signatureValues[field.key] ?? '').trim().isEmpty
+          : (_textControllers[field.key]?.text.trim() ?? '').isEmpty;
+      if (field.isSignature && !_electronicSignatureAllowed) continue;
+      if (empty) {
+        _tapFillController.attention(field.key);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${field.label.isEmpty ? '빈 칸' : field.label}을(를) 채워 주세요.')),
+        );
+        return;
+      }
+    }
+    await _save();
   }
 
   /// 기존 PDF 오버레이 편집 화면 — 필드 위치·크기 조정과 캔버스 줌을 지원한다.
@@ -2078,7 +2205,7 @@ class _LodgingSearchSheetState extends State<_LodgingSearchSheet> {
               },
             ),
           ),
-          const SizedBox(height: 8),
+          const TourApiAttribution(label: '숙소 정보', padding: EdgeInsets.only(top: 4, right: 2, bottom: 6)),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
