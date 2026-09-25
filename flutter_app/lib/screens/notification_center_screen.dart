@@ -4,6 +4,7 @@ import '../core/app_scope.dart';
 import '../models/app_models.dart';
 import '../mock_ui/screens/community.dart' show CommunityDetailScreen;
 import '../mock_ui/screens/course_flow.dart';
+import '../mock_ui/widgets/ui.dart' show AppErrorState;
 import '../mock_ui/screens/region_detail.dart';
 import '../mock_ui/screens/trip_detail.dart';
 import '../mock_ui/state/app_state.dart' as mock;
@@ -163,25 +164,8 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
           future: _future,
           builder: (context, snapshot) {
             if (snapshot.hasError) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        '알림을 불러오지 못했어요.',
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 12),
-                      TextButton(
-                        onPressed: _reload,
-                        child: const Text('다시 시도'),
-                      ),
-                    ],
-                  ),
-                ),
-              );
+              return AppErrorState(
+                  title: '알림을 불러오지 못했어요', error: snapshot.error, onRetry: _reload);
             }
             if (!snapshot.hasData) {
               return const Center(child: CircularProgressIndicator());

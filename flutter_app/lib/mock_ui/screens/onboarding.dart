@@ -15,6 +15,7 @@ import '../../screens/info_screens.dart';
 import '../../data/residence_options.dart';
 import '../theme/app_colors.dart';
 import '../widgets/ui.dart';
+import '../../utils/error_text.dart';
 
 /// S0-1 로그인 — 아이디·비밀번호 폼 + 하단 간편(소셜) 로그인.
 /// 이전엔 소셜 버튼 + "로컬 로그인" 별도 화면 구조였는데, 일반적인 앱 관례(폼 + 원형
@@ -47,9 +48,9 @@ class _LoginScreenState extends State<LoginScreen> {
     FocusScope.of(context).unfocus();
     try {
       await controller.loginWithCredentials(loginId: id, password: _pw.text);
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
-        showMock(context, '아이디 또는 비밀번호를 확인해주세요.');
+        showMock(context, loginErrorText(e));
       }
     }
   }
@@ -414,9 +415,9 @@ class _LocalLoginScreenState extends State<LocalLoginScreen> {
               password: _pw.text,
             );
             navigator.popUntil((r) => r.isFirst);
-          } catch (_) {
+          } catch (e) {
             if (!context.mounted) return;
-            showMock(context, '아이디 또는 비밀번호를 확인해주세요.');
+            showMock(context, loginErrorText(e));
           }
         }),
       ]),
@@ -578,4 +579,11 @@ class _DocLink extends StatelessWidget {
               decorationThickness: 1)),
     );
   }
+}
+
+/// 로그인 실패 문구 — 서버에 못 닿은 건 비밀번호 탓이 아니므로 구분해서 알린다.
+String loginErrorText(Object error) {
+  final text = describeError(error);
+  final network = text.contains('연결') || text.contains('응답이 늦') || text.contains('서버');
+  return network ? text : '아이디 또는 비밀번호를 확인해주세요.';
 }

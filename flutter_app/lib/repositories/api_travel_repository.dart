@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -10,6 +11,19 @@ import '../core/app_config.dart';
 import '../models/app_models.dart';
 import '../utils/browser_file_download.dart';
 import 'travel_repository.dart';
+
+/// HTTP 응답이 실패로 끝난 경우 — 상태코드를 들고 있어 호출부가 "인증 실패"(401·403·404)와
+/// "서버 장애"(5xx·네트워크)를 문구가 아니라 코드로 가른다. toString은 사용자 문구만 돌려준다.
+class ApiException implements Exception {
+  const ApiException(this.statusCode, this.message);
+  final int statusCode;
+  final String message;
+
+  bool get isAuthFailure => statusCode == 401 || statusCode == 403 || statusCode == 404;
+
+  @override
+  String toString() => message;
+}
 
 class ApiTravelRepository implements TravelRepository {
   ApiTravelRepository(this.config);
@@ -74,8 +88,44 @@ class ApiTravelRepository implements TravelRepository {
     Map<String, dynamic>? query,
   }) async {
     final headers = _headers();
-    late http.Response response;
     final uri = _uri(path, query);
+    final response = await _guard(() => _send(method, uri, headers, body));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(response.statusCode, _describeHttpError(response.statusCode, response.body));
+    }
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    if (decoded['success'] == false) {
+      throw ApiException(response.statusCode, (decoded['message'] as String?) ?? '요청에 실패했습니다.');
+    }
+    return decoded;
+  }
+
+  /// 네트워크 단계 실패를 사용자 문구로. Render 재시작·콜드스타트 중 연결이 끊기면
+  /// "Connection reset by peer" 원문이 화면에 그대로 떴다.
+  static Future<T> _guard<T>(Future<T> Function() call) async {
+    try {
+      return await call().timeout(const Duration(seconds: 30));
+    } on SocketException catch (e) {
+      throw Exception(_describeNetworkError(e));
+    } on http.ClientException catch (e) {
+      throw Exception(_describeNetworkError(e));
+    } on TimeoutException {
+      throw Exception('서버 응답이 늦어요. 잠시 후 다시 시도해 주세요.');
+    }
+  }
+
+  static String _describeNetworkError(Object e) {
+    final text = e.toString();
+    if (text.contains('reset by peer') || text.contains('Connection closed')) {
+      return '서버가 잠시 재시작 중이에요. 잠시 후 다시 시도해 주세요.';
+    }
+    return '서버에 연결하지 못했어요. 네트워크를 확인하거나 잠시 후 다시 시도해 주세요.';
+  }
+
+  Future<http.Response> _send(
+      String method, Uri uri, Map<String, String> headers, Map<String, dynamic>? body) async {
+    late http.Response response;
     switch (method) {
       case 'GET':
         response = await http.get(uri, headers: headers);
@@ -111,15 +161,7 @@ class ApiTravelRepository implements TravelRepository {
       default:
         throw UnsupportedError('Unsupported method: $method');
     }
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(_describeHttpError(response.statusCode, response.body));
-    }
-    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-    if (decoded['success'] == false) {
-      throw Exception(decoded['message'] ?? '요청에 실패했습니다.');
-    }
-    return decoded;
+    return response;
   }
 
   Future<String> _downloadToDocuments(
@@ -677,10 +719,11 @@ class ApiTravelRepository implements TravelRepository {
         filename: file.fileName,
       ),
     );
-    final streamed = await request.send();
+    final streamed = await _guard(() => request.send());
     final responseText = await streamed.stream.bytesToString();
     if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
-      throw Exception('파일 업로드 실패: $responseText');
+      // 502 등 HTML 오류 페이지가 그대로 팝업에 뜨지 않게 공통 문구로.
+      throw Exception('파일 업로드 실패: ${_describeHttpError(streamed.statusCode, responseText)}');
     }
     final decoded = jsonDecode(responseText) as Map<String, dynamic>;
     return UploadedFileItem.fromJson(decoded['data'] as Map<String, dynamic>);
@@ -977,10 +1020,10 @@ class ApiTravelRepository implements TravelRepository {
     request.headers.addAll(_headers(json: false));
     // content-type은 따로 안 실린다(octet-stream) — 서버가 파일명 확장자로 이미지 종류를 정한다.
     request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: fileName));
-    final streamed = await request.send();
+    final streamed = await _guard(() => request.send());
     final responseText = await streamed.stream.bytesToString();
     if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
-      throw Exception('사진 업로드 실패: $responseText');
+      throw Exception('사진 업로드 실패: ${_describeHttpError(streamed.statusCode, responseText)}');
     }
     final decoded = jsonDecode(responseText) as Map<String, dynamic>;
     return (decoded['data'] as Map<String, dynamic>)['url'] as String;

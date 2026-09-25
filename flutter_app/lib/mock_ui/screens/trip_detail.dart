@@ -318,14 +318,10 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         if (snapshot.hasError) {
           return Scaffold(
             appBar: AppBar(title: const Text('여행 상세')),
-            body: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  '여행 정보를 불러오지 못했어요.\n${snapshot.error}',
-                  textAlign: TextAlign.center,
-                ),
-              ),
+            body: AppErrorState(
+              title: '여행 정보를 불러오지 못했어요',
+              error: snapshot.error,
+              onRetry: _reload,
             ),
           );
         }

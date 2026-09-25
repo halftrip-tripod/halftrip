@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../utils/error_text.dart';
 
 import 'package:flutter/material.dart';
 
@@ -243,7 +244,7 @@ class _YoutubeCourseAnalysisScreenState
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = '작업 상태를 불러오지 못했습니다.\n$error';
+        _errorMessage = '작업 상태를 불러오지 못했어요.\n${describeError(error)}';
       });
     }
   }
@@ -350,7 +351,7 @@ class _YoutubeCourseAnalysisScreenState
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('플래너 적용에 실패했습니다.\n$error')));
+      ).showSnackBar(SnackBar(content: Text('플래너 적용에 실패했어요. ${describeError(error)}')));
     } finally {
       if (mounted) {
         setState(() {

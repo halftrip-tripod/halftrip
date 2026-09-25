@@ -130,12 +130,7 @@ class _HomeTabState extends State<HomeTab> {
     final data = _data;
     if (data == null) {
       if (_error != null) {
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text('화면을 불러오지 못했어요.\n$_error', textAlign: TextAlign.center),
-          ),
-        );
+        return AppErrorState(error: _error, onRetry: _load);
       }
       return const Center(child: CircularProgressIndicator());
     }
