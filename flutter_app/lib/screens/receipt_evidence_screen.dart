@@ -1,4 +1,6 @@
 import 'dart:typed_data';
+import '../utils/error_text.dart';
+import '../mock_ui/widgets/ui.dart' show showErrorDialog;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -125,7 +127,10 @@ class _ReceiptEvidenceScreenState extends State<ReceiptEvidenceScreen> {
         _draftReceipt = receipt;
       });
     } catch (error) {
-      if (mounted) _snack('영수증 분석에 실패했어요: $error');
+      if (mounted) {
+        setState(() => _uploading = false); // 팝업 뒤에 스피너가 남지 않게 먼저 내린다.
+        await showErrorDialog(context, title: '영수증을 분석하지 못했어요', error: error);
+      }
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
@@ -187,7 +192,7 @@ class _ReceiptEvidenceScreenState extends State<ReceiptEvidenceScreen> {
       };
 
   void _snack(String m) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(describeError(m))));
 
   @override
   Widget build(BuildContext context) {
@@ -262,8 +267,13 @@ class _ReceiptEvidenceScreenState extends State<ReceiptEvidenceScreen> {
               const SizedBox(height: 10),
               _Note(_acceptedPaymentMethods.isEmpty
                   ? '인정 결제수단은 지역마다 달라요. 지역 상세의 "결제 수단"을 확인하고 결제해 주세요.'
+                  // 서버 값이 CARD 같은 코드면 라벨로, 공고 원문 문구면 그대로.
+                  // (지역 상세와 같은 규칙 — 코드 매핑에만 기대면 "판별 실패"로 떴다)
                   : '${detail.trip.regionName} 인정 결제수단: '
-                      '${_acceptedPaymentMethods.map((code) => PaymentTypeWire.fromWire(code).label).join(' · ')}'),
+                      '${_acceptedPaymentMethods.map((code) {
+                        final type = PaymentTypeWire.fromWire(code);
+                        return type == PaymentType.unknown ? code : type.label;
+                      }).join(' · ')}'),
 
               // OCR 결과 (draft) — 등록 전에 "이 정보가 맞나요?"로 확인받는다.
               if (draft != null) ...[

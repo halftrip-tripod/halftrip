@@ -172,7 +172,7 @@ class _TourPlaceDetailScreenState extends State<TourPlaceDetailScreen> {
                   padding: EdgeInsets.only(top: 2, right: 2),
                   child: Align(
                     alignment: Alignment.centerRight,
-                    child: Text('출처: ⓒ한국관광공사',
+                    child: Text('출처: ©한국관광공사',
                         style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.ink4)),
                   ),
                 ),
@@ -264,7 +264,7 @@ class TourAttractionListScreen extends StatelessWidget {
           padding: EdgeInsets.only(top: 4, right: 2),
           child: Align(
             alignment: Alignment.centerRight,
-            child: Text('출처: ⓒ한국관광공사',
+            child: Text('출처: ©한국관광공사',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.ink4)),
           ),
         ),

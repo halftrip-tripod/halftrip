@@ -11,6 +11,7 @@ class PdfEmbedView extends StatefulWidget {
     this.height = 640,
     this.pageCount = 1,
     this.authToken,
+    this.plain = false,
   });
 
   final String url;
@@ -20,6 +21,7 @@ class PdfEmbedView extends StatefulWidget {
   /// 보호된 PDF(채워진 숙박확인서 등)를 열 때 실어 보낼 세션 토큰.
   /// 공개 서식(template-pdf)에는 없어도 되지만 있어도 무방하다.
   final String? authToken;
+  final bool plain;
 
   @override
   State<PdfEmbedView> createState() => _PdfEmbedViewState();

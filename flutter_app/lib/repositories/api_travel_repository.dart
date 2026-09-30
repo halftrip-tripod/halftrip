@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -10,6 +11,19 @@ import '../core/app_config.dart';
 import '../models/app_models.dart';
 import '../utils/browser_file_download.dart';
 import 'travel_repository.dart';
+
+/// HTTP 응답이 실패로 끝난 경우 — 상태코드를 들고 있어 호출부가 "인증 실패"(401·403·404)와
+/// "서버 장애"(5xx·네트워크)를 문구가 아니라 코드로 가른다. toString은 사용자 문구만 돌려준다.
+class ApiException implements Exception {
+  const ApiException(this.statusCode, this.message);
+  final int statusCode;
+  final String message;
+
+  bool get isAuthFailure => statusCode == 401 || statusCode == 403 || statusCode == 404;
+
+  @override
+  String toString() => message;
+}
 
 class ApiTravelRepository implements TravelRepository {
   ApiTravelRepository(this.config);
@@ -74,8 +88,44 @@ class ApiTravelRepository implements TravelRepository {
     Map<String, dynamic>? query,
   }) async {
     final headers = _headers();
-    late http.Response response;
     final uri = _uri(path, query);
+    final response = await _guard(() => _send(method, uri, headers, body));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(response.statusCode, _describeHttpError(response.statusCode, response.body));
+    }
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    if (decoded['success'] == false) {
+      throw ApiException(response.statusCode, (decoded['message'] as String?) ?? '요청에 실패했습니다.');
+    }
+    return decoded;
+  }
+
+  /// 네트워크 단계 실패를 사용자 문구로. Render 재시작·콜드스타트 중 연결이 끊기면
+  /// "Connection reset by peer" 원문이 화면에 그대로 떴다.
+  static Future<T> _guard<T>(Future<T> Function() call) async {
+    try {
+      return await call().timeout(const Duration(seconds: 30));
+    } on SocketException catch (e) {
+      throw Exception(_describeNetworkError(e));
+    } on http.ClientException catch (e) {
+      throw Exception(_describeNetworkError(e));
+    } on TimeoutException {
+      throw Exception('서버 응답이 늦어요. 잠시 후 다시 시도해 주세요.');
+    }
+  }
+
+  static String _describeNetworkError(Object e) {
+    final text = e.toString();
+    if (text.contains('reset by peer') || text.contains('Connection closed')) {
+      return '서버가 잠시 재시작 중이에요. 잠시 후 다시 시도해 주세요.';
+    }
+    return '서버에 연결하지 못했어요. 네트워크를 확인하거나 잠시 후 다시 시도해 주세요.';
+  }
+
+  Future<http.Response> _send(
+      String method, Uri uri, Map<String, String> headers, Map<String, dynamic>? body) async {
+    late http.Response response;
     switch (method) {
       case 'GET':
         response = await http.get(uri, headers: headers);
@@ -111,15 +161,7 @@ class ApiTravelRepository implements TravelRepository {
       default:
         throw UnsupportedError('Unsupported method: $method');
     }
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('API error ${response.statusCode}: ${response.body}');
-    }
-    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-    if (decoded['success'] == false) {
-      throw Exception(decoded['message'] ?? '요청에 실패했습니다.');
-    }
-    return decoded;
+    return response;
   }
 
   Future<String> _downloadToDocuments(
@@ -360,13 +402,14 @@ class ApiTravelRepository implements TravelRepository {
 
   @override
   Future<List<TourAttraction>> getRegionAttractions(int regionId,
-      {String? type, String? keyword}) async {
+      {String? type, String? keyword, String? access}) async {
     final response = await _jsonRequest(
       'GET',
       '/regions/$regionId/attractions',
       query: {
         if (type != null && type.isNotEmpty) 'type': type,
         if (keyword != null && keyword.isNotEmpty) 'q': keyword,
+        if (access != null && access.isNotEmpty) 'access': access,
       },
     );
     return ((response['data'] as List<dynamic>?) ?? const [])
@@ -454,6 +497,11 @@ class ApiTravelRepository implements TravelRepository {
             'latitude': stop.latitude == 0 ? null : stop.latitude,
             'longitude': stop.longitude == 0 ? null : stop.longitude,
             'sourceType': stop.sourceType,
+            // 표시용 카테고리·계획표 시각 — 없으면 코스함에서 전부 '가맹점' 핀으로 보인다.
+            'category': stop.category.isEmpty ? null : stop.category,
+            'visitTime': stop.time.isEmpty ? null : stop.time,
+            'barrierFree': stop.barrierFree,
+            'petFriendly': stop.petFriendly,
           },
       ],
     };
@@ -487,6 +535,10 @@ class ApiTravelRepository implements TravelRepository {
               longitude: (stop['longitude'] as num?)?.toDouble() ?? 0,
               sourceType: stop['sourceType'] as String? ?? 'PLACE',
               day: (stop['dayNumber'] as num?)?.toInt() ?? 1,
+              time: stop['visitTime'] as String? ?? '',
+              category: stop['category'] as String? ?? '',
+              barrierFree: stop['barrierFree'] as bool? ?? false,
+              petFriendly: stop['petFriendly'] as bool? ?? false,
             ))
         .toList();
     final summary = (json['summary'] as String? ?? '').trim();
@@ -667,10 +719,11 @@ class ApiTravelRepository implements TravelRepository {
         filename: file.fileName,
       ),
     );
-    final streamed = await request.send();
+    final streamed = await _guard(() => request.send());
     final responseText = await streamed.stream.bytesToString();
     if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
-      throw Exception('파일 업로드 실패: $responseText');
+      // 502 등 HTML 오류 페이지가 그대로 팝업에 뜨지 않게 공통 문구로.
+      throw Exception('파일 업로드 실패: ${_describeHttpError(streamed.statusCode, responseText)}');
     }
     final decoded = jsonDecode(responseText) as Map<String, dynamic>;
     return UploadedFileItem.fromJson(decoded['data'] as Map<String, dynamic>);
@@ -948,6 +1001,13 @@ class ApiTravelRepository implements TravelRepository {
   }
 
   @override
+  Future<CommunityPostData> getCommunityPost(int postId, {int? userId}) async {
+    final response = await _jsonRequest('GET', '/community/posts/$postId',
+        query: userId == null ? null : {'userId': userId});
+    return CommunityPostData.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  @override
   Future<String> uploadCommunityPhoto({
     required int userId,
     required Uint8List bytes,
@@ -960,10 +1020,10 @@ class ApiTravelRepository implements TravelRepository {
     request.headers.addAll(_headers(json: false));
     // content-type은 따로 안 실린다(octet-stream) — 서버가 파일명 확장자로 이미지 종류를 정한다.
     request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: fileName));
-    final streamed = await request.send();
+    final streamed = await _guard(() => request.send());
     final responseText = await streamed.stream.bytesToString();
     if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
-      throw Exception('사진 업로드 실패: $responseText');
+      throw Exception('사진 업로드 실패: ${_describeHttpError(streamed.statusCode, responseText)}');
     }
     final decoded = jsonDecode(responseText) as Map<String, dynamic>;
     return (decoded['data'] as Map<String, dynamic>)['url'] as String;
@@ -1193,6 +1253,39 @@ class ApiTravelRepository implements TravelRepository {
     await _jsonRequest(
       'POST',
       '/notifications/read-all',
+      query: {'userId': userId},
+      body: const {},
+    );
+  }
+
+  /// 실패 응답을 사람이 읽을 문장으로. 서버 재시작 중엔 Render가 502 HTML 페이지를
+  /// 돌려주는데, 그 원문을 그대로 띄우면 화면이 HTML 소스로 가득 찬다.
+  static String _describeHttpError(int status, String body) {
+    final trimmed = body.trim();
+    if (trimmed.startsWith('{')) {
+      try {
+        final decoded = jsonDecode(trimmed);
+        final message = decoded is Map ? decoded['message'] : null;
+        if (message is String && message.isNotEmpty) return message;
+      } catch (_) {}
+    }
+    if (status == 502 || status == 503 || status == 504) {
+      return '서버가 잠시 응답하지 않아요 (HTTP $status). 잠시 후 다시 시도해 주세요.';
+    }
+    if (status == 401) return '로그인이 만료됐어요. 다시 로그인해 주세요.';
+    if (status == 403) return '이 요청을 할 권한이 없어요.';
+    if (status == 404) return '요청한 정보를 찾을 수 없어요.';
+    final looksLikeHtml = trimmed.startsWith('<');
+    return looksLikeHtml
+        ? '서버 오류가 발생했어요 (HTTP $status).'
+        : 'API error $status: ${trimmed.length > 200 ? trimmed.substring(0, 200) : trimmed}';
+  }
+
+  @override
+  Future<void> markNotificationRead(int userId, int notificationId) async {
+    await _jsonRequest(
+      'POST',
+      '/notifications/$notificationId/read',
       query: {'userId': userId},
       body: const {},
     );

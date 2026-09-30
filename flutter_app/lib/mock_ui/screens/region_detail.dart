@@ -103,10 +103,16 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
               ]),
             ]),
             const SizedBox(height: 14),
-            Row(children: [
-              Pill(r.statusLabel, tone: _isPreparing ? PillTone.gray : PillTone.sky),
-              if (r.digitalBenefitAvailable) ...[const SizedBox(width: 8), const Pill('디민증 중복혜택', tone: PillTone.mint)],
-              const Spacer(),
+            // 배지가 세 개(상태·디민증·D-day)면 한 줄에 다 안 들어가 서로 붙는다 —
+            // 왼쪽 배지들은 Wrap으로 줄바꿈시키고 D-day 칩은 오른쪽에 고정.
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(
+                child: Wrap(spacing: 8, runSpacing: 6, children: [
+                  Pill(r.statusLabel, tone: _isPreparing ? PillTone.gray : PillTone.sky),
+                  if (r.digitalBenefitAvailable) const Pill('디민증 중복혜택', tone: PillTone.mint),
+                ]),
+              ),
+              const SizedBox(width: 8),
               DdayChip(
                 // 마감된 지역·지난 날짜엔 D-음수를 만들지 않는다.
                 r.statusCode.toUpperCase() == 'CLOSED'
@@ -247,7 +253,31 @@ class _RegionDetailScreenState extends State<RegionDetailScreen> {
             if (snapshot.hasData && snapshot.data!.halfPricePlaces.isEmpty) {
               return const SizedBox.shrink();
             }
-            return _DCard(title: '환급 인정 관광지', children: [
+            final allPlaces = snapshot.data?.halfPricePlaces ?? const <PlaceItem>[];
+            return _DCard(
+              title: '환급 인정 관광지',
+              // 가로 스크롤만으론 전체가 안 보인다 — 목록 화면으로 가는 더보기.
+              trailing: allPlaces.isEmpty
+                  ? null
+                  : GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => RefundPlaceListScreen(
+                                regionId: widget.region.id,
+                                regionName: widget.region.name,
+                                places: allPlaces,
+                              ))),
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 8, top: 2, bottom: 2),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Text('전체 ${allPlaces.length}곳',
+                              style: const TextStyle(
+                                  fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.p600)),
+                          const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.p600),
+                        ]),
+                      ),
+                    ),
+              children: [
               SizedBox(
                 height: 148,
                 child: Builder(builder: (context) {
@@ -485,7 +515,7 @@ class _AttractionsSectionState extends State<_AttractionsSection> {
                   ),
                 ),
             ],
-            const Text('출처: ⓒ한국관광공사',
+            const Text('출처: ©한국관광공사',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.ink4)),
           ]);
         },
@@ -512,7 +542,7 @@ class _FestivalSection extends StatelessWidget {
           child: _DCard(title: '이 지역 축제 소식', children: [
             // 같은 지역·시즌이면 축제는 많아야 한두 개 — 세로로 쌓아 섹션이 늘어나게.
             for (final festival in festivals) _FestivalRow(festival: festival),
-            const Text('출처: ⓒ한국관광공사',
+            const Text('출처: ©한국관광공사',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.ink4)),
           ]),
         );
@@ -578,16 +608,25 @@ class _FestivalRow extends StatelessWidget {
 
 /// 지역상세 카드 (제목 + 컨텐츠 리스트).
 class _DCard extends StatelessWidget {
-  const _DCard({required this.title, required this.children});
+  const _DCard({required this.title, required this.children, this.trailing});
   final String title;
   final List<Widget> children;
+
+  /// 제목 줄 오른쪽 — "전체 N곳 ›" 같은 더보기 링크.
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     return AppCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title,
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.3)),
+        Row(children: [
+          Expanded(
+            child: Text(title,
+                style: const TextStyle(
+                    fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.ink9, letterSpacing: -.3)),
+          ),
+          if (trailing != null) trailing!,
+        ]),
         for (final c in children) ...[const SizedBox(height: 13), c],
       ]),
     );
@@ -751,3 +790,74 @@ String _localCurrencyAppLabel(String? url) {
   };
 }
 
+/// 환급 인정 관광지 전체 목록 — 지역 상세의 가로 스크롤 카드에서 "전체 N곳 ›"로 진입.
+/// 출처는 지자체 공고(지정관광지 목록)라 한국관광공사 표기는 붙이지 않는다.
+class RefundPlaceListScreen extends StatelessWidget {
+  const RefundPlaceListScreen({
+    super.key,
+    required this.regionId,
+    required this.regionName,
+    required this.places,
+  });
+
+  final int regionId;
+  final String regionName;
+  final List<PlaceItem> places;
+
+  @override
+  Widget build(BuildContext context) {
+    return DetailScaffold(
+      title: '$regionName 환급 인정 관광지',
+      children: [
+        NoteRow('이 중에서 방문 인증을 하면 환급 조건에 포함돼요. 총 ${places.length}곳'),
+        for (final p in places)
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => TourPlaceDetailScreen(
+                      regionId: regionId,
+                      attraction: TourAttraction(
+                        contentId: '',
+                        contentTypeId: '12',
+                        title: p.name,
+                        address: p.address,
+                        category: '환급 인정',
+                        tel: p.phone ?? '',
+                        latitude: p.latitude,
+                        longitude: p.longitude,
+                        eligibleForRefund: true,
+                      ),
+                    ))),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: AppShadows.soft,
+              ),
+              child: Row(children: [
+                PlaceIllust(p.name, width: 56, height: 56),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(p.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 14.5, fontWeight: FontWeight.w800, color: AppColors.ink9)),
+                    const SizedBox(height: 3),
+                    Text(p.address,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.ink5, height: 1.4)),
+                  ]),
+                ),
+                const Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.ink4),
+              ]),
+            ),
+          ),
+      ],
+    );
+  }
+}

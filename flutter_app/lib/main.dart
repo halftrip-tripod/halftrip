@@ -14,6 +14,7 @@ import 'mock_ui/screens/onboarding.dart';
 import 'mock_ui/screens/shell.dart';
 import 'mock_ui/screens/splash.dart';
 import 'mock_ui/theme/app_theme.dart';
+import 'mock_ui/widgets/ui.dart' show AppErrorState, PrimaryButton, SecondaryButton;
 import 'repositories/api_travel_repository.dart';
 import 'repositories/mock_travel_repository.dart';
 import 'repositories/travel_repository.dart';
@@ -28,6 +29,11 @@ Future<void> main() async {
     // (manifest의 screenOrientation과 이중 잠금)
     await SystemChrome.setPreferredOrientations(
         [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
+    // Android 15+(targetSdk 35↑)는 시스템 바 아래까지 그리는 edge-to-edge가 강제라
+    // 기종마다 하단 버튼이 내비게이션 바에 잘렸다. 모든 기기에서 같은 모드로 맞추고
+    // 실제 인셋 처리는 _PhoneFrame의 SafeArea 한 곳에서 한다.
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(_lightSystemBars);
   }
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
     try {
@@ -137,6 +143,9 @@ class _RootGateState extends State<_RootGate> {
               child: AnimatedBuilder(
                 animation: controller,
                 builder: (context, _) {
+                  if (!controller.isLoggedIn && controller.sessionRestoreError != null) {
+                    return _SessionRetryScreen(controller: controller);
+                  }
                   if (!controller.isLoggedIn) {
                     return const LoginScreen();
                   }
@@ -151,6 +160,72 @@ class _RootGateState extends State<_RootGate> {
   }
 }
 
+/// 세션은 남아 있는데 서버에 닿지 못했을 때 — 로그아웃시키지 않고 재시도하게 한다.
+class _SessionRetryScreen extends StatefulWidget {
+  const _SessionRetryScreen({required this.controller});
+  final AppController controller;
+
+  @override
+  State<_SessionRetryScreen> createState() => _SessionRetryScreenState();
+}
+
+class _SessionRetryScreenState extends State<_SessionRetryScreen> {
+  bool _retrying = false;
+
+  Future<void> _retry() async {
+    if (_retrying) return;
+    setState(() => _retrying = true);
+    // 재시도 중엔 컨트롤러가 오류를 비워 이 화면이 사라질 수 있어 mounted를 확인한다.
+    await widget.controller.retryRestoreSession();
+    if (mounted) setState(() => _retrying = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      body: SafeArea(
+        child: _retrying
+            ? const Center(child: CircularProgressIndicator())
+            : Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    const AppErrorState(
+                      title: '서버에 연결하지 못했어요',
+                      message: '네트워크 상태를 확인하거나 잠시 후 다시 시도해 주세요.\n로그인 정보는 그대로 남아 있어요.',
+                      compact: true,
+                    ),
+                    // 다시 시도(주) · 다른 계정으로 로그인(보조) — 같은 폭으로 위아래.
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 220),
+                      child: Column(children: [
+                        Row(children: [PrimaryButton('다시 시도', onTap: _retry)]),
+                        const SizedBox(height: 10),
+                        Row(children: [
+                          SecondaryButton('다른 계정으로 로그인',
+                              onTap: widget.controller.dismissSessionRestoreError),
+                        ]),
+                      ]),
+                    ),
+                  ]),
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+/// 밝은 배경용 시스템 바 스타일 — 투명 바 + 어두운 아이콘.
+const _lightSystemBars = SystemUiOverlayStyle(
+  statusBarColor: Colors.transparent,
+  statusBarIconBrightness: Brightness.dark,
+  statusBarBrightness: Brightness.light,
+  systemNavigationBarColor: Colors.transparent,
+  systemNavigationBarIconBrightness: Brightness.dark,
+  systemNavigationBarContrastEnforced: false,
+);
+
 /// 데스크톱 브라우저에서는 390×844 폰 목업 프레임 안에 렌더링.
 class _PhoneFrame extends StatelessWidget {
   const _PhoneFrame({required this.child});
@@ -159,8 +234,28 @@ class _PhoneFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
-      // 모바일 기기·좁은 창에서는 프레임 없이 그대로.
-      if (constraints.maxWidth <= 500) return child;
+      // 모바일 기기·좁은 창에서는 프레임 없이 그대로 — 단, 상태바·내비게이션 바
+      // 인셋은 여기서 한 번에 비운다. 화면마다 ListView에 padding을 직접 주거나
+      // 하단 CTA를 Align으로 붙여 인셋을 잃는 곳이 많아, 개별 SafeArea 대신
+      // 앱 전체를 안전 영역 안에 넣고 바깥은 배경색으로 칠한다.
+      if (constraints.maxWidth <= 500) {
+        // 상태바·내비게이션 바 아이콘은 밝은 배경 위라 어두운 색이어야 한다.
+        // main()의 setSystemUIOverlayStyle만으로는 첫 프레임 이후 흰 아이콘으로
+        // 되돌아가는 기기(갤럭시 3버튼 내비)가 있어, 시스템 바 영역까지 덮는 이
+        // 최상위 박스에 스타일을 걸어 매 프레임 유지한다.
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: _lightSystemBars,
+          child: ColoredBox(
+            color: AppColors.bg,
+            // 시스템 글씨 크기는 1.3배까지만 반영. 그 이상(갤럭시 최대 2.0)은
+            // 고정폭 라벨·칩·단계 표시가 줄바꿈되며 깨져서 상한을 둔다.
+            child: MediaQuery.withClampedTextScaling(
+              maxScaleFactor: 1.3,
+              child: SafeArea(child: child),
+            ),
+          ),
+        );
+      }
 
       const bezel = 12.0;
       final height = math.min(constraints.maxHeight - 56, 852.0);

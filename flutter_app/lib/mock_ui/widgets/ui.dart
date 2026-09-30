@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../utils/error_text.dart';
 import '../theme/app_colors.dart';
 
 // 체크박스 정본 — 실화면·목업 공용이라 디자인 시스템(lib/widgets/ui/)에 둔다.
@@ -244,6 +245,67 @@ class SectionTitle extends StatelessWidget {
 }
 
 /// ℹ️ 안내 문구 행.
+/// 화면 로딩 실패 공용 상태 — 아이콘·제목·짧은 이유·다시 시도.
+/// 예외 원문(Exception: …, SocketException, 502 HTML)은 [describe]가 사용자 문구로 정리한다.
+class AppErrorState extends StatelessWidget {
+  const AppErrorState({
+    super.key,
+    this.title = '화면을 불러오지 못했어요',
+    this.error,
+    this.message,
+    this.onRetry,
+    this.compact = false,
+  });
+
+  final String title;
+  final Object? error;
+  /// 직접 문구를 주면 [error] 대신 쓴다.
+  final String? message;
+  final VoidCallback? onRetry;
+  /// 리스트 안에 끼워 넣을 때 — 위아래 여백만 두고 가운데 정렬은 안 한다.
+  final bool compact;
+
+  static String describe(Object? error) => describeError(error);
+
+  @override
+  Widget build(BuildContext context) {
+    final body = Column(mainAxisSize: MainAxisSize.min, children: [
+      Container(
+        width: 56,
+        height: 56,
+        alignment: Alignment.center,
+        decoration: const BoxDecoration(color: AppColors.p50, shape: BoxShape.circle),
+        child: const Icon(Icons.cloud_off_rounded, size: 26, color: AppColors.p600),
+      ),
+      const SizedBox(height: 14),
+      Text(title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink9)),
+      const SizedBox(height: 6),
+      Text(message ?? describe(error),
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+              fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink5, height: 1.5)),
+      if (onRetry != null) ...[
+        const SizedBox(height: 18),
+        // SecondaryButton은 CtaBar(Row)용 Expanded라 Row 안에 두고 폭만 제한한다.
+        Row(children: [
+          const Spacer(),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 180),
+            child: Row(children: [PrimaryButton('다시 시도', onTap: onRetry)]),
+          ),
+          const Spacer(),
+        ]),
+      ],
+    ]);
+    if (compact) {
+      return Padding(padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8), child: body);
+    }
+    return Center(child: Padding(padding: const EdgeInsets.all(24), child: body));
+  }
+}
+
 class NoteRow extends StatelessWidget {
   const NoteRow(this.text, {super.key, this.icon = Icons.info_outline_rounded});
   final String text;
@@ -281,8 +343,10 @@ class CtaBar extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
+          // 안내문(note)이 반투명 구간에 놓여 스크롤되는 목록 글자와 겹쳐 보였다 —
+          // 위쪽 얇은 띠만 페이드하고 그 아래는 불투명하게.
           colors: [Color(0x00F7FAFD), AppColors.bg],
-          stops: [0, .4],
+          stops: [0, .12],
         ),
       ),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -595,12 +659,16 @@ class ToggleRow extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onChanged,
+    this.sub,
   });
 
   final IconData icon;
   final String label;
   final bool value;
   final ValueChanged<bool> onChanged;
+
+  /// 라벨 아래 한 줄 설명(선택).
+  final String? sub;
 
   @override
   Widget build(BuildContext context) {
@@ -610,9 +678,17 @@ class ToggleRow extends StatelessWidget {
         Icon(icon, size: 20, color: AppColors.ink5),
         const SizedBox(width: 12),
         Expanded(
-          child: Text(label,
-              style: const TextStyle(
-                  fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink9)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label,
+                style: const TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink9)),
+            if (sub != null) ...[
+              const SizedBox(height: 2),
+              Text(sub!,
+                  style: const TextStyle(
+                      fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.ink4)),
+            ],
+          ]),
         ),
         Switch(value: value, onChanged: onChanged),
       ]),
@@ -1014,8 +1090,14 @@ class _CourseMapPainter extends CustomPainter {
 String? refundProofRequirement(String? conditionText) {
   final text = (conditionText ?? '').trim();
   if (text.isEmpty) return null;
-  var head = text.split('·').first.split('+').first.trim();
-  head = head.replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim(); // 괄호 부연은 뺀다
+  // 괄호 부연부터 뺀다 — 괄호 안의 '·'·'+'가 구절 구분자로 오인되지 않게.
+  var head = text.replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim();
+  // 구절 구분자는 양옆에 공백이 있는 ' · ' / ' + '. 서천 "유료·무료 관광지 각 1곳"처럼
+  // 낱말 사이의 '·'는 나열이라 자르면 "유료"만 남는다. 공백 없는 구분자는 폴백.
+  final clause = head.split(RegExp(r'\s+[·+]\s+')).first.trim();
+  head = clause.contains(RegExp(r'[·+]')) && clause == head
+      ? head.split('·').first.split('+').first.trim()
+      : clause;
   return head.isEmpty ? null : head;
 }
 
@@ -1089,6 +1171,51 @@ Future<bool> showConfirmDialog(
   );
   return result ?? false;
 }
+
+/// 오류 팝업 — 업로드·저장·생성처럼 "동작"이 실패했을 때. 원문은 [describeError]로 정리해 보여준다.
+/// [retryLabel]을 주면 다시 시도 버튼이 생기고, 눌렀으면 true를 돌려준다.
+Future<bool> showErrorDialog(
+  BuildContext context, {
+  String title = '문제가 생겼어요',
+  Object? error,
+  String? message,
+  String? retryLabel,
+}) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (c) => _appDialogFrame(
+      title: title,
+      body: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          width: 34,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(color: AppColors.coralTint, shape: BoxShape.circle),
+          child: const Icon(Icons.error_outline_rounded, size: 19, color: AppColors.coralDeep),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(message ?? describeError(error),
+              style: const TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink5, height: 1.5)),
+        ),
+      ]),
+      buttons: [
+        // 재시도 버튼이 있을 때만 닫기를 보조(회색)로, 아니면 닫기가 주 버튼(파랑).
+        if (retryLabel != null) ...[
+          SecondaryButton('닫기', onTap: () => Navigator.pop(c, false)),
+          PrimaryButton(retryLabel, onTap: () => Navigator.pop(c, true)),
+        ] else
+          PrimaryButton('닫기', onTap: () => Navigator.pop(c, false)),
+      ],
+    ),
+  );
+  return result ?? false;
+}
+
+/// 오류 토스트 — 가벼운 실패 안내. 원문이 아니라 정리된 문구만 띄운다.
+void showErrorToast(BuildContext context, Object? error, {String? prefix}) =>
+    showMock(context, '${prefix == null ? '' : '$prefix '}${describeError(error)}');
 
 /// 한 줄 입력 다이얼로그 — 코스 이름 바꾸기 등. 비우거나 취소하면 null.
 Future<String?> showTextInputDialog(
@@ -1187,10 +1314,15 @@ Future<T?> showAppSheet<T>(BuildContext context, {required Widget child, bool sc
 /// 옵션 리스트 선택 시트.
 Future<String?> pickOption(BuildContext context,
     {required String title, required List<String> options}) {
+  // 시/도처럼 항목이 많으면 시트가 화면 꼭대기까지 차오른다 — 화면의 60%까지만
+  // 올라오고 그 안에서 스크롤하게 상한을 둔다.
+  final maxHeight = MediaQuery.sizeOf(context).height * 0.6;
   return showAppSheet<String>(
     context,
     scrollable: true,
-    child: Column(mainAxisSize: MainAxisSize.min, children: [
+    child: ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxHeight),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(24, 14, 24, 4),
         child: Align(
@@ -1213,7 +1345,8 @@ Future<String?> pickOption(BuildContext context,
         ),
       ),
       const SizedBox(height: 8),
-    ]),
+      ]),
+    ),
   );
 }
 
@@ -1226,7 +1359,8 @@ class DetailScaffold extends StatelessWidget {
     this.cta,
     this.actions,
     this.closeIcon = false,
-    this.padding = const EdgeInsets.fromLTRB(14, 4, 14, 120),
+    // CTA 바(약 104) 위로 마지막 항목이 붙지 않게 여유를 둔다.
+    this.padding = const EdgeInsets.fromLTRB(14, 4, 14, 140),
   });
 
   final String title;

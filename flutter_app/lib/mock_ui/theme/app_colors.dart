@@ -40,6 +40,12 @@ abstract final class AppColors {
   static const coralDeep = Color(0xFFD9534F);
   static const coralTint = Color(0xFFFDEAEA);
 
+  // 접근성 배지 — 무장애(보라)·반려동물(갈색). 환급(민트)·카테고리(하늘)와 겹치지 않게.
+  static const violetTint = Color(0xFFEDE9FE);
+  static const violetDeep = Color(0xFF6D28D9);
+  static const amberTint = Color(0xFFFDF3E7);
+  static const amberDeep = Color(0xFF9A5B1E);
+
   // 시맨틱 틴트 (배지·배너 배경)
   static const successTint = Color(0xFFEAF8F0);
   static const dangerTint = Color(0xFFFEECEC);

@@ -7,12 +7,14 @@ class PdfEmbedView extends StatelessWidget {
     this.height = 640,
     this.pageCount = 1,
     this.authToken,
+    this.plain = false,
   });
 
   final String url;
   final double height;
   final int pageCount;
   final String? authToken;
+  final bool plain;
 
   @override
   Widget build(BuildContext context) {
