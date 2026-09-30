@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../utils/error_text.dart';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
@@ -303,7 +304,7 @@ class SubmissionPackageScreen extends StatelessWidget {
         text: '${detail.trip.regionName} 반값여행 증빙 패키지',
       ));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('zip 생성에 실패했어요: $e')));
+      messenger.showSnackBar(SnackBar(content: Text('zip 생성에 실패했어요. ${describeError(e)}')));
     }
   }
 

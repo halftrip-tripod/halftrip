@@ -1,4 +1,6 @@
 import 'dart:typed_data';
+import '../utils/error_text.dart';
+import '../mock_ui/widgets/ui.dart' show showErrorDialog;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -125,7 +127,10 @@ class _ReceiptEvidenceScreenState extends State<ReceiptEvidenceScreen> {
         _draftReceipt = receipt;
       });
     } catch (error) {
-      if (mounted) _snack('영수증 분석에 실패했어요: $error');
+      if (mounted) {
+        setState(() => _uploading = false); // 팝업 뒤에 스피너가 남지 않게 먼저 내린다.
+        await showErrorDialog(context, title: '영수증을 분석하지 못했어요', error: error);
+      }
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
@@ -187,7 +192,7 @@ class _ReceiptEvidenceScreenState extends State<ReceiptEvidenceScreen> {
       };
 
   void _snack(String m) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(describeError(m))));
 
   @override
   Widget build(BuildContext context) {
